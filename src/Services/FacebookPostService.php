@@ -11,7 +11,7 @@ class FacebookPostService
 
     public function __construct()
     {
-        $this->page_id = config('facebook.page_id',);
+        $this->page_id = config('facebook.default_page_id',);
         $this->access_token = config('facebook.access_token');
     }
 
