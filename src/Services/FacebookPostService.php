@@ -11,8 +11,8 @@ class FacebookPostService
 
     public function __construct()
     {
-        $this->page_id = config('facebook.page_id','10160837575386795');
-        $this->access_token = config('facebook.access_token','EAAM4C5Pxa5kBOzerqkdVcybvj0zkrUdCSRk1tyxAZAoEgpCZAyrFZB9ZAaR1F4DeJqn6GYs8HmMLUJO1oqNIFXnLZCxn4CxHbh10YY4GZBAdGhg3X9mS7AqMB21ULslietxK6IIevKMRWSaRUtamIGSwkVROhQUsif6lyzawaj6Dv7VlM0IZAJQdk4oG9VKi0RxtsyxAUZCQMPDd9ad1z3itGlLr');
+        $this->page_id = config('facebook.page_id',);
+        $this->access_token = config('facebook.access_token');
     }
 
     /**
