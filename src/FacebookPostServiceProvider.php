@@ -11,10 +11,7 @@ class FacebookPostServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/facebook.php', 'facebook');
 
-        $this->app->singleton(FacebookPostService::class, function (): FacebookPostService
-        {
-            return new FacebookPostService();
-        });
+        $this->app->singleton(FacebookPostService::class, fn() => new FacebookPostService());
 
         $this->app->alias(FacebookPostService::class, 'facebook-post');
     }

@@ -39,7 +39,7 @@ $response = FacebookPost::getPost();
 ``` 
 use Kalimeromk\FacebookPost\Facades\FacebookPost;
 
-FacebookPost::createPost('Hello, this is a test post!');
+FacebookPost::storePost('Hello, this is a test post!');
 
 ```
 
@@ -47,13 +47,13 @@ FacebookPost::createPost('Hello, this is a test post!');
 ``` 
 use Kalimeromk\FacebookPost\Facades\FacebookPost;
 
-FacebookPost::createPhotoPost('Check out this photo!', '/path/to/photo.jpg');
+FacebookPost::storePhotoPost('Check out this photo!', '/path/to/photo.jpg');
 ```
 ### Create Text post with video
 ``` 
 use Kalimeromk\FacebookPost\Facades\FacebookPost;
 
-FacebookPost::createVideoPost('Watch this video!', '/path/to/video.mp4');
+FacebookPost::storeVideoPost('Watch this video!', '/path/to/video.mp4');
 ```
 ### Update  post
 ``` 
