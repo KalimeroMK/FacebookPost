@@ -5,13 +5,16 @@ namespace Rector\Php70\Rector\StmtsAwareInterface;
 
 use PhpParser\Node;
 use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\Assign;
 use PhpParser\Node\Expr\BinaryOp\Coalesce;
 use PhpParser\Node\Expr\Isset_;
+use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\Else_;
 use PhpParser\Node\Stmt\If_;
 use PhpParser\Node\Stmt\Return_;
-use Rector\Contract\PhpParser\Node\StmtsAwareInterface;
+use Rector\NodeTypeResolver\Node\AttributeKey;
+use Rector\PhpParser\Enum\NodeGroup;
 use Rector\Rector\AbstractRector;
 use Rector\ValueObject\PhpVersionFeature;
 use Rector\VersionBonding\Contract\MinPhpVersionInterface;
@@ -22,9 +25,9 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  */
 final class IfIssetToCoalescingRector extends AbstractRector implements MinPhpVersionInterface
 {
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
-        return new RuleDefinition('Change if with isset and return to coalesce', [new CodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Change `if` with `isset` and `return` to coalesce', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
 {
     private $items = [];
@@ -55,14 +58,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
-        return [StmtsAwareInterface::class];
+        return NodeGroup::STMTS_AWARE;
     }
     /**
-     * @param StmtsAwareInterface $node
+     * @param StmtsAware $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($node->stmts === null) {
             return null;
@@ -92,17 +95,23 @@ CODE_SAMPLE
             if (!$this->nodeComparator->areNodesEqual($ifOnlyStmt->expr, $ifIsset->vars[0])) {
                 continue;
             }
+            if ($stmt->expr instanceof Assign && $this->nodeComparator->areNodesEqual($ifOnlyStmt->expr, $stmt->expr->var)) {
+                continue;
+            }
             unset($node->stmts[$key - 1]);
+            if ($stmt->expr instanceof Ternary) {
+                $stmt->expr->setAttribute(AttributeKey::WRAPPED_IN_PARENTHESES, \true);
+            }
             $stmt->expr = new Coalesce($ifOnlyStmt->expr, $stmt->expr);
             return $node;
         }
         return null;
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::NULL_COALESCE;
     }
-    private function matchBareIfOnlyStmt(If_ $if) : ?Stmt
+    private function matchBareIfOnlyStmt(If_ $if): ?Stmt
     {
         if ($if->else instanceof Else_) {
             return null;
@@ -110,7 +119,7 @@ CODE_SAMPLE
         if ($if->elseifs !== []) {
             return null;
         }
-        if (\count($if->stmts) !== 1) {
+        if (count($if->stmts) !== 1) {
             return null;
         }
         return $if->stmts[0];

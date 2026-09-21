@@ -9,7 +9,7 @@
  * file that was distributed with this source code.
  */
 declare (strict_types=1);
-namespace RectorPrefix202502\Fidry\CpuCoreCounter\Finder;
+namespace RectorPrefix202609\Fidry\CpuCoreCounter\Finder;
 
 /**
  * Find the number of logical CPU cores for Linux and the likes.
@@ -18,11 +18,11 @@ namespace RectorPrefix202502\Fidry\CpuCoreCounter\Finder;
  */
 final class _NProcessorFinder extends ProcOpenBasedFinder
 {
-    protected function getCommand() : string
+    protected function getCommand(): string
     {
         return 'getconf _NPROCESSORS_ONLN';
     }
-    public function toString() : string
+    public function toString(): string
     {
         return '_NProcessorFinder';
     }

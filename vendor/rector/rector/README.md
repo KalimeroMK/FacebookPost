@@ -8,7 +8,7 @@ Rector instantly upgrades and refactors the PHP code of your application.  It ca
 
 ### 1. Instant Upgrades
 
-Rector now supports upgrades from PHP 5.3 to 8.4 and major open-source projects like [Symfony](https://github.com/rectorphp/rector-symfony), [PHPUnit](https://github.com/rectorphp/rector-phpunit), and [Doctrine](https://github.com/rectorphp/rector-doctrine). Do you want to **be constantly on the latest PHP and Framework without effort**?
+Rector now supports upgrades from PHP 5.3 to 8.5 and major open-source projects like [Symfony](https://github.com/rectorphp/rector-symfony), [PHPUnit](https://github.com/rectorphp/rector-phpunit), and [Doctrine](https://github.com/rectorphp/rector-doctrine). Do you want to **be constantly on the latest PHP and Framework without effort**?
 
 Use Rector to handle **instant upgrades** for you.
 
@@ -60,13 +60,13 @@ return RectorConfig::configure()
 Then dry run Rector:
 
 ```bash
-vendor/bin/rector process src --dry-run
+vendor/bin/rector src --dry-run
 ```
 
 Rector will show you diff of files that it *would* change. To *make* the changes, drop `--dry-run`:
 
 ```bash
-vendor/bin/rector process src
+vendor/bin/rector src
 ```
 
 ## Documentation
@@ -102,6 +102,10 @@ Among there projects belong:
 * [driftingly/rector-laravel](https://github.com/driftingly/rector-laravel)
 * [contao/contao-rector](https://github.com/contao/contao-rector)
 * [php-static-analysis/rector-rule](https://github.com/php-static-analysis/rector-rule)
+* [ibexa/rector](https://github.com/ibexa/rector)
+* [guanguans/rector-rules](https://github.com/guanguans/rector-rules)
+* [wernerkrauss/silverstripe-rector](https://github.com/wernerkrauss/silverstripe-rector)
+* [mspirkov/yii2-rector](https://github.com/mspirkov/yii2-rector)
 
 <br>
 
@@ -124,7 +128,7 @@ See [the contribution guide](/CONTRIBUTING.md) or go to development repository [
 You can use `--debug` option, that will print nested exceptions output:
 
 ```bash
-vendor/bin/rector process src/Controller --dry-run --debug
+vendor/bin/rector src/Controller --dry-run --debug
 ```
 
 Or with Xdebug:
@@ -133,7 +137,7 @@ Or with Xdebug:
 2. Add `--xdebug` option when running Rector
 
 ```bash
-vendor/bin/rector process src/Controller --dry-run --xdebug
+vendor/bin/rector src/Controller --dry-run --xdebug
 ```
 
 To assist with simple debugging Rector provides 2 helpers to pretty-print AST-nodes:

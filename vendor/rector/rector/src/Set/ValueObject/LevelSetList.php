@@ -11,6 +11,14 @@ final class LevelSetList
     /**
      * @var string
      */
+    public const UP_TO_PHP_86 = __DIR__ . '/../../../config/set/level/up-to-php86.php';
+    /**
+     * @var string
+     */
+    public const UP_TO_PHP_85 = __DIR__ . '/../../../config/set/level/up-to-php85.php';
+    /**
+     * @var string
+     */
     public const UP_TO_PHP_84 = __DIR__ . '/../../../config/set/level/up-to-php84.php';
     /**
      * @var string

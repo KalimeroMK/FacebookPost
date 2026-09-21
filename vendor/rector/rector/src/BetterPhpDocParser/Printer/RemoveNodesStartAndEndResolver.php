@@ -11,14 +11,14 @@ use Rector\BetterPhpDocParser\ValueObject\StartAndEnd;
 final class RemoveNodesStartAndEndResolver
 {
     /**
-     * @param mixed[] $tokens
+     * @param array<int, mixed> $tokens
      * @return StartAndEnd[]
      */
-    public function resolve(PhpDocNode $originalPhpDocNode, PhpDocNode $currentPhpDocNode, array $tokens) : array
+    public function resolve(PhpDocNode $originalPhpDocNode, PhpDocNode $currentPhpDocNode, array $tokens): array
     {
         $removedNodePositions = [];
         /** @var PhpDocChildNode[] $removedChildNodes */
-        $removedChildNodes = \array_diff($originalPhpDocNode->children, $currentPhpDocNode->children);
+        $removedChildNodes = array_diff($originalPhpDocNode->children, $currentPhpDocNode->children);
         $lastEndPosition = null;
         foreach ($removedChildNodes as $removedChildNode) {
             /** @var StartAndEnd|null $removedPhpDocNodeInfo */
@@ -33,14 +33,14 @@ final class RemoveNodesStartAndEndResolver
                 if ($tokens[$seekPosition][1] === Lexer::TOKEN_PHPDOC_EOL) {
                     break;
                 }
-                // do not colide
+                // do not collide
                 if ($lastEndPosition < $seekPosition) {
                     break;
                 }
                 --$seekPosition;
             }
             $lastEndPosition = $removedPhpDocNodeInfo->getEnd();
-            $removedNodePositions[] = new StartAndEnd(\max(0, $seekPosition - 1), $removedPhpDocNodeInfo->getEnd());
+            $removedNodePositions[] = new StartAndEnd(max(0, $seekPosition - 1), $removedPhpDocNodeInfo->getEnd());
         }
         return $removedNodePositions;
     }

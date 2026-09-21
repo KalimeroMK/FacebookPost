@@ -4,17 +4,18 @@ declare (strict_types=1);
 namespace Rector\CodingStyle\Rector\Encapsed;
 
 use PhpParser\Node;
-use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Scalar\InterpolatedString;
+use Rector\Configuration\Deprecation\Contract\DeprecatedInterface;
+use Rector\Exception\ShouldNotHappenException;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
- * @see \Rector\Tests\CodingStyle\Rector\Encapsed\WrapEncapsedVariableInCurlyBracesRector\WrapEncapsedVariableInCurlyBracesRectorTest
+ * @deprecated This rule is deprecated, as it is a coding standard preference with no real value. Use a coding standard tool instead.
  */
-final class WrapEncapsedVariableInCurlyBracesRector extends AbstractRector
+final class WrapEncapsedVariableInCurlyBracesRector extends AbstractRector implements DeprecatedInterface
 {
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Wrap encapsed variables in curly braces', [new CodeSample(<<<'CODE_SAMPLE'
 function run($world)
@@ -33,30 +34,15 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [InterpolatedString::class];
     }
     /**
      * @param InterpolatedString $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
-        $startTokenPos = $node->getStartTokenPos();
-        $hasVariableBeenWrapped = \false;
-        foreach ($node->parts as $index => $nodePart) {
-            if ($nodePart instanceof Variable) {
-                $previousNode = $node->parts[$index - 1] ?? null;
-                $previousNodeEndTokenPosition = $previousNode instanceof Node ? $previousNode->getEndTokenPos() : $startTokenPos;
-                if ($previousNodeEndTokenPosition + 1 === $nodePart->getStartTokenPos()) {
-                    $hasVariableBeenWrapped = \true;
-                    $node->parts[$index] = new Variable($nodePart->name);
-                }
-            }
-        }
-        if (!$hasVariableBeenWrapped) {
-            return null;
-        }
-        return $node;
+        throw new ShouldNotHappenException(sprintf('"%s" rule is deprecated, as it is a coding standard preference with no real value', self::class));
     }
 }

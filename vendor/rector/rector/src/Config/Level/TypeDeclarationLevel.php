@@ -3,29 +3,45 @@
 declare (strict_types=1);
 namespace Rector\Config\Level;
 
+use Rector\CodeQuality\Rector\Class_\ReturnIteratorInDataProviderRector;
 use Rector\Contract\Rector\RectorInterface;
 use Rector\Symfony\CodeQuality\Rector\ClassMethod\ResponseReturnTypeControllerActionRector;
 use Rector\TypeDeclaration\Rector\ArrowFunction\AddArrowFunctionReturnTypeRector;
+use Rector\TypeDeclaration\Rector\BooleanAnd\BinaryOpNullableToInstanceofRector;
 use Rector\TypeDeclaration\Rector\Class_\AddTestsVoidReturnTypeWhereNoReturnRector;
 use Rector\TypeDeclaration\Rector\Class_\ChildDoctrineRepositoryClassTypeRector;
 use Rector\TypeDeclaration\Rector\Class_\MergeDateTimePropertyTypeDeclarationRector;
+use Rector\TypeDeclaration\Rector\Class_\ObjectTypedPropertyFromJMSSerializerAttributeTypeRector;
 use Rector\TypeDeclaration\Rector\Class_\PropertyTypeFromStrictSetterGetterRector;
 use Rector\TypeDeclaration\Rector\Class_\ReturnTypeFromStrictTernaryRector;
+use Rector\TypeDeclaration\Rector\Class_\ScalarTypedPropertyFromJMSSerializerAttributeTypeRector;
+use Rector\TypeDeclaration\Rector\Class_\TypedPropertyFromContainerGetSetUpRector;
 use Rector\TypeDeclaration\Rector\Class_\TypedPropertyFromCreateMockAssignRector;
-use Rector\TypeDeclaration\Rector\Class_\TypedPropertyFromJMSSerializerAttributeTypeRector;
+use Rector\TypeDeclaration\Rector\Class_\TypedPropertyFromDocblockSetUpDefinedRector;
+use Rector\TypeDeclaration\Rector\Class_\TypedPropertyFromGetRepositorySetUpRector;
+use Rector\TypeDeclaration\Rector\Class_\TypedStaticPropertyInBehatContextRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\AddMethodCallBasedStrictParamTypeRector;
+use Rector\TypeDeclaration\Rector\ClassMethod\AddParamFromDimFetchKeyUseRector;
+use Rector\TypeDeclaration\Rector\ClassMethod\AddParamStringTypeFromSprintfUseRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\AddParamTypeBasedOnPHPUnitDataProviderRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\AddParamTypeFromPropertyTypeRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\AddReturnTypeDeclarationBasedOnParentClassMethodRector;
+use Rector\TypeDeclaration\Rector\ClassMethod\AddReturnTypeFromTryCatchTypeRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\AddVoidReturnTypeWhereNoReturnRector;
+use Rector\TypeDeclaration\Rector\ClassMethod\ArrayParamTypeByMethodCallTypeRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\BoolReturnTypeFromBooleanConstReturnsRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\BoolReturnTypeFromBooleanStrictReturnsRector;
+use Rector\TypeDeclaration\Rector\ClassMethod\KnownMagicClassMethodTypeRector;
+use Rector\TypeDeclaration\Rector\ClassMethod\NarrowObjectReturnTypeRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\NumericReturnTypeFromStrictReturnsRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\NumericReturnTypeFromStrictScalarReturnsRector;
+use Rector\TypeDeclaration\Rector\ClassMethod\ObjectParamTypeByMethodCallTypeRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\ParamTypeByMethodCallTypeRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\ParamTypeByParentCallTypeRector;
+use Rector\TypeDeclaration\Rector\ClassMethod\PrivateMethodReturnTypeFromStrictNewArrayRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\ReturnNeverTypeRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\ReturnNullableTypeRector;
+use Rector\TypeDeclaration\Rector\ClassMethod\ReturnTypeFromGetRepositoryDocblockRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\ReturnTypeFromMockObjectRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\ReturnTypeFromReturnCastRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\ReturnTypeFromReturnDirectArrayRector;
@@ -39,22 +55,30 @@ use Rector\TypeDeclaration\Rector\ClassMethod\ReturnTypeFromStrictTypedCallRecto
 use Rector\TypeDeclaration\Rector\ClassMethod\ReturnTypeFromStrictTypedPropertyRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\ReturnTypeFromSymfonySerializerRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\ReturnUnionTypeRector;
+use Rector\TypeDeclaration\Rector\ClassMethod\ScalarParamTypeByMethodCallTypeRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\StrictArrayParamDimFetchRector;
-use Rector\TypeDeclaration\Rector\ClassMethod\StrictStringParamConcatRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\StringReturnTypeFromStrictScalarReturnsRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\StringReturnTypeFromStrictStringReturnsRector;
 use Rector\TypeDeclaration\Rector\Closure\AddClosureNeverReturnTypeRector;
 use Rector\TypeDeclaration\Rector\Closure\AddClosureVoidReturnTypeWhereNoReturnRector;
+use Rector\TypeDeclaration\Rector\Closure\ClosureReturnTypeFromAssertInstanceOfRector;
 use Rector\TypeDeclaration\Rector\Closure\ClosureReturnTypeRector;
 use Rector\TypeDeclaration\Rector\Empty_\EmptyOnNullableObjectToInstanceOfRector;
+use Rector\TypeDeclaration\Rector\FuncCall\AddArrayAnyAllClosureParamTypeRector;
+use Rector\TypeDeclaration\Rector\FuncCall\AddArrayFunctionClosureParamTypeRector;
+use Rector\TypeDeclaration\Rector\FuncCall\AddArrowFunctionParamArrayWhereDimFetchRector;
+use Rector\TypeDeclaration\Rector\FuncCall\NarrowArrayAnyAllNullableParamTypeRector;
 use Rector\TypeDeclaration\Rector\Function_\AddFunctionVoidReturnTypeWhereNoReturnRector;
 use Rector\TypeDeclaration\Rector\FunctionLike\AddClosureParamTypeForArrayMapRector;
 use Rector\TypeDeclaration\Rector\FunctionLike\AddClosureParamTypeForArrayReduceRector;
+use Rector\TypeDeclaration\Rector\FunctionLike\AddClosureParamTypeFromIterableMethodCallRector;
+use Rector\TypeDeclaration\Rector\FunctionLike\AddClosureParamTypeFromVariableCallRector;
 use Rector\TypeDeclaration\Rector\FunctionLike\AddParamTypeSplFixedArrayRector;
 use Rector\TypeDeclaration\Rector\FunctionLike\AddReturnTypeDeclarationFromYieldsRector;
 use Rector\TypeDeclaration\Rector\Property\TypedPropertyFromAssignsRector;
 use Rector\TypeDeclaration\Rector\Property\TypedPropertyFromStrictConstructorRector;
 use Rector\TypeDeclaration\Rector\Property\TypedPropertyFromStrictSetUpRector;
+use Rector\TypeDeclaration\Rector\While_\WhileNullableToInstanceofRector;
 final class TypeDeclarationLevel
 {
     /**
@@ -68,10 +92,13 @@ final class TypeDeclarationLevel
         AddClosureVoidReturnTypeWhereNoReturnRector::class,
         AddFunctionVoidReturnTypeWhereNoReturnRector::class,
         AddTestsVoidReturnTypeWhereNoReturnRector::class,
+        ReturnIteratorInDataProviderRector::class,
         ReturnTypeFromMockObjectRector::class,
         TypedPropertyFromCreateMockAssignRector::class,
         AddArrowFunctionReturnTypeRector::class,
         BoolReturnTypeFromBooleanConstReturnsRector::class,
+        // private methods first, as safest - no external contract
+        PrivateMethodReturnTypeFromStrictNewArrayRector::class,
         ReturnTypeFromStrictNewArrayRector::class,
         // scalar and array from constant
         ReturnTypeFromStrictConstantReturnRector::class,
@@ -91,6 +118,8 @@ final class TypeDeclarationLevel
         ReturnNullableTypeRector::class,
         // php 7.4
         EmptyOnNullableObjectToInstanceOfRector::class,
+        WhileNullableToInstanceofRector::class,
+        BinaryOpNullableToInstanceofRector::class,
         // php 7.4
         TypedPropertyFromStrictConstructorRector::class,
         AddParamTypeSplFixedArrayRector::class,
@@ -98,30 +127,56 @@ final class TypeDeclarationLevel
         AddParamTypeBasedOnPHPUnitDataProviderRector::class,
         TypedPropertyFromStrictSetUpRector::class,
         ReturnTypeFromStrictNativeCallRector::class,
+        AddReturnTypeFromTryCatchTypeRector::class,
         ReturnTypeFromStrictTypedCallRector::class,
         ChildDoctrineRepositoryClassTypeRector::class,
+        // php native types
+        KnownMagicClassMethodTypeRector::class,
         // param
         AddMethodCallBasedStrictParamTypeRector::class,
         ParamTypeByParentCallTypeRector::class,
+        NarrowObjectReturnTypeRector::class,
         // multi types (nullable, union)
         ReturnUnionTypeRector::class,
         // closures
         AddClosureNeverReturnTypeRector::class,
-        ClosureReturnTypeRector::class,
-        AddClosureParamTypeForArrayReduceRector::class,
         AddClosureParamTypeForArrayMapRector::class,
+        AddClosureParamTypeForArrayReduceRector::class,
+        ClosureReturnTypeRector::class,
+        AddArrowFunctionParamArrayWhereDimFetchRector::class,
         // more risky rules
         ReturnTypeFromStrictParamRector::class,
         AddParamTypeFromPropertyTypeRector::class,
         MergeDateTimePropertyTypeDeclarationRector::class,
         PropertyTypeFromStrictSetterGetterRector::class,
         ParamTypeByMethodCallTypeRector::class,
+        ObjectParamTypeByMethodCallTypeRector::class,
+        ScalarParamTypeByMethodCallTypeRector::class,
+        ArrayParamTypeByMethodCallTypeRector::class,
+        TypedPropertyFromContainerGetSetUpRector::class,
+        TypedPropertyFromGetRepositorySetUpRector::class,
         TypedPropertyFromAssignsRector::class,
         AddReturnTypeDeclarationBasedOnParentClassMethodRector::class,
         ReturnTypeFromStrictFluentReturnRector::class,
         ReturnNeverTypeRector::class,
+        // jms attributes
+        ObjectTypedPropertyFromJMSSerializerAttributeTypeRector::class,
+        ScalarTypedPropertyFromJMSSerializerAttributeTypeRector::class,
+        // array parameter from dim fetch assign inside
+        AddClosureParamTypeFromVariableCallRector::class,
         StrictArrayParamDimFetchRector::class,
-        StrictStringParamConcatRector::class,
-        TypedPropertyFromJMSSerializerAttributeTypeRector::class,
+        AddParamFromDimFetchKeyUseRector::class,
+        AddParamStringTypeFromSprintfUseRector::class,
+        // possibly based on docblocks, but also helpful, intentionally last
+        AddArrayFunctionClosureParamTypeRector::class,
+        TypedPropertyFromDocblockSetUpDefinedRector::class,
+        AddClosureParamTypeFromIterableMethodCallRector::class,
+        TypedStaticPropertyInBehatContextRector::class,
+        // PHP 8.4
+        NarrowArrayAnyAllNullableParamTypeRector::class,
+        AddArrayAnyAllClosureParamTypeRector::class,
+        ClosureReturnTypeFromAssertInstanceOfRector::class,
+        // docblock @return into native return type, intentionally last
+        ReturnTypeFromGetRepositoryDocblockRector::class,
     ];
 }

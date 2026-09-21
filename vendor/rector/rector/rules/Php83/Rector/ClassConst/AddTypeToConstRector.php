@@ -20,6 +20,10 @@ use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassConst;
 use PHPStan\Reflection\ClassReflection;
 use PHPStan\Reflection\ReflectionProvider;
+use Rector\BetterPhpDocParser\PhpDocInfo\PhpDocInfo;
+use Rector\BetterPhpDocParser\PhpDocInfo\PhpDocInfoFactory;
+use Rector\Configuration\Parameter\FeatureFlags;
+use Rector\DeadCode\PhpDoc\TagRemover\VarTagRemover;
 use Rector\PHPStanStaticTypeMapper\Enum\TypeKind;
 use Rector\Rector\AbstractRector;
 use Rector\StaticTypeMapper\StaticTypeMapper;
@@ -40,12 +44,22 @@ final class AddTypeToConstRector extends AbstractRector implements MinPhpVersion
      * @readonly
      */
     private StaticTypeMapper $staticTypeMapper;
-    public function __construct(ReflectionProvider $reflectionProvider, StaticTypeMapper $staticTypeMapper)
+    /**
+     * @readonly
+     */
+    private VarTagRemover $varTagRemover;
+    /**
+     * @readonly
+     */
+    private PhpDocInfoFactory $phpDocInfoFactory;
+    public function __construct(ReflectionProvider $reflectionProvider, StaticTypeMapper $staticTypeMapper, VarTagRemover $varTagRemover, PhpDocInfoFactory $phpDocInfoFactory)
     {
         $this->reflectionProvider = $reflectionProvider;
         $this->staticTypeMapper = $staticTypeMapper;
+        $this->varTagRemover = $varTagRemover;
+        $this->phpDocInfoFactory = $phpDocInfoFactory;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Add type to constants based on their value', [new CodeSample(<<<'CODE_SAMPLE'
 final class SomeClass
@@ -61,20 +75,17 @@ final class SomeClass
 CODE_SAMPLE
 )]);
     }
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Class_
+    public function refactor(Node $node): ?Class_
     {
         $className = $this->getName($node);
-        if (!\is_string($className)) {
-            return null;
-        }
-        if ($node->isAbstract()) {
+        if (!is_string($className)) {
             return null;
         }
         $classConsts = $node->getConstants();
@@ -90,6 +101,9 @@ CODE_SAMPLE
                 continue;
             }
             foreach ($classConst->consts as $constNode) {
+                if ($node->isAbstract() && !$classConst->isPrivate()) {
+                    continue;
+                }
                 if ($this->isConstGuardedByParents($constNode, $parentClassReflections)) {
                     continue;
                 }
@@ -101,43 +115,49 @@ CODE_SAMPLE
             if ($valueTypes === []) {
                 continue;
             }
-            if (\count($valueTypes) > 1) {
-                $valueTypes = \array_unique($valueTypes, \SORT_REGULAR);
+            if (count($valueTypes) > 1) {
+                $valueTypes = array_unique($valueTypes, \SORT_REGULAR);
             }
             // once more verify after uniquate
-            if (\count($valueTypes) > 1) {
+            if (count($valueTypes) > 1) {
                 continue;
             }
-            $valueType = \current($valueTypes);
+            $valueType = current($valueTypes);
             if (!$valueType instanceof Identifier) {
                 continue;
             }
             $classConst->type = $valueType;
             $hasChanged = \true;
+            $classConstPhpDocInfo = $this->phpDocInfoFactory->createFromNode($classConst);
+            if ($classConstPhpDocInfo instanceof PhpDocInfo) {
+                $this->varTagRemover->removeVarTagIfUseless($classConstPhpDocInfo, $classConst);
+            }
         }
         if (!$hasChanged) {
             return null;
         }
         return $node;
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::TYPED_CLASS_CONSTANTS;
     }
     /**
      * @param ClassReflection[] $parentClassReflections
      */
-    public function isConstGuardedByParents(Const_ $const, array $parentClassReflections) : bool
+    public function isConstGuardedByParents(Const_ $const, array $parentClassReflections): bool
     {
         $constantName = $this->getName($const);
+        $found = \false;
         foreach ($parentClassReflections as $parentClassReflection) {
             if ($parentClassReflection->hasConstant($constantName)) {
-                return \true;
+                $found = \true;
+                break;
             }
         }
-        return \false;
+        return $found;
     }
-    private function findValueType(Expr $expr) : ?Identifier
+    private function findValueType(Expr $expr): ?Identifier
     {
         if ($expr instanceof UnaryPlus || $expr instanceof UnaryMinus) {
             return $this->findValueType($expr->expr);
@@ -173,16 +193,19 @@ CODE_SAMPLE
     /**
      * @return ClassReflection[]
      */
-    private function getParentReflections(string $className) : array
+    private function getParentReflections(string $className): array
     {
         if (!$this->reflectionProvider->hasClass($className)) {
             return [];
         }
         $currentClassReflection = $this->reflectionProvider->getClass($className);
-        return \array_filter($currentClassReflection->getAncestors(), static fn(ClassReflection $classReflection): bool => $currentClassReflection !== $classReflection);
+        return array_filter($currentClassReflection->getAncestors(), static fn(ClassReflection $classReflection): bool => $currentClassReflection !== $classReflection);
     }
-    private function canBeInherited(ClassConst $classConst, Class_ $class) : bool
+    private function canBeInherited(ClassConst $classConst, Class_ $class): bool
     {
+        if (FeatureFlags::treatClassesAsFinal($class)) {
+            return \false;
+        }
         return !$class->isFinal() && !$classConst->isPrivate() && !$classConst->isFinal();
     }
 }

@@ -12,7 +12,7 @@ use Rector\Rector\AbstractRector;
 use Rector\Renaming\ValueObject\RenameStaticMethod;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\ConfiguredCodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
-use RectorPrefix202502\Webmozart\Assert\Assert;
+use RectorPrefix202609\Webmozart\Assert\Assert;
 /**
  * @see \Rector\Tests\Renaming\Rector\StaticCall\RenameStaticMethodRector\RenameStaticMethodRectorTest
  */
@@ -22,21 +22,21 @@ final class RenameStaticMethodRector extends AbstractRector implements Configura
      * @var RenameStaticMethod[]
      */
     private array $staticMethodRenames = [];
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
-        return new RuleDefinition('Turns method names to new ones.', [new ConfiguredCodeSample('SomeClass::oldStaticMethod();', 'AnotherExampleClass::newStaticMethod();', [new RenameStaticMethod('SomeClass', 'oldMethod', 'AnotherExampleClass', 'newStaticMethod')])]);
+        return new RuleDefinition('Turn method names to new ones', [new ConfiguredCodeSample('SomeClass::oldStaticMethod();', 'AnotherExampleClass::newStaticMethod();', [new RenameStaticMethod('SomeClass', 'oldMethod', 'AnotherExampleClass', 'newStaticMethod')])]);
     }
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [StaticCall::class];
     }
     /**
      * @param StaticCall $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         foreach ($this->staticMethodRenames as $staticMethodRename) {
             if (!$this->isName($node->name, $staticMethodRename->getOldMethod())) {
@@ -52,12 +52,12 @@ final class RenameStaticMethodRector extends AbstractRector implements Configura
     /**
      * @param mixed[] $configuration
      */
-    public function configure(array $configuration) : void
+    public function configure(array $configuration): void
     {
         Assert::allIsAOf($configuration, RenameStaticMethod::class);
         $this->staticMethodRenames = $configuration;
     }
-    private function rename(StaticCall $staticCall, RenameStaticMethod $renameStaticMethod) : StaticCall
+    private function rename(StaticCall $staticCall, RenameStaticMethod $renameStaticMethod): StaticCall
     {
         $staticCall->name = new Identifier($renameStaticMethod->getNewMethod());
         if ($renameStaticMethod->hasClassChanged()) {

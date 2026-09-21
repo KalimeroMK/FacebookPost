@@ -1,6 +1,25 @@
 CHANGELOG
 =========
 
+8.1
+---
+
+ * Allow `HtmlDumper::setNonce()` to take a distinct style nonce alongside the script nonce
+ * Dump class-strings as class stubs with source location and static properties
+
+7.4
+---
+
+ * Add support for adding more default casters to `AbstractCloner::addDefaultCasters()`
+ * Select HtmlDumper only if `Accept` header contains "html"
+
+7.3
+---
+
+ * Add casters for `Dba\Connection`, `SQLite3Result`, `OpenSSLAsymmetricKey` and `OpenSSLCertificateSigningRequest`
+ * Deprecate `ResourceCaster::castCurl()`, `ResourceCaster::castGd()` and `ResourceCaster::castOpensslX509()`
+ * Mark all casters as `@internal`
+
 7.2
 ---
 

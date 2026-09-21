@@ -31,7 +31,7 @@ final class DowngradeTrailingCommasInFunctionCallsRector extends AbstractRector
         $this->followedByCommaAnalyzer = $followedByCommaAnalyzer;
         $this->trailingCommaRemover = $trailingCommaRemover;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Remove trailing commas in function calls', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
@@ -62,14 +62,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [FuncCall::class, MethodCall::class, StaticCall::class, New_::class];
     }
     /**
      * @param FuncCall|MethodCall|StaticCall|New_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($node->isFirstClassCallable()) {
             return null;
@@ -78,7 +78,17 @@ CODE_SAMPLE
         if ($args === []) {
             return null;
         }
-        $lastArgKey = \count($args) - 1;
+        foreach ($args as $arg) {
+            // reprinted, needs to remove from call like itself
+            if ($arg->getEndTokenPos() < 0) {
+                $hasChanged = $this->trailingCommaRemover->removeFromCallLike($this->file, $node);
+                if ($hasChanged) {
+                    return $node;
+                }
+                return null;
+            }
+        }
+        $lastArgKey = count($args) - 1;
         $lastArg = $args[$lastArgKey];
         if (!$this->followedByCommaAnalyzer->isFollowed($this->file, $lastArg)) {
             return null;

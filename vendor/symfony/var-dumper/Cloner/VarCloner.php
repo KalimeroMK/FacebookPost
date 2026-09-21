@@ -11,6 +11,8 @@
 
 namespace Symfony\Component\VarDumper\Cloner;
 
+use Symfony\Component\VarDumper\Caster\ClassDumpStub;
+
 /**
  * @author Nicolas Grekas <p@tchwork.com>
  */
@@ -28,14 +30,12 @@ class VarCloner extends AbstractCloner
         $objRefs = [];                  // Map of original object handles to their stub object counterpart
         $objects = [];                  // Keep a ref to objects to ensure their handle cannot be reused while cloning
         $resRefs = [];                  // Map of original resource handles to their stub object counterpart
-        $values = [];                   // Map of stub objects' ids to original values
         $maxItems = $this->maxItems;
         $maxString = $this->maxString;
         $minDepth = $this->minDepth;
         $currentDepth = 0;              // Current tree depth
         $currentDepthFinalIndex = 0;    // Final $queue index for current tree depth
         $minimumDepthReached = 0 === $minDepth; // Becomes true when minimum tree depth has been reached
-        $cookie = (object) [];          // Unique object used to detect hard references
         $a = null;                      // Array cast for nested structures
         $stub = null;                   // Stub capturing the main properties of an original item value
                                         // or null if the original value is used directly
@@ -53,7 +53,7 @@ class VarCloner extends AbstractCloner
                 }
             }
 
-            $refs = $vals = $queue[$i];
+            $vals = $queue[$i];
             foreach ($vals as $k => $v) {
                 // $v is the original value or a stub object in case of hard references
 
@@ -86,6 +86,12 @@ class VarCloner extends AbstractCloner
                     case \is_string($v):
                         if ('' === $v) {
                             continue 2;
+                        }
+                        if (0 === $i && class_exists($v, false) && new \ReflectionClass($v)->isUserDefined()) {
+                            $stub = new ClassDumpStub($v);
+                            $a = $stub->value;
+                            $stub->value = null;
+                            break;
                         }
                         if (!preg_match('//u', $v)) {
                             $stub = new Stub();
@@ -213,10 +219,6 @@ class VarCloner extends AbstractCloner
             }
 
             $queue[$i] = $vals;
-        }
-
-        foreach ($values as $h => $v) {
-            $hardRefs[$h] = $v;
         }
 
         return $queue;

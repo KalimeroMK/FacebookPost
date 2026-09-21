@@ -12,6 +12,8 @@ use Rector\Comments\NodeDocBlock\DocBlockUpdater;
 use Rector\PHPUnit\NodeAnalyzer\TestsNodeAnalyzer;
 use Rector\PHPUnit\NodeFactory\ExpectExceptionMethodCallFactory;
 use Rector\Rector\AbstractRector;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -20,7 +22,7 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  *
  * @see \Rector\PHPUnit\Tests\PHPUnit60\Rector\ClassMethod\ExceptionAnnotationRector\ExceptionAnnotationRectorTest
  */
-final class ExceptionAnnotationRector extends AbstractRector
+final class ExceptionAnnotationRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @readonly
@@ -43,6 +45,13 @@ final class ExceptionAnnotationRector extends AbstractRector
      */
     private PhpDocInfoFactory $phpDocInfoFactory;
     /**
+     * expectException() was added in PHPUnit 5.2
+     */
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('phpunit/phpunit', '>=5.2');
+    }
+    /**
      * In reversed order, which they should be called in code.
      *
      * @var array<string, string>
@@ -56,7 +65,7 @@ final class ExceptionAnnotationRector extends AbstractRector
         $this->docBlockUpdater = $docBlockUpdater;
         $this->phpDocInfoFactory = $phpDocInfoFactory;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Changes `@expectedException annotations to `expectException*()` methods', [new CodeSample(<<<'CODE_SAMPLE'
 /**
@@ -81,14 +90,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [ClassMethod::class];
     }
     /**
      * @param ClassMethod $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$this->testsNodeAnalyzer->isInTestClass($node)) {
             return null;
@@ -103,7 +112,7 @@ CODE_SAMPLE
                 continue;
             }
             $methodCallExpressions = $this->expectExceptionMethodCallFactory->createFromTagValueNodes($phpDocInfo->getTagsByName($annotationName), $methodName);
-            $node->stmts = \array_merge($methodCallExpressions, (array) $node->stmts);
+            $node->stmts = array_merge($methodCallExpressions, (array) $node->stmts);
             $this->phpDocTagRemover->removeByName($phpDocInfo, $annotationName);
             $hasChanged = \true;
         }

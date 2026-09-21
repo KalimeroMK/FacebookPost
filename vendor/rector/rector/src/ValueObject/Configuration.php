@@ -4,7 +4,10 @@ declare (strict_types=1);
 namespace Rector\ValueObject;
 
 use Rector\ChangesReporting\Output\ConsoleOutputFormatter;
-use RectorPrefix202502\Webmozart\Assert\Assert;
+use Rector\Configuration\Option;
+use Rector\Configuration\Parameter\SimpleParameterProvider;
+use Rector\ValueObject\Configuration\LevelOverflow;
+use RectorPrefix202609\Webmozart\Assert\Assert;
 final class Configuration
 {
     /**
@@ -65,18 +68,48 @@ final class Configuration
      */
     private bool $reportingWithRealPath = \false;
     /**
+     * @var string[]
      * @readonly
      */
-    private ?string $onlyRule = null;
+    private array $onlyRules = [];
     /**
      * @readonly
      */
     private ?string $onlySuffix = null;
     /**
+     * @var LevelOverflow[]
+     * @readonly
+     */
+    private array $levelOverflows = [];
+    /**
+     * @readonly
+     */
+    private bool $showRulesSummary = \false;
+    /**
+     * @readonly
+     */
+    private bool $isComposerBased = \false;
+    /**
+     * @readonly
+     */
+    private bool $isPhpOnly = \false;
+    /**
+     * @var string[]
+     * @readonly
+     */
+    private array $filters = [];
+    /**
+     * @readonly
+     */
+    private ?int $maxChanges = null;
+    /**
      * @param string[] $fileExtensions
      * @param string[] $paths
+     * @param string[] $onlyRules
+     * @param LevelOverflow[] $levelOverflows
+     * @param string[] $filters
      */
-    public function __construct(bool $isDryRun = \false, bool $showProgressBar = \true, bool $shouldClearCache = \false, string $outputFormat = ConsoleOutputFormatter::NAME, array $fileExtensions = ['php'], array $paths = [], bool $showDiffs = \true, ?string $parallelPort = null, ?string $parallelIdentifier = null, bool $isParallel = \false, ?string $memoryLimit = null, bool $isDebug = \false, bool $reportingWithRealPath = \false, ?string $onlyRule = null, ?string $onlySuffix = null)
+    public function __construct(bool $isDryRun = \false, bool $showProgressBar = \true, bool $shouldClearCache = \false, string $outputFormat = ConsoleOutputFormatter::NAME, array $fileExtensions = ['php'], array $paths = [], bool $showDiffs = \true, ?string $parallelPort = null, ?string $parallelIdentifier = null, bool $isParallel = \false, ?string $memoryLimit = null, bool $isDebug = \false, bool $reportingWithRealPath = \false, array $onlyRules = [], ?string $onlySuffix = null, array $levelOverflows = [], bool $showRulesSummary = \false, bool $isComposerBased = \false, bool $isPhpOnly = \false, array $filters = [], ?int $maxChanges = null)
     {
         $this->isDryRun = $isDryRun;
         $this->showProgressBar = $showProgressBar;
@@ -91,74 +124,123 @@ final class Configuration
         $this->memoryLimit = $memoryLimit;
         $this->isDebug = $isDebug;
         $this->reportingWithRealPath = $reportingWithRealPath;
-        $this->onlyRule = $onlyRule;
+        $this->onlyRules = $onlyRules;
         $this->onlySuffix = $onlySuffix;
+        $this->levelOverflows = $levelOverflows;
+        $this->showRulesSummary = $showRulesSummary;
+        $this->isComposerBased = $isComposerBased;
+        $this->isPhpOnly = $isPhpOnly;
+        $this->filters = $filters;
+        $this->maxChanges = $maxChanges;
     }
-    public function isDryRun() : bool
+    public function getMaxChanges(): ?int
+    {
+        return $this->maxChanges;
+    }
+    public function isComposerBased(): bool
+    {
+        return $this->isComposerBased;
+    }
+    public function isPhpOnly(): bool
+    {
+        return $this->isPhpOnly;
+    }
+    public function isDryRun(): bool
     {
         return $this->isDryRun;
     }
-    public function shouldShowProgressBar() : bool
+    public function shouldShowProgressBar(): bool
     {
         return $this->showProgressBar;
     }
-    public function shouldClearCache() : bool
+    public function shouldClearCache(): bool
     {
         return $this->shouldClearCache;
     }
     /**
      * @return string[]
      */
-    public function getFileExtensions() : array
+    public function getFileExtensions(): array
     {
         Assert::notEmpty($this->fileExtensions);
         return $this->fileExtensions;
     }
-    public function getOnlyRule() : ?string
+    /**
+     * @return string[]
+     */
+    public function getOnlyRules(): array
     {
-        return $this->onlyRule;
+        return $this->onlyRules;
     }
     /**
      * @return string[]
      */
-    public function getPaths() : array
+    public function getPaths(): array
     {
         return $this->paths;
     }
-    public function getOutputFormat() : string
+    public function getOutputFormat(): string
     {
         return $this->outputFormat;
     }
-    public function shouldShowDiffs() : bool
+    public function shouldShowDiffs(): bool
     {
         return $this->showDiffs;
     }
-    public function getParallelPort() : ?string
+    public function getParallelPort(): ?string
     {
         return $this->parallelPort;
     }
-    public function getParallelIdentifier() : ?string
+    public function getParallelIdentifier(): ?string
     {
         return $this->parallelIdentifier;
     }
-    public function isParallel() : bool
+    public function isParallel(): bool
     {
         return $this->isParallel;
     }
-    public function getMemoryLimit() : ?string
+    public function getMemoryLimit(): ?string
     {
         return $this->memoryLimit;
     }
-    public function isDebug() : bool
+    public function isDebug(): bool
     {
         return $this->isDebug;
     }
-    public function isReportingWithRealPath() : bool
+    public function isReportingWithRealPath(): bool
     {
         return $this->reportingWithRealPath;
     }
-    public function getOnlySuffix() : ?string
+    public function getOnlySuffix(): ?string
     {
         return $this->onlySuffix;
+    }
+    /**
+     * @return string[]
+     */
+    public function getFilters(): array
+    {
+        return $this->filters;
+    }
+    /**
+     * @return LevelOverflow[]
+     */
+    public function getLevelOverflows(): array
+    {
+        return $this->levelOverflows;
+    }
+    /**
+     * @return string[]
+     */
+    public function getBothSetAndRulesDuplicatedRegistrations(): array
+    {
+        $rootStandaloneRegisteredRules = SimpleParameterProvider::provideArrayParameter(Option::ROOT_STANDALONE_REGISTERED_RULES);
+        $setRegisteredRules = SimpleParameterProvider::provideArrayParameter(Option::SET_REGISTERED_RULES);
+        $ruleDuplicatedRegistrations = array_intersect($rootStandaloneRegisteredRules, $setRegisteredRules);
+        return array_unique($ruleDuplicatedRegistrations);
+    }
+    public function shouldShowRulesSummary(): bool
+    {
+        return $this->showRulesSummary;
     }
 }

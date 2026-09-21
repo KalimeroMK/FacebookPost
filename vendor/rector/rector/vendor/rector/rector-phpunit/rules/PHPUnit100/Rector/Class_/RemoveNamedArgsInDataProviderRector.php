@@ -4,37 +4,19 @@ declare (strict_types=1);
 namespace Rector\PHPUnit\PHPUnit100\Rector\Class_;
 
 use PhpParser\Node;
-use PhpParser\Node\Expr\Array_;
-use PhpParser\Node\Expr\ArrayItem;
-use PhpParser\Node\Expr\Yield_;
-use PhpParser\Node\Scalar\Int_;
 use PhpParser\Node\Stmt\Class_;
-use PhpParser\Node\Stmt\Expression;
-use Rector\PHPUnit\NodeAnalyzer\TestsNodeAnalyzer;
-use Rector\PHPUnit\NodeFinder\DataProviderClassMethodFinder;
-use Rector\PHPUnit\Tests\PHPUnit100\Rector\Class_\RemoveNamedArgsInDataProviderRector\RemoveNamedArgsInDataProviderRectorTest;
+use Rector\Configuration\Deprecation\Contract\DeprecatedInterface;
+use Rector\Exception\ShouldNotHappenException;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
- * @see RemoveNamedArgsInDataProviderRectorTest
+ * @deprecated This rule is deprecated, as named arguments in data providers are on purpose to match test method
+ * parameters. PHPUnit handles their mapping itself, so there is nothing to remove.
  */
-final class RemoveNamedArgsInDataProviderRector extends AbstractRector
+final class RemoveNamedArgsInDataProviderRector extends AbstractRector implements DeprecatedInterface
 {
-    /**
-     * @readonly
-     */
-    private TestsNodeAnalyzer $testsNodeAnalyzer;
-    /**
-     * @readonly
-     */
-    private DataProviderClassMethodFinder $dataProviderClassMethodFinder;
-    public function __construct(TestsNodeAnalyzer $testsNodeAnalyzer, DataProviderClassMethodFinder $dataProviderClassMethodFinder)
-    {
-        $this->testsNodeAnalyzer = $testsNodeAnalyzer;
-        $this->dataProviderClassMethodFinder = $dataProviderClassMethodFinder;
-    }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Remove named arguments in data provider', [new CodeSample(<<<'CODE_SAMPLE'
 use PHPUnit\Framework\TestCase;
@@ -77,47 +59,15 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
-     * @param  Class_  $node
+     * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
-        if (!$this->testsNodeAnalyzer->isInTestClass($node)) {
-            return null;
-        }
-        $hasChanged = \false;
-        $dataProviders = $this->dataProviderClassMethodFinder->find($node);
-        foreach ($dataProviders as $dataProvider) {
-            /** @var Expression $stmt */
-            foreach ($dataProvider->getStmts() ?? [] as $stmt) {
-                $expr = $stmt->expr;
-                if ($expr instanceof Yield_) {
-                    $this->handleStmt($expr->value);
-                    $hasChanged = \true;
-                } elseif ($expr instanceof Array_) {
-                    $this->handleStmt($expr);
-                    $hasChanged = \true;
-                }
-            }
-        }
-        if ($hasChanged) {
-            return $node;
-        }
-        return null;
-    }
-    private function handleStmt(Array_ $array) : void
-    {
-        foreach ($array->items as $item) {
-            if (!$item instanceof ArrayItem) {
-                continue;
-            }
-            if (!$item->key instanceof Int_) {
-                $item->key = null;
-            }
-        }
+        throw new ShouldNotHappenException(sprintf('"%s" is deprecated, as named arguments in data providers are on purpose to match test method parameters and are handled by PHPUnit itself.', self::class));
     }
 }

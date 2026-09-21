@@ -15,7 +15,7 @@ use Rector\Rector\AbstractRector;
 use Rector\ValueObject\MethodName;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\ConfiguredCodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
-use RectorPrefix202502\Webmozart\Assert\Assert;
+use RectorPrefix202609\Webmozart\Assert\Assert;
 /**
  * @api used in rector-symfony
  * @see \Rector\Tests\Arguments\Rector\ClassMethod\ReplaceArgumentDefaultValueRector\ReplaceArgumentDefaultValueRectorTest
@@ -34,9 +34,9 @@ final class ReplaceArgumentDefaultValueRector extends AbstractRector implements 
     {
         $this->argumentDefaultValueReplacer = $argumentDefaultValueReplacer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
-        return new RuleDefinition('Replaces defined map of arguments in defined methods and their calls.', [new ConfiguredCodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Replace defined map of arguments in defined methods and their calls', [new ConfiguredCodeSample(<<<'CODE_SAMPLE'
 $someObject = new SomeClass;
 $someObject->someMethod(SomeClass::OLD_CONSTANT);
 CODE_SAMPLE
@@ -49,7 +49,7 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [MethodCall::class, StaticCall::class, ClassMethod::class, New_::class];
     }
@@ -59,7 +59,6 @@ CODE_SAMPLE
      */
     public function refactor(Node $node)
     {
-        $hasChanged = \false;
         if ($node instanceof New_) {
             return $this->refactorNew($node);
         }
@@ -67,42 +66,48 @@ CODE_SAMPLE
         if ($nodeName === null) {
             return null;
         }
+        $hasChanged = \false;
+        $currentNode = $node;
         foreach ($this->replaceArgumentDefaultValues as $replaceArgumentDefaultValue) {
             if (!$this->nodeNameResolver->isStringName($nodeName, $replaceArgumentDefaultValue->getMethod())) {
                 continue;
             }
-            if (!$this->nodeTypeResolver->isMethodStaticCallOrClassMethodObjectType($node, $replaceArgumentDefaultValue->getObjectType())) {
+            if (!$this->nodeTypeResolver->isMethodStaticCallOrClassMethodObjectType($currentNode, $replaceArgumentDefaultValue->getObjectType())) {
                 continue;
             }
-            $replacedNode = $this->argumentDefaultValueReplacer->processReplaces($node, $replaceArgumentDefaultValue);
-            if ($replacedNode instanceof Node) {
+            $replacedNode = $this->argumentDefaultValueReplacer->processReplaces($currentNode, $replaceArgumentDefaultValue);
+            if ($replacedNode !== null) {
+                $currentNode = $replacedNode;
                 $hasChanged = \true;
             }
         }
-        if ($hasChanged) {
-            return $node;
-        }
-        return null;
+        return $hasChanged ? $currentNode : null;
     }
     /**
      * @param mixed[] $configuration
      */
-    public function configure(array $configuration) : void
+    public function configure(array $configuration): void
     {
         Assert::allIsAOf($configuration, ReplaceArgumentDefaultValue::class);
         $this->replaceArgumentDefaultValues = $configuration;
     }
-    private function refactorNew(New_ $new) : ?New_
+    private function refactorNew(New_ $new): ?New_
     {
+        $hasChanged = \false;
+        $currentNode = $new;
         foreach ($this->replaceArgumentDefaultValues as $replaceArgumentDefaultValue) {
             if ($replaceArgumentDefaultValue->getMethod() !== MethodName::CONSTRUCT) {
                 continue;
             }
-            if (!$this->isObjectType($new, $replaceArgumentDefaultValue->getObjectType())) {
+            if (!$this->isObjectType($currentNode, $replaceArgumentDefaultValue->getObjectType())) {
                 continue;
             }
-            return $this->argumentDefaultValueReplacer->processReplaces($new, $replaceArgumentDefaultValue);
+            $replacedNode = $this->argumentDefaultValueReplacer->processReplaces($currentNode, $replaceArgumentDefaultValue);
+            if ($replacedNode !== null) {
+                $currentNode = $replacedNode;
+                $hasChanged = \true;
+            }
         }
-        return null;
+        return $hasChanged ? $currentNode : null;
     }
 }

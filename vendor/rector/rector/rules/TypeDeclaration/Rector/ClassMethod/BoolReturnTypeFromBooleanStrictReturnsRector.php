@@ -5,29 +5,18 @@ namespace Rector\TypeDeclaration\Rector\ClassMethod;
 
 use PhpParser\Node;
 use PhpParser\Node\Expr;
-use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
-use PhpParser\Node\Expr\BinaryOp\BooleanOr;
-use PhpParser\Node\Expr\BinaryOp\Equal;
-use PhpParser\Node\Expr\BinaryOp\Greater;
-use PhpParser\Node\Expr\BinaryOp\GreaterOrEqual;
-use PhpParser\Node\Expr\BinaryOp\Identical;
-use PhpParser\Node\Expr\BinaryOp\NotEqual;
-use PhpParser\Node\Expr\BinaryOp\NotIdentical;
-use PhpParser\Node\Expr\BinaryOp\Smaller;
-use PhpParser\Node\Expr\BinaryOp\SmallerOrEqual;
-use PhpParser\Node\Expr\BooleanNot;
 use PhpParser\Node\Expr\Closure;
 use PhpParser\Node\Expr\ConstFetch;
-use PhpParser\Node\Expr\Empty_;
 use PhpParser\Node\Expr\FuncCall;
-use PhpParser\Node\Expr\Isset_;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Function_;
 use PhpParser\Node\Stmt\Return_;
 use PHPStan\Analyser\Scope;
+use PHPStan\Reflection\ExtendedParametersAcceptor;
 use PHPStan\Reflection\ReflectionProvider;
+use Rector\NodeAnalyzer\ExprAnalyzer;
 use Rector\PhpParser\Node\BetterNodeFinder;
 use Rector\PhpParser\Node\Value\ValueResolver;
 use Rector\PHPStan\ScopeFetcher;
@@ -63,15 +52,20 @@ final class BoolReturnTypeFromBooleanStrictReturnsRector extends AbstractRector 
      * @readonly
      */
     private ReturnAnalyzer $returnAnalyzer;
-    public function __construct(ReflectionProvider $reflectionProvider, ValueResolver $valueResolver, BetterNodeFinder $betterNodeFinder, ClassMethodReturnTypeOverrideGuard $classMethodReturnTypeOverrideGuard, ReturnAnalyzer $returnAnalyzer)
+    /**
+     * @readonly
+     */
+    private ExprAnalyzer $exprAnalyzer;
+    public function __construct(ReflectionProvider $reflectionProvider, ValueResolver $valueResolver, BetterNodeFinder $betterNodeFinder, ClassMethodReturnTypeOverrideGuard $classMethodReturnTypeOverrideGuard, ReturnAnalyzer $returnAnalyzer, ExprAnalyzer $exprAnalyzer)
     {
         $this->reflectionProvider = $reflectionProvider;
         $this->valueResolver = $valueResolver;
         $this->betterNodeFinder = $betterNodeFinder;
         $this->classMethodReturnTypeOverrideGuard = $classMethodReturnTypeOverrideGuard;
         $this->returnAnalyzer = $returnAnalyzer;
+        $this->exprAnalyzer = $exprAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Add bool return type based on strict bool returns type operations', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
@@ -96,14 +90,14 @@ CODE_SAMPLE
     /**
      * @funcCall array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [ClassMethod::class, Function_::class];
     }
     /**
      * @param ClassMethod|Function_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         $scope = ScopeFetcher::fetch($node);
         if ($this->shouldSkip($node, $scope)) {
@@ -124,14 +118,14 @@ CODE_SAMPLE
         $node->returnType = new Identifier('bool');
         return $node;
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::SCALAR_TYPES;
     }
     /**
      * @param ClassMethod|Function_|Closure $node
      */
-    private function shouldSkip(Node $node, Scope $scope) : bool
+    private function shouldSkip(Node $node, Scope $scope): bool
     {
         // already has the type, skip
         if ($node->returnType instanceof Node) {
@@ -142,13 +136,13 @@ CODE_SAMPLE
     /**
      * @param Return_[] $returns
      */
-    private function hasOnlyBoolScalarReturnExprs(array $returns) : bool
+    private function hasOnlyBoolScalarReturnExprs(array $returns): bool
     {
         foreach ($returns as $return) {
             if (!$return->expr instanceof Expr) {
                 return \false;
             }
-            if ($this->isBooleanOp($return->expr)) {
+            if ($this->exprAnalyzer->isBoolExpr($return->expr)) {
                 continue;
             }
             if ($return->expr instanceof FuncCall && $this->isNativeBooleanReturnTypeFuncCall($return->expr)) {
@@ -158,10 +152,10 @@ CODE_SAMPLE
         }
         return \true;
     }
-    private function isNativeBooleanReturnTypeFuncCall(FuncCall $funcCall) : bool
+    private function isNativeBooleanReturnTypeFuncCall(FuncCall $funcCall): bool
     {
         $functionName = $this->getName($funcCall);
-        if (!\is_string($functionName)) {
+        if (!is_string($functionName)) {
             return \false;
         }
         $name = new Name($functionName);
@@ -172,57 +166,19 @@ CODE_SAMPLE
         if (!$functionReflection->isBuiltin()) {
             return \false;
         }
-        foreach ($functionReflection->getVariants() as $variant) {
-            if (!$variant->getNativeReturnType()->isBoolean()->yes()) {
-                return \false;
+        $found = \true;
+        foreach ($functionReflection->getVariants() as $extendedParametersAcceptor) {
+            if (!$extendedParametersAcceptor->getNativeReturnType()->isBoolean()->yes()) {
+                $found = \false;
+                break;
             }
         }
-        return \true;
-    }
-    private function isBooleanOp(Expr $expr) : bool
-    {
-        if ($expr instanceof Smaller) {
-            return \true;
-        }
-        if ($expr instanceof SmallerOrEqual) {
-            return \true;
-        }
-        if ($expr instanceof Greater) {
-            return \true;
-        }
-        if ($expr instanceof GreaterOrEqual) {
-            return \true;
-        }
-        if ($expr instanceof BooleanOr) {
-            return \true;
-        }
-        if ($expr instanceof BooleanAnd) {
-            return \true;
-        }
-        if ($expr instanceof Identical) {
-            return \true;
-        }
-        if ($expr instanceof NotIdentical) {
-            return \true;
-        }
-        if ($expr instanceof Equal) {
-            return \true;
-        }
-        if ($expr instanceof NotEqual) {
-            return \true;
-        }
-        if ($expr instanceof Empty_) {
-            return \true;
-        }
-        if ($expr instanceof Isset_) {
-            return \true;
-        }
-        return $expr instanceof BooleanNot;
+        return $found;
     }
     /**
      * @param Return_[] $returns
      */
-    private function hasOnlyBooleanConstExprs(array $returns) : bool
+    private function hasOnlyBooleanConstExprs(array $returns): bool
     {
         foreach ($returns as $return) {
             if (!$return->expr instanceof ConstFetch) {

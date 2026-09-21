@@ -9,12 +9,21 @@ declare (strict_types=1);
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\SebastianBergmann\Diff;
+namespace RectorPrefix202609\SebastianBergmann\Diff;
 
 final class Line
 {
+    /**
+     * @var int
+     */
     public const ADDED = 1;
+    /**
+     * @var int
+     */
     public const REMOVED = 2;
+    /**
+     * @var int
+     */
     public const UNCHANGED = 3;
     private int $type;
     private string $content;
@@ -23,23 +32,23 @@ final class Line
         $this->type = $type;
         $this->content = $content;
     }
-    public function content() : string
+    public function content(): string
     {
         return $this->content;
     }
-    public function type() : int
+    public function type(): int
     {
         return $this->type;
     }
-    public function isAdded() : bool
+    public function isAdded(): bool
     {
         return $this->type === self::ADDED;
     }
-    public function isRemoved() : bool
+    public function isRemoved(): bool
     {
         return $this->type === self::REMOVED;
     }
-    public function isUnchanged() : bool
+    public function isUnchanged(): bool
     {
         return $this->type === self::UNCHANGED;
     }

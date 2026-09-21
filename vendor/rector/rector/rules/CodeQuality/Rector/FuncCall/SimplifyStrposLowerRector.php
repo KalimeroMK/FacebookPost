@@ -3,7 +3,7 @@
 declare (strict_types=1);
 namespace Rector\CodeQuality\Rector\FuncCall;
 
-use RectorPrefix202502\Nette\Utils\Strings;
+use RectorPrefix202609\Nette\Utils\Strings;
 use PhpParser\Node;
 use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Name;
@@ -17,25 +17,25 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 final class SimplifyStrposLowerRector extends AbstractRector
 {
     /**
-     * @var string
      * @see https://regex101.com/r/Jokjt8/1
+     * @var string
      */
     private const UPPERCASE_REGEX = '#[A-Z]#';
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Simplify strpos(strtolower(), "...") calls', [new CodeSample('strpos(strtolower($var), "...")', 'stripos($var, "...")')]);
     }
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [FuncCall::class];
     }
     /**
      * @param FuncCall $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$this->isName($node, 'strpos')) {
             return null;
@@ -51,7 +51,6 @@ final class SimplifyStrposLowerRector extends AbstractRector
         if (!$firstArg->value instanceof FuncCall) {
             return null;
         }
-        /** @var FuncCall $innerFuncCall */
         $innerFuncCall = $firstArg->value;
         if (!$this->isName($innerFuncCall, 'strtolower')) {
             return null;

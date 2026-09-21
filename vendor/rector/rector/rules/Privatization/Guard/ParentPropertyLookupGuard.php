@@ -43,6 +43,14 @@ final class ParentPropertyLookupGuard
      * @readonly
      */
     private ClassReflectionAnalyzer $classReflectionAnalyzer;
+    /**
+     * Symfony Console Command reserved static properties, read by the parent class via reflection
+     * even when not declared on the parent class itself
+     * @see https://github.com/symfony/console/blob/7.1/Command/Command.php
+     *
+     * @var string[]
+     */
+    private const SYMFONY_COMMAND_RESERVED_PROPERTY_NAMES = ['defaultName', 'defaultDescription'];
     public function __construct(BetterNodeFinder $betterNodeFinder, NodeNameResolver $nodeNameResolver, PropertyFetchAnalyzer $propertyFetchAnalyzer, AstResolver $astResolver, PropertyManipulator $propertyManipulator, ClassReflectionAnalyzer $classReflectionAnalyzer)
     {
         $this->betterNodeFinder = $betterNodeFinder;
@@ -55,7 +63,7 @@ final class ParentPropertyLookupGuard
     /**
      * @param \PhpParser\Node\Stmt\Property|string $property
      */
-    public function isLegal($property, ?ClassReflection $classReflection) : bool
+    public function isLegal($property, ?ClassReflection $classReflection): bool
     {
         if (!$classReflection instanceof ClassReflection) {
             return \false;
@@ -65,6 +73,9 @@ final class ParentPropertyLookupGuard
         }
         $propertyName = $property instanceof Property ? $this->nodeNameResolver->getName($property) : $property;
         if ($this->propertyManipulator->isUsedByTrait($classReflection, $propertyName)) {
+            return \false;
+        }
+        if ($this->isSymfonyCommandReservedProperty($classReflection, $propertyName)) {
             return \false;
         }
         $parentClassName = $this->classReflectionAnalyzer->resolveParentClassName($classReflection);
@@ -79,7 +90,14 @@ final class ParentPropertyLookupGuard
         }
         return $this->isGuardedByParents($parentClassReflections, $propertyName, $className);
     }
-    private function isFoundInParentClassMethods(ClassReflection $parentClassReflection, string $propertyName, string $className) : bool
+    private function isSymfonyCommandReservedProperty(ClassReflection $classReflection, string $propertyName): bool
+    {
+        if (!in_array($propertyName, self::SYMFONY_COMMAND_RESERVED_PROPERTY_NAMES, \true)) {
+            return \false;
+        }
+        return $classReflection->is('Symfony\Component\Console\Command\Command');
+    }
+    private function isFoundInParentClassMethods(ClassReflection $parentClassReflection, string $propertyName, string $className): bool
     {
         $classLike = $this->astResolver->resolveClassFromClassReflection($parentClassReflection);
         if (!$classLike instanceof Class_) {
@@ -97,9 +115,9 @@ final class ParentPropertyLookupGuard
     /**
      * @param Stmt[] $stmts
      */
-    private function isFoundInMethodStmts(array $stmts, string $propertyName, string $className) : bool
+    private function isFoundInMethodStmts(array $stmts, string $propertyName, string $className): bool
     {
-        return (bool) $this->betterNodeFinder->findFirst($stmts, function (Node $subNode) use($propertyName, $className) : bool {
+        return (bool) $this->betterNodeFinder->findFirst($stmts, function (Node $subNode) use ($propertyName, $className): bool {
             if (!$this->propertyFetchAnalyzer->isPropertyFetch($subNode)) {
                 return \false;
             }
@@ -121,10 +139,13 @@ final class ParentPropertyLookupGuard
     /**
      * @param ClassReflection[] $parentClassReflections
      */
-    private function isGuardedByParents(array $parentClassReflections, string $propertyName, string $className) : bool
+    private function isGuardedByParents(array $parentClassReflections, string $propertyName, string $className): bool
     {
         foreach ($parentClassReflections as $parentClassReflection) {
-            if ($parentClassReflection->hasProperty($propertyName)) {
+            if ($parentClassReflection->hasInstanceProperty($propertyName)) {
+                return \false;
+            }
+            if ($parentClassReflection->hasStaticProperty($propertyName)) {
                 return \false;
             }
             if ($this->isFoundInParentClassMethods($parentClassReflection, $propertyName, $className)) {

@@ -8,6 +8,7 @@ use PhpParser\Node\FunctionLike;
 use PhpParser\Node\Name;
 use PhpParser\Node\Param;
 use PHPStan\PhpDocParser\Ast\PhpDoc\ParamTagValueNode;
+use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use Rector\BetterPhpDocParser\PhpDocManipulator\PhpDocTypeChanger;
 use Rector\BetterPhpDocParser\ValueObject\Type\BracketsAwareUnionTypeNode;
@@ -69,7 +70,7 @@ final class DeadParamTagValueNodeAnalyzer
         $this->staticTypeMapper = $staticTypeMapper;
         $this->templateTypeRemovalGuard = $templateTypeRemovalGuard;
     }
-    public function isDead(ParamTagValueNode $paramTagValueNode, FunctionLike $functionLike) : bool
+    public function isDead(ParamTagValueNode $paramTagValueNode, FunctionLike $functionLike): bool
     {
         $param = $this->paramAnalyzer->getParamByName($paramTagValueNode->parameterName, $functionLike);
         if (!$param instanceof Param) {
@@ -79,6 +80,9 @@ final class DeadParamTagValueNodeAnalyzer
             return \false;
         }
         if ($paramTagValueNode->description !== '') {
+            return \false;
+        }
+        if ($paramTagValueNode->type instanceof GenericTypeNode) {
             return \false;
         }
         $docType = $this->staticTypeMapper->mapPHPStanPhpDocTypeNodeToPHPStanType($paramTagValueNode->type, $functionLike);
@@ -99,7 +103,7 @@ final class DeadParamTagValueNodeAnalyzer
         }
         return $this->isAllowedBracketAwareUnion($paramTagValueNode->type);
     }
-    private function isAllowedBracketAwareUnion(BracketsAwareUnionTypeNode $bracketsAwareUnionTypeNode) : bool
+    private function isAllowedBracketAwareUnion(BracketsAwareUnionTypeNode $bracketsAwareUnionTypeNode): bool
     {
         if ($this->mixedArrayTypeNodeAnalyzer->hasMixedArrayType($bracketsAwareUnionTypeNode)) {
             return \false;

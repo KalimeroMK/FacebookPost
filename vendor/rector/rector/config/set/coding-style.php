@@ -1,11 +1,11 @@
 <?php
 
 declare (strict_types=1);
-namespace RectorPrefix202502;
+namespace RectorPrefix202609;
 
 use Rector\Config\Level\CodingStyleLevel;
 use Rector\Config\RectorConfig;
-return static function (RectorConfig $rectorConfig) : void {
+return static function (RectorConfig $rectorConfig): void {
     foreach (CodingStyleLevel::RULES_WITH_CONFIGURATION as $rectorClass => $configuration) {
         $rectorConfig->ruleWithConfiguration($rectorClass, $configuration);
     }

@@ -1,12 +1,12 @@
 <?php
 
-namespace RectorPrefix202502\React\EventLoop;
+namespace RectorPrefix202609\React\EventLoop;
 
 use BadMethodCallException;
 use Event;
 use EventBase;
-use RectorPrefix202502\React\EventLoop\Tick\FutureTickQueue;
-use RectorPrefix202502\React\EventLoop\Timer\Timer;
+use RectorPrefix202609\React\EventLoop\Tick\FutureTickQueue;
+use RectorPrefix202609\React\EventLoop\Timer\Timer;
 use SplObjectStorage;
 /**
  * An `ext-event` based event loop.
@@ -58,7 +58,7 @@ final class ExtEventLoop implements LoopInterface
     {
         // explicitly clear all references to Event objects to prevent SEGFAULTs on Windows
         foreach ($this->timerEvents as $timer) {
-            $this->timerEvents->detach($timer);
+            $this->timerEvents->offsetUnset($timer);
         }
         $this->readEvents = array();
         $this->writeEvents = array();
@@ -125,9 +125,9 @@ final class ExtEventLoop implements LoopInterface
     }
     public function cancelTimer(TimerInterface $timer)
     {
-        if ($this->timerEvents->contains($timer)) {
+        if ($this->timerEvents->offsetExists($timer)) {
             $this->timerEvents[$timer]->free();
-            $this->timerEvents->detach($timer);
+            $this->timerEvents->offsetUnset($timer);
         }
     }
     public function futureTick($listener)
@@ -193,9 +193,9 @@ final class ExtEventLoop implements LoopInterface
     private function createTimerCallback()
     {
         $timers = $this->timerEvents;
-        $this->timerCallback = function ($_, $__, $timer) use($timers) {
+        $this->timerCallback = function ($_, $__, $timer) use ($timers) {
             \call_user_func($timer->getCallback(), $timer);
-            if (!$timer->isPeriodic() && $timers->contains($timer)) {
+            if (!$timer->isPeriodic() && $timers->offsetExists($timer)) {
                 $this->cancelTimer($timer);
             }
         };
@@ -211,7 +211,7 @@ final class ExtEventLoop implements LoopInterface
     {
         $read =& $this->readListeners;
         $write =& $this->writeListeners;
-        $this->streamCallback = function ($stream, $flags) use(&$read, &$write) {
+        $this->streamCallback = function ($stream, $flags) use (&$read, &$write) {
             $key = (int) $stream;
             if (Event::READ === (Event::READ & $flags) && isset($read[$key])) {
                 \call_user_func($read[$key], $stream);

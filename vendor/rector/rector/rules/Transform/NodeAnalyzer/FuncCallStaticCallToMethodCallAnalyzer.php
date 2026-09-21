@@ -54,7 +54,7 @@ final class FuncCallStaticCallToMethodCallAnalyzer
         $this->classDependencyManipulator = $classDependencyManipulator;
     }
     /**
-     * @return \PhpParser\Node\Expr\MethodCall|\PhpParser\Node\Expr\PropertyFetch|\PhpParser\Node\Expr\Variable
+     * @return \PhpParser\Node\Expr\MethodCall|\PhpParser\Node\Expr\PropertyFetch|\PhpParser\Node\Expr\Variable|null
      */
     public function matchTypeProvidingExpr(Class_ $class, ClassMethod $classMethod, ObjectType $objectType)
     {
@@ -65,6 +65,10 @@ final class FuncCallStaticCallToMethodCallAnalyzer
             }
             return $expr;
         }
+        // Cannot add constructor dependency when nearest parent constructor is final
+        if ($this->classDependencyManipulator->hasFinalParentConstructor($class)) {
+            return null;
+        }
         $propertyName = $this->propertyNaming->fqnToVariableName($objectType);
         $this->classDependencyManipulator->addConstructorDependency($class, new PropertyMetadata($propertyName, $objectType));
         return $this->propertyFetchFactory->createFromType($objectType);
@@ -72,7 +76,7 @@ final class FuncCallStaticCallToMethodCallAnalyzer
     /**
      * @param \PhpParser\Node\Stmt\ClassMethod|\PhpParser\Node\Stmt\Function_ $functionLike
      */
-    private function addClassMethodParamForVariable(Variable $variable, ObjectType $objectType, $functionLike) : void
+    private function addClassMethodParamForVariable(Variable $variable, ObjectType $objectType, $functionLike): void
     {
         /** @var string $variableName */
         $variableName = $this->nodeNameResolver->getName($variable);

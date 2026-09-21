@@ -7,9 +7,16 @@ use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Attribute;
 use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\Array_;
+use PhpParser\Node\Expr\ClassConstFetch;
+use PhpParser\Node\Expr\ConstFetch;
 use PhpParser\Node\Expr\MethodCall;
+use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Identifier;
+use PhpParser\Node\Name;
+use PhpParser\Node\Scalar;
+use PhpParser\Node\Scalar\InterpolatedString;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
@@ -18,17 +25,21 @@ use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Type\ObjectType;
 use Rector\PhpAttribute\NodeFactory\PhpAttributeGroupFactory;
 use Rector\Rector\AbstractRector;
-use Rector\Symfony\Enum\SymfonyAnnotation;
+use Rector\Symfony\Enum\SymfonyAttribute;
+use Rector\Symfony\Enum\SymfonyClass;
 use Rector\ValueObject\PhpVersionFeature;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
 use Rector\VersionBonding\Contract\MinPhpVersionInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
+use RectorPrefix202609\Webmozart\Assert\Assert;
 /**
- * @changelog https://symfony.com/doc/current/console.html#registering-the-command
+ * @see https://symfony.com/doc/current/console.html#registering-the-command
  *
  * @see \Rector\Symfony\Tests\Symfony61\Rector\Class_\CommandConfigureToAttributeRector\CommandConfigureToAttributeRectorTest
  */
-final class CommandConfigureToAttributeRector extends AbstractRector implements MinPhpVersionInterface
+final class CommandConfigureToAttributeRector extends AbstractRector implements MinPhpVersionInterface, ComposerPackageConstraintInterface
 {
     /**
      * @readonly
@@ -47,13 +58,17 @@ final class CommandConfigureToAttributeRector extends AbstractRector implements 
         $this->phpAttributeGroupFactory = $phpAttributeGroupFactory;
         $this->reflectionProvider = $reflectionProvider;
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::ATTRIBUTES;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
     {
-        return new RuleDefinition('Add Symfony\\Component\\Console\\Attribute\\AsCommand to Symfony Commands from configure()', [new CodeSample(<<<'CODE_SAMPLE'
+        return new ComposerPackageConstraint('symfony/console', '>=6.1');
+    }
+    public function getRuleDefinition(): RuleDefinition
+    {
+        return new RuleDefinition('Add Symfony\Component\Console\Attribute\AsCommand to Symfony Commands from configure()', [new CodeSample(<<<'CODE_SAMPLE'
 use Symfony\Component\Console\Command\Command;
 
 final class SunshineCommand extends Command
@@ -80,22 +95,22 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($node->isAbstract()) {
             return null;
         }
-        if (!$this->reflectionProvider->hasClass(SymfonyAnnotation::AS_COMMAND)) {
+        if (!$this->reflectionProvider->hasClass(SymfonyAttribute::AS_COMMAND)) {
             return null;
         }
-        if (!$this->isObjectType($node, new ObjectType('Symfony\\Component\\Console\\Command\\Command'))) {
+        if (!$this->isObjectType($node, new ObjectType(SymfonyClass::COMMAND))) {
             return null;
         }
         $configureClassMethod = $node->getMethod('configure');
@@ -107,7 +122,7 @@ CODE_SAMPLE
         $attributeArgs = [];
         foreach ($node->attrGroups as $attrGroup) {
             foreach ($attrGroup->attrs as $attribute) {
-                if (!$this->nodeNameResolver->isName($attribute->name, SymfonyAnnotation::AS_COMMAND)) {
+                if (!$this->isName($attribute->name, SymfonyAttribute::AS_COMMAND)) {
                     continue;
                 }
                 $asCommandAttribute = $attribute;
@@ -121,34 +136,89 @@ CODE_SAMPLE
                 break 2;
             }
         }
-        if (!$asCommandAttribute instanceof Attribute) {
-            $asCommandAttributeGroup = $this->phpAttributeGroupFactory->createFromClass(SymfonyAnnotation::AS_COMMAND);
-            $asCommandAttribute = $asCommandAttributeGroup->attrs[0];
-            $node->attrGroups[] = $asCommandAttributeGroup;
-        }
+        $existingAttributeNames = array_map(function (Arg $arg): string {
+            Assert::isInstanceOf($arg->name, Identifier::class);
+            return $arg->name->toString();
+        }, $attributeArgs);
         foreach (self::METHODS_TO_ATTRIBUTE_NAMES as $methodName => $attributeName) {
             $resolvedExpr = $this->findAndRemoveMethodExpr($configureClassMethod, $methodName);
-            if ($resolvedExpr instanceof Expr) {
-                $attributeArgs[] = $this->createNamedArg($attributeName, $resolvedExpr);
+            if (!$resolvedExpr instanceof Expr) {
+                continue;
             }
+            if (in_array($attributeName, $existingAttributeNames, \true)) {
+                continue;
+            }
+            $attributeArgs[] = $this->createNamedArg($attributeName, $resolvedExpr);
         }
-        $asCommandAttribute->args = $attributeArgs;
+        // only create/update the attribute when there is something to fill it with,
+        // to avoid adding an empty #[AsCommand] to an already empty configure()
+        if ($attributeArgs !== []) {
+            if (!$asCommandAttribute instanceof Attribute) {
+                $asCommandAttributeGroup = $this->phpAttributeGroupFactory->createFromClass(SymfonyAttribute::AS_COMMAND);
+                $asCommandAttribute = $asCommandAttributeGroup->attrs[0];
+                $node->attrGroups[] = $asCommandAttributeGroup;
+            }
+            $asCommandAttribute->args = $attributeArgs;
+        }
+        $hasChanged = $attributeArgs !== [];
         // remove left overs
         foreach ((array) $configureClassMethod->stmts as $key => $stmt) {
             if ($this->isExpressionVariableThis($stmt)) {
                 unset($configureClassMethod->stmts[$key]);
+                $hasChanged = \true;
             }
+        }
+        // remove now empty configure() method, only a possible parent::configure() call left
+        if ($this->isEmptyConfigureClassMethod($configureClassMethod)) {
+            foreach ($node->stmts as $key => $classStmt) {
+                if ($classStmt === $configureClassMethod) {
+                    unset($node->stmts[$key]);
+                    $hasChanged = \true;
+                    break;
+                }
+            }
+        }
+        // nothing could be extracted (e.g. only non-constant values), leave the class untouched
+        if (!$hasChanged) {
+            return null;
         }
         return $node;
     }
-    private function createNamedArg(string $name, Expr $expr) : Arg
+    private function isEmptyConfigureClassMethod(ClassMethod $classMethod): bool
+    {
+        foreach ((array) $classMethod->stmts as $stmt) {
+            if ($this->isParentConfigureCall($stmt)) {
+                continue;
+            }
+            return \false;
+        }
+        return \true;
+    }
+    private function isParentConfigureCall(Stmt $stmt): bool
+    {
+        if (!$stmt instanceof Expression) {
+            return \false;
+        }
+        if (!$stmt->expr instanceof StaticCall) {
+            return \false;
+        }
+        $staticCall = $stmt->expr;
+        if (!$staticCall->class instanceof Name) {
+            return \false;
+        }
+        if (!$staticCall->class->isSpecialClassName() || $staticCall->class->toString() !== 'parent') {
+            return \false;
+        }
+        return $this->isName($staticCall->name, 'configure');
+    }
+    private function createNamedArg(string $name, Expr $expr): Arg
     {
         return new Arg($expr, \false, \false, [], new Identifier($name));
     }
-    private function findAndRemoveMethodExpr(ClassMethod $classMethod, string $methodName) : ?Expr
+    private function findAndRemoveMethodExpr(ClassMethod $classMethod, string $methodName): ?Expr
     {
         $expr = null;
-        $this->traverseNodesWithCallable((array) $classMethod->stmts, function (Node $node) use(&$expr, $methodName) : ?Expr {
+        $this->traverseNodesWithCallable((array) $classMethod->stmts, function (Node $node) use (&$expr, $methodName): ?Expr {
             // find setName() method call
             if (!$node instanceof MethodCall) {
                 return null;
@@ -156,12 +226,39 @@ CODE_SAMPLE
             if (!$this->isName($node->name, $methodName)) {
                 return null;
             }
-            $expr = $node->getArgs()[0]->value;
+            $argValue = $node->getArgs()[0]->value;
+            // attribute arguments must be constant expressions;
+            // a runtime value (e.g. $this->description) cannot be inlined, so leave the call in place
+            if (!$this->isPermittedAttributeValue($argValue)) {
+                return null;
+            }
+            $expr = $argValue;
             return $node->var;
         });
         return $expr;
     }
-    private function isExpressionVariableThis(Stmt $stmt) : bool
+    private function isPermittedAttributeValue(Expr $expr): bool
+    {
+        if ($expr instanceof Scalar) {
+            return !$expr instanceof InterpolatedString;
+        }
+        if ($expr instanceof ConstFetch || $expr instanceof ClassConstFetch) {
+            return \true;
+        }
+        if ($expr instanceof Array_) {
+            foreach ($expr->items as $item) {
+                if ($item->key instanceof Expr && !$this->isPermittedAttributeValue($item->key)) {
+                    return \false;
+                }
+                if (!$this->isPermittedAttributeValue($item->value)) {
+                    return \false;
+                }
+            }
+            return \true;
+        }
+        return \false;
+    }
+    private function isExpressionVariableThis(Stmt $stmt): bool
     {
         if (!$stmt instanceof Expression) {
             return \false;

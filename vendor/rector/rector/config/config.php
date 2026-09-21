@@ -1,13 +1,11 @@
 <?php
 
 declare (strict_types=1);
-namespace RectorPrefix202502;
+namespace RectorPrefix202609;
 
-use RectorPrefix202502\OndraM\CiDetector\CiDetector;
 use Rector\Bootstrap\ExtensionConfigResolver;
-use Rector\Caching\ValueObject\Storage\MemoryCacheStorage;
 use Rector\Config\RectorConfig;
-return static function (RectorConfig $rectorConfig) : void {
+return static function (RectorConfig $rectorConfig): void {
     $rectorConfig->paths([]);
     $rectorConfig->skip([]);
     $rectorConfig->autoloadPaths([]);
@@ -21,11 +19,6 @@ return static function (RectorConfig $rectorConfig) : void {
     $rectorConfig->fileExtensions(['php']);
     $rectorConfig->cacheDirectory(\sys_get_temp_dir() . '/rector_cached_files');
     $rectorConfig->containerCacheDirectory(\sys_get_temp_dir());
-    // use faster in-memory cache in CI.
-    // CI always starts from scratch, therefore IO intensive caching is not worth it
-    if ((new CiDetector())->isCiDetected()) {
-        $rectorConfig->cacheClass(MemoryCacheStorage::class);
-    }
     // load internal rector-* extension configs
     $extensionConfigResolver = new ExtensionConfigResolver();
     foreach ($extensionConfigResolver->provide() as $extensionConfigFile) {
@@ -35,4 +28,5 @@ return static function (RectorConfig $rectorConfig) : void {
     $rectorConfig->newLineOnFluentCall(\false);
     // allow real paths in output formatters
     $rectorConfig->reportingRealPath(\false);
+    $rectorConfig->treatClassesAsFinal(\false);
 };

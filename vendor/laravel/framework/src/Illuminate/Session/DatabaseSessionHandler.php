@@ -9,6 +9,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\InteractsWithTime;
+use RuntimeException;
 use SessionHandlerInterface;
 
 class DatabaseSessionHandler implements ExistenceAwareInterface, SessionHandlerInterface
@@ -57,7 +58,6 @@ class DatabaseSessionHandler implements ExistenceAwareInterface, SessionHandlerI
      * @param  string  $table
      * @param  int  $minutes
      * @param  \Illuminate\Contracts\Container\Container|null  $container
-     * @return void
      */
     public function __construct(ConnectionInterface $connection, $table, $minutes, ?Container $container = null)
     {
@@ -85,6 +85,26 @@ class DatabaseSessionHandler implements ExistenceAwareInterface, SessionHandlerI
     public function close(): bool
     {
         return true;
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * @return string
+     */
+    public function create_sid(): string
+    {
+        return session_create_id() ?: throw new RuntimeException('Unable to create a session ID.');
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * @return bool
+     */
+    public function validateId($id): bool
+    {
+        return ! is_null($this->getQuery()->find($id));
     }
 
     /**
@@ -256,7 +276,7 @@ class DatabaseSessionHandler implements ExistenceAwareInterface, SessionHandlerI
      */
     protected function userAgent()
     {
-        return substr((string) $this->container->make('request')->header('User-Agent'), 0, 500);
+        return mb_substr(mb_convert_encoding((string) $this->container->make('request')->header('User-Agent'), 'UTF-8'), 0, 500);
     }
 
     /**

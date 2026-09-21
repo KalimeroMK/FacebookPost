@@ -10,7 +10,10 @@ use Rector\BetterPhpDocParser\PhpDocInfo\PhpDocInfo;
 use Rector\PhpDocParser\PhpDocParser\PhpDocNodeTraverser;
 final class PhpDocTagRemover
 {
-    public function removeByName(PhpDocInfo $phpDocInfo, string $name) : bool
+    /**
+     * @api phpunit
+     */
+    public function removeByName(PhpDocInfo $phpDocInfo, string $name): bool
     {
         $hasChanged = \false;
         $phpDocNode = $phpDocInfo->getPhpDocNode();
@@ -29,12 +32,12 @@ final class PhpDocTagRemover
         }
         return $hasChanged;
     }
-    public function removeTagValueFromNode(PhpDocInfo $phpDocInfo, Node $desiredNode) : bool
+    public function removeTagValueFromNode(PhpDocInfo $phpDocInfo, Node $desiredNode): bool
     {
         $phpDocNode = $phpDocInfo->getPhpDocNode();
         $hasChanged = \false;
         $phpDocNodeTraverser = new PhpDocNodeTraverser();
-        $phpDocNodeTraverser->traverseWithCallable($phpDocNode, '', static function (Node $node) use($desiredNode, &$hasChanged) : ?int {
+        $phpDocNodeTraverser->traverseWithCallable($phpDocNode, '', static function (Node $node) use ($desiredNode, &$hasChanged): ?int {
             if ($node instanceof PhpDocTagNode && $node->value === $desiredNode) {
                 $hasChanged = \true;
                 return PhpDocNodeTraverser::NODE_REMOVE;
@@ -47,10 +50,8 @@ final class PhpDocTagRemover
         });
         return $hasChanged;
     }
-    private function areAnnotationNamesEqual(string $firstAnnotationName, string $secondAnnotationName) : bool
+    private function areAnnotationNamesEqual(string $firstAnnotationName, string $secondAnnotationName): bool
     {
-        $firstAnnotationName = \trim($firstAnnotationName, '@');
-        $secondAnnotationName = \trim($secondAnnotationName, '@');
-        return $firstAnnotationName === $secondAnnotationName;
+        return trim($firstAnnotationName, '@') === trim($secondAnnotationName, '@');
     }
 }

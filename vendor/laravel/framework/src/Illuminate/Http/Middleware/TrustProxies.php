@@ -20,11 +20,11 @@ class TrustProxies
      * @var int
      */
     protected $headers = Request::HEADER_X_FORWARDED_FOR |
-                         Request::HEADER_X_FORWARDED_HOST |
-                         Request::HEADER_X_FORWARDED_PORT |
-                         Request::HEADER_X_FORWARDED_PROTO |
-                         Request::HEADER_X_FORWARDED_PREFIX |
-                         Request::HEADER_X_FORWARDED_AWS_ELB;
+        Request::HEADER_X_FORWARDED_HOST |
+        Request::HEADER_X_FORWARDED_PORT |
+        Request::HEADER_X_FORWARDED_PROTO |
+        Request::HEADER_X_FORWARDED_PREFIX |
+        Request::HEADER_X_FORWARDED_AWS_ELB;
 
     /**
      * The proxies that have been configured to always be trusted.
@@ -68,8 +68,16 @@ class TrustProxies
     {
         $trustedIps = $this->proxies() ?: config('trustedproxy.proxies');
 
-        if (is_null($trustedIps) && laravel_cloud()) {
+        if (is_null($trustedIps) &&
+            (laravel_cloud() ||
+             str_ends_with($request->host(), '.on-forge.com') ||
+             str_ends_with($request->host(), '.on-vapor.com'))) {
             $trustedIps = '*';
+        }
+
+        if (str_ends_with($request->host(), '.on-forge.com') ||
+            str_ends_with($request->host(), '.on-vapor.com')) {
+            $request->headers->remove('X-Forwarded-Host');
         }
 
         if ($trustedIps === '*' || $trustedIps === '**') {
@@ -77,8 +85,8 @@ class TrustProxies
         }
 
         $trustedIps = is_string($trustedIps)
-                ? array_map(trim(...), explode(',', $trustedIps))
-                : $trustedIps;
+            ? array_map(trim(...), explode(',', $trustedIps))
+            : $trustedIps;
 
         if (is_array($trustedIps)) {
             return $this->setTrustedProxyIpAddressesToSpecificIps($request, $trustedIps);
@@ -104,14 +112,14 @@ class TrustProxies
     }
 
     /**
-     * Set the trusted proxy to be the IP address calling this servers.
+     * Set the trusted proxies to catchall addresses for IPv4 and IPv6.
      *
      * @param  \Illuminate\Http\Request  $request
      * @return void
      */
     protected function setTrustedProxyIpAddressesToTheCallingIp(Request $request)
     {
-        $request->setTrustedProxies([$request->server->get('REMOTE_ADDR')], $this->getTrustedHeaderNames());
+        $request->setTrustedProxies(['0.0.0.0/0', '::/0'], $this->getTrustedHeaderNames());
     }
 
     /**

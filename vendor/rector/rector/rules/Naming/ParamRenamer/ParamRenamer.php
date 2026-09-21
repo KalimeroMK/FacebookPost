@@ -30,16 +30,16 @@ final class ParamRenamer
         $this->docBlockUpdater = $docBlockUpdater;
         $this->phpDocInfoFactory = $phpDocInfoFactory;
     }
-    public function rename(ParamRename $paramRename) : void
+    public function rename(ParamRename $paramRename): void
     {
         // 1. rename param
         $paramRename->getVariable()->name = $paramRename->getExpectedName();
         // 2. rename param in the rest of the method
-        $this->variableRenamer->renameVariableInFunctionLike($paramRename->getFunctionLike(), $paramRename->getCurrentName(), $paramRename->getExpectedName(), null);
+        $this->variableRenamer->renameVariableInFunctionLike($paramRename->getFunctionLike(), $paramRename->getCurrentName(), $paramRename->getExpectedName());
         // 3. rename @param variable in docblock too
         $this->renameParameterNameInDocBlock($paramRename);
     }
-    private function renameParameterNameInDocBlock(ParamRename $paramRename) : void
+    private function renameParameterNameInDocBlock(ParamRename $paramRename): void
     {
         $functionLike = $paramRename->getFunctionLike();
         $phpDocInfo = $this->phpDocInfoFactory->createFromNode($functionLike);

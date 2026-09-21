@@ -3,12 +3,14 @@
 declare (strict_types=1);
 namespace Rector\PHPStanStaticTypeMapper\TypeMapper;
 
-use RectorPrefix202502\Nette\Utils\Strings;
+use RectorPrefix202609\Nette\Utils\Strings;
 use PhpParser\Node;
 use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
+use PHPStan\Type\ArrayType;
 use PHPStan\Type\Generic\GenericObjectType;
+use PHPStan\Type\MixedType;
 use PHPStan\Type\ObjectType;
 use PHPStan\Type\Type;
 use PHPStan\Type\TypeTraverser;
@@ -23,38 +25,44 @@ use Rector\StaticTypeMapper\ValueObject\Type\ShortenedObjectType;
  */
 final class ObjectTypeMapper implements TypeMapperInterface
 {
-    public function getNodeClass() : string
+    /**
+     * @return array<class-string<Type>>
+     */
+    public function getNodeClasses(): array
     {
-        return ObjectType::class;
+        return [ObjectType::class];
     }
     /**
      * @param ObjectType $type
      */
-    public function mapToPHPStanPhpDocTypeNode(Type $type) : TypeNode
+    public function mapToPHPStanPhpDocTypeNode(Type $type): TypeNode
     {
-        $type = TypeTraverser::map($type, static function (Type $type, callable $traverse) : Type {
+        $type = TypeTraverser::map($type, static function (Type $type, callable $traverse): Type {
+            if ($type instanceof ArrayType && ($type->getItemType() instanceof MixedType && $type->getKeyType() instanceof MixedType)) {
+                return new ArrayType(new MixedType(), new MixedType(\true));
+            }
             if (!$type instanceof ObjectType) {
                 return $traverse($type);
             }
-            $typeClass = \get_class($type);
+            $typeClass = get_class($type);
             // early native ObjectType check
-            if ($typeClass === 'PHPStan\\Type\\ObjectType') {
+            if ($typeClass === 'PHPStan\Type\ObjectType') {
                 return new ObjectType('\\' . $type->getClassName());
             }
             if ($type instanceof FullyQualifiedObjectType) {
                 return new ObjectType('\\' . $type->getClassName());
             }
             if ($type instanceof GenericObjectType) {
-                return $traverse(new GenericObjectType('\\' . $type->getClassName(), $type->getTypes()));
+                return $traverse(new GenericObjectType('\\' . $type->getClassName(), $type->getTypes()), $traverse);
             }
-            return $traverse($type);
+            return $traverse($type, $traverse);
         });
         return $type->toPhpDocNode();
     }
     /**
      * @param ObjectType $type
      */
-    public function mapToPhpParserNode(Type $type, string $typeKind) : ?Node
+    public function mapToPhpParserNode(Type $type, string $typeKind): ?Node
     {
         if ($type instanceof SelfObjectType) {
             return new Name('self');
@@ -64,7 +72,7 @@ final class ObjectTypeMapper implements TypeMapperInterface
         }
         if ($type instanceof FullyQualifiedObjectType) {
             $className = $type->getClassName();
-            if (\strncmp($className, '\\', \strlen('\\')) === 0) {
+            if (strncmp($className, '\\', strlen('\\')) === 0) {
                 // skip leading \
                 return new FullyQualified(Strings::substring($className, 1));
             }

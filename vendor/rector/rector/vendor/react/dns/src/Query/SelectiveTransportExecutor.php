@@ -1,8 +1,8 @@
 <?php
 
-namespace RectorPrefix202502\React\Dns\Query;
+namespace RectorPrefix202609\React\Dns\Query;
 
-use RectorPrefix202502\React\Promise\Promise;
+use RectorPrefix202609\React\Promise\Promise;
 /**
  * Send DNS queries over a UDP or TCP/IP stream transport.
  *
@@ -62,15 +62,15 @@ class SelectiveTransportExecutor implements ExecutorInterface
     {
         $stream = $this->streamExecutor;
         $pending = $this->datagramExecutor->query($query);
-        return new Promise(function ($resolve, $reject) use(&$pending, $stream, $query) {
-            $pending->then($resolve, function ($e) use(&$pending, $stream, $query, $resolve, $reject) {
+        return new Promise(function ($resolve, $reject) use (&$pending, $stream, $query) {
+            $pending->then($resolve, function ($e) use (&$pending, $stream, $query, $resolve, $reject) {
                 if ($e->getCode() === (\defined('SOCKET_EMSGSIZE') ? \SOCKET_EMSGSIZE : 90)) {
                     $pending = $stream->query($query)->then($resolve, $reject);
                 } else {
                     $reject($e);
                 }
             });
-        }, function () use(&$pending) {
+        }, function () use (&$pending) {
             $pending->cancel();
             $pending = null;
         });

@@ -18,13 +18,13 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  */
 final class RemoveReferenceFromCallRector extends AbstractRector implements MinPhpVersionInterface
 {
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::NO_REFERENCE_IN_ARG;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
-        return new RuleDefinition('Remove & from function and method calls', [new CodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Remove `&` from function and method calls', [new CodeSample(<<<'CODE_SAMPLE'
 final class SomeClass
 {
     public function run($one)
@@ -47,7 +47,7 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [FuncCall::class, MethodCall::class, StaticCall::class];
     }

@@ -17,9 +17,9 @@ use PhpParser\Node\Stmt\Return_;
 use PhpParser\NodeVisitor;
 use Rector\FamilyTree\Reflection\FamilyRelationsAnalyzer;
 use Rector\NodeAnalyzer\ClassAnalyzer;
-use Rector\PhpParser\Node\BetterNodeFinder;
 use Rector\Rector\AbstractRector;
 use Rector\TypeDeclaration\TypeInferer\ReturnTypeInferer;
+use Rector\TypeDeclaration\TypeInferer\SilentVoidResolver;
 use Rector\ValueObject\MethodName;
 use Rector\ValueObject\PhpVersionFeature;
 use Rector\VersionBonding\Contract\MinPhpVersionInterface;
@@ -45,24 +45,24 @@ final class StringableForToStringRector extends AbstractRector implements MinPhp
     /**
      * @readonly
      */
-    private BetterNodeFinder $betterNodeFinder;
+    private SilentVoidResolver $silentVoidResolver;
     /**
      * @var string
      */
     private const STRINGABLE = 'Stringable';
     private bool $hasChanged = \false;
-    public function __construct(FamilyRelationsAnalyzer $familyRelationsAnalyzer, ReturnTypeInferer $returnTypeInferer, ClassAnalyzer $classAnalyzer, BetterNodeFinder $betterNodeFinder)
+    public function __construct(FamilyRelationsAnalyzer $familyRelationsAnalyzer, ReturnTypeInferer $returnTypeInferer, ClassAnalyzer $classAnalyzer, SilentVoidResolver $silentVoidResolver)
     {
         $this->familyRelationsAnalyzer = $familyRelationsAnalyzer;
         $this->returnTypeInferer = $returnTypeInferer;
         $this->classAnalyzer = $classAnalyzer;
-        $this->betterNodeFinder = $betterNodeFinder;
+        $this->silentVoidResolver = $silentVoidResolver;
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::STRINGABLE;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Add `Stringable` interface to classes with `__toString()` method', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
@@ -87,14 +87,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($this->classAnalyzer->isAnonymousClass($node)) {
             return null;
@@ -104,10 +104,10 @@ CODE_SAMPLE
             return null;
         }
         $this->hasChanged = \false;
-        // warning, classes that implements __toString() will return Stringable interface even if they don't implemen it
+        // warning, classes that implements __toString() will return Stringable interface even if they don't implement it
         // reflection cannot be used for real detection
         $classLikeAncestorNames = $this->familyRelationsAnalyzer->getClassLikeAncestorNames($node);
-        $isAncestorHasStringable = \in_array(self::STRINGABLE, $classLikeAncestorNames, \true);
+        $isAncestorHasStringable = in_array(self::STRINGABLE, $classLikeAncestorNames, \true);
         $returnType = $this->returnTypeInferer->inferFunctionLike($toStringClassMethod);
         if (!$returnType->isString()->yes()) {
             $this->processNotStringType($toStringClassMethod);
@@ -127,19 +127,18 @@ CODE_SAMPLE
         }
         return $node;
     }
-    private function processNotStringType(ClassMethod $toStringClassMethod) : void
+    private function processNotStringType(ClassMethod $toStringClassMethod): void
     {
         if ($toStringClassMethod->isAbstract()) {
             return;
         }
-        $hasReturn = $this->betterNodeFinder->hasInstancesOfInFunctionLikeScoped($toStringClassMethod, Return_::class);
-        if (!$hasReturn) {
+        if ($this->silentVoidResolver->hasSilentVoid($toStringClassMethod)) {
             $emptyStringReturn = new Return_(new String_(''));
             $toStringClassMethod->stmts[] = $emptyStringReturn;
             $this->hasChanged = \true;
             return;
         }
-        $this->traverseNodesWithCallable((array) $toStringClassMethod->stmts, function (Node $subNode) : ?int {
+        $this->traverseNodesWithCallable((array) $toStringClassMethod->stmts, function (Node $subNode): ?int {
             if ($subNode instanceof Class_ || $subNode instanceof Function_ || $subNode instanceof Closure) {
                 return NodeVisitor::DONT_TRAVERSE_CURRENT_AND_CHILDREN;
             }

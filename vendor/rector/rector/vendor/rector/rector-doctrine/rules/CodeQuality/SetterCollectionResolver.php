@@ -13,7 +13,7 @@ use PHPStan\Type\Generic\GenericObjectType;
 use PHPStan\Type\ObjectType;
 use PHPStan\Type\Type;
 use PHPStan\Type\UnionType;
-use Rector\Doctrine\CodeQuality\Enum\DoctrineClass;
+use Rector\Doctrine\Enum\DoctrineClass;
 use Rector\Doctrine\TypeAnalyzer\CollectionTypeFactory;
 use Rector\Doctrine\TypeAnalyzer\CollectionTypeResolver;
 use Rector\Doctrine\TypeAnalyzer\CollectionVarTagValueNodeResolver;
@@ -62,10 +62,10 @@ final class SetterCollectionResolver
         $this->collectionTypeFactory = $collectionTypeFactory;
         $this->collectionTypeResolver = $collectionTypeResolver;
     }
-    public function resolveAssignedGenericCollectionType(Class_ $class, ClassMethod $classMethod) : ?GenericObjectType
+    public function resolveAssignedGenericCollectionType(Class_ $class, ClassMethod $classMethod): ?GenericObjectType
     {
         $propertyFetches = $this->assignManipulator->resolveAssignsToLocalPropertyFetches($classMethod);
-        if (\count($propertyFetches) !== 1) {
+        if (count($propertyFetches) !== 1) {
             return null;
         }
         $phpPropertyReflection = $this->reflectionResolver->resolvePropertyReflectionFromPropertyFetch($propertyFetches[0]);
@@ -91,7 +91,7 @@ final class SetterCollectionResolver
                 }
                 $nonCollectionTypes[] = $unionedType;
             }
-            if (\count($nonCollectionTypes) === 1) {
+            if (count($nonCollectionTypes) === 1) {
                 $soleType = $nonCollectionTypes[0];
                 if ($soleType instanceof ArrayType && $soleType->getItemType() instanceof ObjectType) {
                     return $this->collectionTypeFactory->createType($soleType->getItemType(), $this->collectionTypeResolver->hasIndexBy($property), $property);
@@ -103,7 +103,7 @@ final class SetterCollectionResolver
         }
         return null;
     }
-    private function isCollectionType(Type $type) : bool
+    private function isCollectionType(Type $type): bool
     {
         if ($type instanceof ShortenedObjectType && $type->getFullyQualifiedName() === DoctrineClass::COLLECTION) {
             return \true;

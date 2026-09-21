@@ -44,7 +44,7 @@ final class RemoveDeadInstanceOfRector extends AbstractRector
         $this->ifManipulator = $ifManipulator;
         $this->reflectionResolver = $reflectionResolver;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Remove dead instanceof check on type hinted variable', [new CodeSample(<<<'CODE_SAMPLE'
 function run(stdClass $stdClass)
@@ -67,13 +67,13 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [If_::class];
     }
     /**
      * @param If_ $node
-     * @return Stmt[]|null|int|If_
+     * @return Stmt[]|null|NodeVisitor::REMOVE_NODE|If_
      */
     public function refactor(Node $node)
     {
@@ -92,7 +92,7 @@ CODE_SAMPLE
         return null;
     }
     /**
-     * @return null|Stmt[]|int
+     * @return null|Stmt[]|NodeVisitor::REMOVE_NODE
      */
     private function refactorStmtAndInstanceof(If_ $if, Instanceof_ $instanceof)
     {
@@ -105,7 +105,7 @@ CODE_SAMPLE
         if ($instanceof->expr instanceof Assign) {
             $instanceof->expr->setAttribute(AttributeKey::WRAPPED_IN_PARENTHESES, \false);
             $assignExpression = new Expression($instanceof->expr);
-            return \array_merge([$assignExpression], $if->stmts);
+            return array_merge([$assignExpression], $if->stmts);
         }
         if ($if->cond !== $instanceof) {
             return NodeVisitor::REMOVE_NODE;
@@ -116,19 +116,19 @@ CODE_SAMPLE
         // unwrap stmts
         return $if->stmts;
     }
-    private function shouldSkipFromNotTypedParam(Instanceof_ $instanceof) : bool
+    private function shouldSkipFromNotTypedParam(Instanceof_ $instanceof): bool
     {
         $nativeParamType = $this->nodeTypeResolver->getNativeType($instanceof->expr);
         return $nativeParamType instanceof MixedType;
     }
-    private function isPropertyFetch(Expr $expr) : bool
+    private function isPropertyFetch(Expr $expr): bool
     {
         if ($expr instanceof PropertyFetch) {
             return \true;
         }
         return $expr instanceof StaticPropertyFetch;
     }
-    private function isInstanceofTheSameType(Instanceof_ $instanceof) : ?bool
+    private function isInstanceofTheSameType(Instanceof_ $instanceof): ?bool
     {
         if (!$instanceof->class instanceof Name) {
             return null;
@@ -148,7 +148,7 @@ CODE_SAMPLE
         $className = $instanceof->class->toString();
         return $exprType->isInstanceOf($className)->yes();
     }
-    private function refactorIfWithBooleanAnd(If_ $if) : ?\PhpParser\Node\Stmt\If_
+    private function refactorIfWithBooleanAnd(If_ $if): ?\PhpParser\Node\Stmt\If_
     {
         if (!$if->cond instanceof BooleanAnd) {
             return null;

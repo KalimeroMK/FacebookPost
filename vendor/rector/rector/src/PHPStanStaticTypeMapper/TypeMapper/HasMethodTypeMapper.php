@@ -21,21 +21,24 @@ final class HasMethodTypeMapper implements TypeMapperInterface
     {
         $this->objectWithoutClassTypeMapper = $objectWithoutClassTypeMapper;
     }
-    public function getNodeClass() : string
+    /**
+     * @return array<class-string<Type>>
+     */
+    public function getNodeClasses(): array
     {
-        return HasMethodType::class;
+        return [HasMethodType::class];
     }
     /**
      * @param HasMethodType $type
      */
-    public function mapToPHPStanPhpDocTypeNode(Type $type) : TypeNode
+    public function mapToPHPStanPhpDocTypeNode(Type $type): TypeNode
     {
         return $type->toPhpDocNode();
     }
     /**
      * @param HasMethodType $type
      */
-    public function mapToPhpParserNode(Type $type, string $typeKind) : ?Node
+    public function mapToPhpParserNode(Type $type, string $typeKind): ?Node
     {
         return $this->objectWithoutClassTypeMapper->mapToPhpParserNode($type, $typeKind);
     }

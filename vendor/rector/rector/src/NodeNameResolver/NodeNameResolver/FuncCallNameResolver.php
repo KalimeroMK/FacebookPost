@@ -24,7 +24,7 @@ final class FuncCallNameResolver implements NodeNameResolverInterface
     {
         $this->reflectionProvider = $reflectionProvider;
     }
-    public function getNode() : string
+    public function getNode(): string
     {
         return FuncCall::class;
     }
@@ -34,7 +34,7 @@ final class FuncCallNameResolver implements NodeNameResolverInterface
      *
      * @param FuncCall $node
      */
-    public function resolve(Node $node, ?Scope $scope) : ?string
+    public function resolve(Node $node, ?Scope $scope): ?string
     {
         if ($node->name instanceof Expr) {
             return null;
@@ -45,6 +45,9 @@ final class FuncCallNameResolver implements NodeNameResolverInterface
             if ($this->reflectionProvider->hasFunction($namespaceName, null)) {
                 return $functionFqnName;
             }
+        }
+        if (is_string($namespaceName)) {
+            return $namespaceName;
         }
         return (string) $node->name;
     }

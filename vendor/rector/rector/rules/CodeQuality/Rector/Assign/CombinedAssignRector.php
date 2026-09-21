@@ -4,8 +4,10 @@ declare (strict_types=1);
 namespace Rector\CodeQuality\Rector\Assign;
 
 use PhpParser\Node;
+use PhpParser\Node\Expr\ArrayDimFetch;
 use PhpParser\Node\Expr\Assign;
 use PhpParser\Node\Expr\BinaryOp;
+use PhpParser\Node\Expr\BinaryOp\BitwiseXor;
 use Rector\PhpParser\Node\AssignAndBinaryMap;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
@@ -23,28 +25,30 @@ final class CombinedAssignRector extends AbstractRector
     {
         $this->assignAndBinaryMap = $assignAndBinaryMap;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Simplify $value = $value + 5; assignments to shorter ones', [new CodeSample('$value = $value + 5;', '$value += 5;')]);
     }
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Assign::class];
     }
     /**
      * @param Assign $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$node->expr instanceof BinaryOp) {
             return null;
         }
-        /** @var BinaryOp $binaryNode */
         $binaryNode = $node->expr;
         if (!$this->nodeComparator->areNodesEqual($node->var, $binaryNode->left)) {
+            return null;
+        }
+        if ($binaryNode->left instanceof ArrayDimFetch && $node->expr instanceof BitwiseXor) {
             return null;
         }
         $assignClass = $this->assignAndBinaryMap->getAlternative($binaryNode);

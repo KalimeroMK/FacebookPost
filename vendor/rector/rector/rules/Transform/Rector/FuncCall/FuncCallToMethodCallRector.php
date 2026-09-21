@@ -4,35 +4,22 @@ declare (strict_types=1);
 namespace Rector\Transform\Rector\FuncCall;
 
 use PhpParser\Node;
-use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Stmt\Class_;
+use Rector\Configuration\Deprecation\Contract\DeprecatedInterface;
 use Rector\Contract\Rector\ConfigurableRectorInterface;
+use Rector\Exception\ShouldNotHappenException;
 use Rector\Rector\AbstractRector;
-use Rector\Transform\NodeAnalyzer\FuncCallStaticCallToMethodCallAnalyzer;
 use Rector\Transform\ValueObject\FuncCallToMethodCall;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\ConfiguredCodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
-use RectorPrefix202502\Webmozart\Assert\Assert;
 /**
- * @see \Rector\Tests\Transform\Rector\FuncCall\FuncCallToMethodCallRector\FuncCallToMethodCallRectorTest
+ * @deprecated This rule is deprecated, as a function call can be turned to a method call in very few cases without breaking the code. The service has to be available in the class, the method signature has to match and the function must have no side effects. Use a custom rule for the exact project case instead.
  */
-final class FuncCallToMethodCallRector extends AbstractRector implements ConfigurableRectorInterface
+final class FuncCallToMethodCallRector extends AbstractRector implements ConfigurableRectorInterface, DeprecatedInterface
 {
-    /**
-     * @readonly
-     */
-    private FuncCallStaticCallToMethodCallAnalyzer $funcCallStaticCallToMethodCallAnalyzer;
-    /**
-     * @var FuncCallToMethodCall[]
-     */
-    private array $funcNameToMethodCallNames = [];
-    public function __construct(FuncCallStaticCallToMethodCallAnalyzer $funcCallStaticCallToMethodCallAnalyzer)
+    public function getRuleDefinition(): RuleDefinition
     {
-        $this->funcCallStaticCallToMethodCallAnalyzer = $funcCallStaticCallToMethodCallAnalyzer;
-    }
-    public function getRuleDefinition() : RuleDefinition
-    {
-        return new RuleDefinition('Turns defined function calls to local method calls.', [new ConfiguredCodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Turn defined function calls to local method calls', [new ConfiguredCodeSample(<<<'CODE_SAMPLE'
 class SomeClass
 {
     public function run()
@@ -60,55 +47,26 @@ class SomeClass
     }
 }
 CODE_SAMPLE
-, [new FuncCallToMethodCall('view', 'Namespaced\\SomeRenderer', 'render')])]);
+, [new FuncCallToMethodCall('view', 'Namespaced\SomeRenderer', 'render')])]);
     }
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
-        $hasChanged = \false;
-        $class = $node;
-        foreach ($node->getMethods() as $classMethod) {
-            if ($classMethod->isStatic()) {
-                continue;
-            }
-            if ($classMethod->isAbstract()) {
-                continue;
-            }
-            $this->traverseNodesWithCallable($classMethod, function (Node $node) use($class, $classMethod, &$hasChanged) : ?Node {
-                if (!$node instanceof FuncCall) {
-                    return null;
-                }
-                foreach ($this->funcNameToMethodCallNames as $funcNameToMethodCallName) {
-                    if (!$this->isName($node->name, $funcNameToMethodCallName->getOldFuncName())) {
-                        continue;
-                    }
-                    $expr = $this->funcCallStaticCallToMethodCallAnalyzer->matchTypeProvidingExpr($class, $classMethod, $funcNameToMethodCallName->getNewObjectType());
-                    $hasChanged = \true;
-                    return $this->nodeFactory->createMethodCall($expr, $funcNameToMethodCallName->getNewMethodName(), $node->args);
-                }
-                return null;
-            });
-        }
-        if ($hasChanged) {
-            return $node;
-        }
-        return null;
+        throw new ShouldNotHappenException(sprintf('"%s" rule is deprecated, as a function call can rarely be turned to a method call without breaking the code; use a custom rule for the exact project case instead', self::class));
     }
     /**
      * @param mixed[] $configuration
      */
-    public function configure(array $configuration) : void
+    public function configure(array $configuration): void
     {
-        Assert::allIsAOf($configuration, FuncCallToMethodCall::class);
-        $this->funcNameToMethodCallNames = $configuration;
     }
 }

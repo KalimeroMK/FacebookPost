@@ -2,6 +2,7 @@
 
 namespace Illuminate\Foundation\Exceptions\Renderer\Mappers;
 
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -63,7 +64,6 @@ class BladeMapper
      *
      * @param  \Illuminate\Contracts\View\Factory  $factory
      * @param  \Illuminate\View\Compilers\BladeCompiler  $bladeCompiler
-     * @return void
      */
     public function __construct(Factory $factory, BladeCompiler $bladeCompiler)
     {
@@ -106,7 +106,7 @@ class BladeMapper
      * @param  string  $compiledPath
      * @return string|null
      */
-    protected function findCompiledView(string $compiledPath)
+    public function findCompiledView(string $compiledPath)
     {
         return once(fn () => $this->getKnownPaths())[$compiledPath] ?? null;
     }
@@ -166,7 +166,7 @@ class BladeMapper
      * @param  int  $compiledLineNumber
      * @return int
      */
-    protected function detectLineNumber(string $filename, int $compiledLineNumber)
+    public function detectLineNumber(string $filename, int $compiledLineNumber)
     {
         $map = $this->compileSourcemap((string) file_get_contents($filename));
 

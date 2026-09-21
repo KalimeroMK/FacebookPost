@@ -46,19 +46,21 @@ final class MatchSwitchAnalyzer
     /**
      * @param CondAndExpr[] $condAndExprs
      */
-    public function isReturnCondsAndExprs(array $condAndExprs) : bool
+    public function isReturnCondsAndExprs(array $condAndExprs): bool
     {
+        $found = \false;
         foreach ($condAndExprs as $condAndExpr) {
             if ($condAndExpr->equalsMatchKind(MatchKind::RETURN)) {
-                return \true;
+                $found = \true;
+                break;
             }
         }
-        return \false;
+        return $found;
     }
     /**
      * @param CondAndExpr[] $condAndExprs
      */
-    public function shouldSkipSwitch(Switch_ $switch, array $condAndExprs, ?Stmt $nextStmt) : bool
+    public function shouldSkipSwitch(Switch_ $switch, array $condAndExprs, ?Stmt $nextStmt): bool
     {
         if ($condAndExprs === []) {
             return \true;
@@ -79,15 +81,15 @@ final class MatchSwitchAnalyzer
         if ($this->isNextStmtReturnWithExpr($switch, $nextStmt)) {
             return \false;
         }
-        return !($nextStmt instanceof Expression && $nextStmt->expr instanceof Throw_);
+        return !$nextStmt instanceof Expression || !$nextStmt->expr instanceof Throw_;
     }
     /**
      * @param CondAndExpr[] $condAndExprs
      */
-    public function haveCondAndExprsMatchPotential(array $condAndExprs) : bool
+    public function haveCondAndExprsMatchPotential(array $condAndExprs): bool
     {
         $uniqueCondAndExprKinds = $this->resolveUniqueKindsWithoutThrows($condAndExprs);
-        if (\count($uniqueCondAndExprKinds) > 1) {
+        if (count($uniqueCondAndExprKinds) > 1) {
             return \false;
         }
         $assignVariableNames = [];
@@ -99,25 +101,27 @@ final class MatchSwitchAnalyzer
             if ($expr->var instanceof ArrayDimFetch) {
                 $assignVariableNames[] = $this->betterStandardPrinter->print($expr->var);
             } else {
-                $assignVariableNames[] = \get_class($expr->var) . $this->nodeNameResolver->getName($expr->var);
+                $assignVariableNames[] = get_class($expr->var) . $this->nodeNameResolver->getName($expr->var);
             }
         }
-        $assignVariableNames = \array_unique($assignVariableNames);
-        return \count($assignVariableNames) <= 1;
+        $assignVariableNames = array_unique($assignVariableNames);
+        return count($assignVariableNames) <= 1;
     }
     /**
      * @param CondAndExpr[] $condAndExprs
      */
-    public function hasCondsAndExprDefaultValue(array $condAndExprs) : bool
+    public function hasCondsAndExprDefaultValue(array $condAndExprs): bool
     {
+        $found = \false;
         foreach ($condAndExprs as $condAndExpr) {
             if ($condAndExpr->getCondExprs() === null) {
-                return \true;
+                $found = \true;
+                break;
             }
         }
-        return \false;
+        return $found;
     }
-    public function hasDefaultValue(Match_ $match) : bool
+    public function hasDefaultValue(Match_ $match): bool
     {
         foreach ($match->arms as $matchArm) {
             if ($matchArm->conds === null) {
@@ -133,7 +137,7 @@ final class MatchSwitchAnalyzer
      * @param CondAndExpr[] $condAndExprs
      * @return array<MatchKind::*>
      */
-    private function resolveUniqueKindsWithoutThrows(array $condAndExprs) : array
+    private function resolveUniqueKindsWithoutThrows(array $condAndExprs): array
     {
         $condAndExprKinds = [];
         foreach ($condAndExprs as $condAndExpr) {
@@ -142,9 +146,9 @@ final class MatchSwitchAnalyzer
             }
             $condAndExprKinds[] = $condAndExpr->getMatchKind();
         }
-        return \array_unique($condAndExprKinds);
+        return array_unique($condAndExprKinds);
     }
-    private function isNextStmtReturnWithExpr(Switch_ $switch, ?Stmt $nextStmt) : bool
+    private function isNextStmtReturnWithExpr(Switch_ $switch, ?Stmt $nextStmt): bool
     {
         if (!$nextStmt instanceof Return_) {
             return \false;
@@ -154,7 +158,7 @@ final class MatchSwitchAnalyzer
         }
         foreach ($switch->cases as $case) {
             /** @var Expression[] $expressions */
-            $expressions = \array_filter($case->stmts, static fn(Node $node): bool => $node instanceof Expression);
+            $expressions = array_filter($case->stmts, static fn(Node $node): bool => $node instanceof Expression);
             foreach ($expressions as $expression) {
                 if (!$expression->expr instanceof Assign) {
                     continue;

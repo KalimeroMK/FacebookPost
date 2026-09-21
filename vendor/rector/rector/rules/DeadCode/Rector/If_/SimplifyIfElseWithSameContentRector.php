@@ -7,6 +7,7 @@ use PhpParser\Node;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\Else_;
 use PhpParser\Node\Stmt\If_;
+use PhpParser\NodeVisitor;
 use Rector\Exception\ShouldNotHappenException;
 use Rector\PhpParser\Printer\BetterStandardPrinter;
 use Rector\Rector\AbstractRector;
@@ -25,7 +26,7 @@ final class SimplifyIfElseWithSameContentRector extends AbstractRector
     {
         $this->betterStandardPrinter = $betterStandardPrinter;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Remove if/else if they have same content', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
@@ -54,15 +55,15 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [If_::class];
     }
     /**
      * @param If_ $node
-     * @return Stmt[]|null
+     * @return Stmt[]|null|int
      */
-    public function refactor(Node $node) : ?array
+    public function refactor(Node $node)
     {
         if (!$node->else instanceof Else_) {
             return null;
@@ -70,9 +71,12 @@ CODE_SAMPLE
         if (!$this->isIfWithConstantReturns($node)) {
             return null;
         }
+        if ($node->stmts === []) {
+            return NodeVisitor::REMOVE_NODE;
+        }
         return $node->stmts;
     }
-    private function isIfWithConstantReturns(If_ $if) : bool
+    private function isIfWithConstantReturns(If_ $if): bool
     {
         $possibleContents = [];
         $possibleContents[] = $this->betterStandardPrinter->print($if->stmts);
@@ -84,8 +88,8 @@ CODE_SAMPLE
             throw new ShouldNotHappenException();
         }
         $possibleContents[] = $this->betterStandardPrinter->print($else->stmts);
-        $uniqueContents = \array_unique($possibleContents);
+        $uniqueContents = array_unique($possibleContents);
         // only one content for all
-        return \count($uniqueContents) === 1;
+        return count($uniqueContents) === 1;
     }
 }

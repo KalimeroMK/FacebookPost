@@ -12,10 +12,10 @@ use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Stmt\Else_;
 use PhpParser\Node\Stmt\If_;
 use PhpParser\Node\Stmt\Return_;
-use Rector\Contract\PhpParser\Node\StmtsAwareInterface;
 use Rector\Php70\Enum\BattleshipCompareOrder;
 use Rector\Php70\NodeAnalyzer\BattleshipTernaryAnalyzer;
 use Rector\Php70\ValueObject\ComparedExprs;
+use Rector\PhpParser\Enum\NodeGroup;
 use Rector\PhpParser\Node\Value\ValueResolver;
 use Rector\Rector\AbstractRector;
 use Rector\ValueObject\PhpVersionFeature;
@@ -40,7 +40,7 @@ final class IfToSpaceshipRector extends AbstractRector implements MinPhpVersionI
         $this->battleshipTernaryAnalyzer = $battleshipTernaryAnalyzer;
         $this->valueResolver = $valueResolver;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Changes if/else to spaceship <=> where useful', [new CodeSample(<<<'CODE_SAMPLE'
 usort($languages, function ($first, $second) {
@@ -61,14 +61,15 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
-        return [StmtsAwareInterface::class, If_::class];
+        return NodeGroup::STMTS_AWARE;
     }
     /**
-     * @param StmtsAwareInterface|If_ $node
+     * @param StmtsAware $node
+     * @return StmtsAware|Return_|null
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($node instanceof If_) {
             return $this->refactorIf($node);
@@ -83,7 +84,7 @@ CODE_SAMPLE
             if (!$stmt->expr instanceof Ternary) {
                 continue;
             }
-            // preceeded by if
+            // preceded by if
             $prevStmt = $node->stmts[$key - 1] ?? null;
             if (!$prevStmt instanceof If_) {
                 continue;
@@ -103,11 +104,11 @@ CODE_SAMPLE
         }
         return null;
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::SPACESHIP;
     }
-    private function refactorIf(If_ $if) : ?Return_
+    private function refactorIf(If_ $if): ?Return_
     {
         if ($if->elseifs !== []) {
             return null;
@@ -133,13 +134,13 @@ CODE_SAMPLE
      *      return 0;
      * }
      */
-    private function matchExprComparedExprsReturnZero(If_ $if) : ?ComparedExprs
+    private function matchExprComparedExprsReturnZero(If_ $if): ?ComparedExprs
     {
         if (!$if->cond instanceof Equal && !$if->cond instanceof Identical) {
             return null;
         }
         $binaryOp = $if->cond;
-        if (\count($if->stmts) !== 1) {
+        if (count($if->stmts) !== 1) {
             return null;
         }
         $onlyStmt = $if->stmts[0];
@@ -157,7 +158,7 @@ CODE_SAMPLE
     /**
      * @param BattleshipCompareOrder::*|null $battleshipCompareOrder
      */
-    private function createReturnSpaceship(?string $battleshipCompareOrder, ComparedExprs $comparedExprs) : ?Return_
+    private function createReturnSpaceship(?string $battleshipCompareOrder, ComparedExprs $comparedExprs): ?Return_
     {
         if ($battleshipCompareOrder === null) {
             return null;
@@ -169,9 +170,9 @@ CODE_SAMPLE
         }
         return new Return_($spaceship);
     }
-    private function matchElseOnlyStmtTernary(Else_ $else) : ?\PhpParser\Node\Expr\Ternary
+    private function matchElseOnlyStmtTernary(Else_ $else): ?\PhpParser\Node\Expr\Ternary
     {
-        if (\count($else->stmts) !== 1) {
+        if (count($else->stmts) !== 1) {
             return null;
         }
         $onlyElseStmt = $else->stmts[0];

@@ -36,11 +36,11 @@ final class NamedToUnnamedArgs
      * @param array<int, Arg> $unnamedArgs
      * @return array<int, Arg>
      */
-    public function fillFromNamedArgs(array $parameters, array $currentArgs, array $toFillArgs, array $unnamedArgs) : array
+    public function fillFromNamedArgs(array $parameters, array $currentArgs, array $toFillArgs, array $unnamedArgs): array
     {
         foreach ($parameters as $paramPosition => $parameterReflection) {
             $parameterReflectionName = $parameterReflection->getName();
-            if (!\in_array($parameterReflectionName, $toFillArgs, \true)) {
+            if (!in_array($parameterReflectionName, $toFillArgs, \true)) {
                 continue;
             }
             foreach ($currentArgs as $currentArg) {
@@ -50,7 +50,7 @@ final class NamedToUnnamedArgs
                 if (!$this->nodeNameResolver->isName($currentArg->name, $parameterReflectionName)) {
                     continue;
                 }
-                $unnamedArgs[$paramPosition] = new Arg($currentArg->value, $currentArg->byRef, $currentArg->unpack, $currentArg->getAttributes(), null);
+                $unnamedArgs[$paramPosition] = new Arg($currentArg->value, $currentArg->byRef, $currentArg->unpack, []);
             }
         }
         return $unnamedArgs;
@@ -61,16 +61,16 @@ final class NamedToUnnamedArgs
      * @return array<int, Arg>
      * @param \PHPStan\Reflection\FunctionReflection|\PHPStan\Reflection\MethodReflection|\ReflectionFunction $functionLikeReflection
      */
-    public function fillFromJumpedNamedArgs($functionLikeReflection, array $unnamedArgs, array $parameters) : array
+    public function fillFromJumpedNamedArgs($functionLikeReflection, array $unnamedArgs, array $parameters): array
     {
-        $keys = \array_keys($unnamedArgs);
+        $keys = array_keys($unnamedArgs);
         if ($keys === []) {
             return $unnamedArgs;
         }
-        $highestParameterPosition = \max($keys);
-        $parametersCount = \count($parameters);
+        $highestParameterPosition = max($keys);
+        $parametersCount = count($parameters);
         for ($i = 0; $i < $parametersCount; ++$i) {
-            if (\in_array($i, $keys, \true)) {
+            if (in_array($i, $keys, \true)) {
                 continue;
             }
             if ($i > $highestParameterPosition) {
@@ -86,7 +86,7 @@ final class NamedToUnnamedArgs
             if (!$defaultValue instanceof Expr) {
                 continue;
             }
-            $unnamedArgs[$i] = new Arg($defaultValue, $parameterReflection->passedByReference()->yes(), $parameterReflection->isVariadic(), [], null);
+            $unnamedArgs[$i] = new Arg($defaultValue, $parameterReflection->passedByReference()->yes(), $parameterReflection->isVariadic(), []);
         }
         return $unnamedArgs;
     }

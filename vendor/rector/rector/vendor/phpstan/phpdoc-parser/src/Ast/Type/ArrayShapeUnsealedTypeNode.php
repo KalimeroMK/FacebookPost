@@ -16,11 +16,24 @@ class ArrayShapeUnsealedTypeNode implements Node
         $this->valueType = $valueType;
         $this->keyType = $keyType;
     }
-    public function __toString() : string
+    public function __toString(): string
     {
         if ($this->keyType !== null) {
             return sprintf('<%s, %s>', $this->keyType, $this->valueType);
         }
         return sprintf('<%s>', $this->valueType);
+    }
+    /**
+     * @param array<string, mixed> $properties
+     */
+    public static function __set_state(array $properties): self
+    {
+        $instance = new self($properties['valueType'], $properties['keyType']);
+        if (isset($properties['attributes'])) {
+            foreach ($properties['attributes'] as $key => $value) {
+                $instance->setAttribute($key, $value);
+            }
+        }
+        return $instance;
     }
 }

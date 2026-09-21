@@ -5,9 +5,11 @@ namespace Illuminate\Database\Schema;
 use Closure;
 use Illuminate\Container\Container;
 use Illuminate\Database\Connection;
+use Illuminate\Database\PostgresConnection;
 use Illuminate\Support\Traits\Macroable;
 use InvalidArgumentException;
 use LogicException;
+use RuntimeException;
 
 class Builder
 {
@@ -30,14 +32,14 @@ class Builder
     /**
      * The Blueprint resolver callback.
      *
-     * @var \Closure
+     * @var \Closure(\Illuminate\Database\Connection, string, \Closure|null): \Illuminate\Database\Schema\Blueprint
      */
     protected $resolver;
 
     /**
      * The default string length for migrations.
      *
-     * @var int|null
+     * @var non-negative-int|null
      */
     public static $defaultStringLength = 255;
 
@@ -49,7 +51,7 @@ class Builder
     /**
      * The default relationship morph key type.
      *
-     * @var string
+     * @var 'int'|'uuid'|'ulid'
      */
     public static $defaultMorphKeyType = 'int';
 
@@ -57,7 +59,6 @@ class Builder
      * Create a new database Schema manager.
      *
      * @param  \Illuminate\Database\Connection  $connection
-     * @return void
      */
     public function __construct(Connection $connection)
     {
@@ -68,7 +69,7 @@ class Builder
     /**
      * Set the default string length for migrations.
      *
-     * @param  int  $length
+     * @param  non-negative-int  $length
      * @return void
      */
     public static function defaultStringLength($length)
@@ -150,7 +151,7 @@ class Builder
     /**
      * Get the schemas that belong to the connection.
      *
-     * @return array
+     * @return list<array{name: string, path: string|null, default: bool}>
      */
     public function getSchemas()
     {
@@ -209,7 +210,7 @@ class Builder
      * Get the tables that belong to the connection.
      *
      * @param  string|string[]|null  $schema
-     * @return array
+     * @return list<array{name: string, schema: string|null, schema_qualified_name: string, size: int|null, comment: string|null, collation: string|null, engine: string|null}>
      */
     public function getTables($schema = null)
     {
@@ -223,7 +224,7 @@ class Builder
      *
      * @param  string|string[]|null  $schema
      * @param  bool  $schemaQualified
-     * @return array
+     * @return list<string>
      */
     public function getTableListing($schema = null, $schemaQualified = true)
     {
@@ -237,7 +238,7 @@ class Builder
      * Get the views that belong to the connection.
      *
      * @param  string|string[]|null  $schema
-     * @return array
+     * @return list<array{name: string, schema: string|null, schema_qualified_name: string, definition: string}>
      */
     public function getViews($schema = null)
     {
@@ -250,7 +251,7 @@ class Builder
      * Get the user-defined types that belong to the connection.
      *
      * @param  string|string[]|null  $schema
-     * @return array
+     * @return list<array{name: string, schema: string, schema_qualified_name: string, type: string, category: string, implicit: bool}>
      */
     public function getTypes($schema = null)
     {
@@ -277,20 +278,14 @@ class Builder
      * Determine if the given table has given columns.
      *
      * @param  string  $table
-     * @param  array  $columns
+     * @param  array<string>  $columns
      * @return bool
      */
     public function hasColumns($table, array $columns)
     {
         $tableColumns = array_map(strtolower(...), $this->getColumnListing($table));
 
-        foreach ($columns as $column) {
-            if (! in_array(strtolower($column), $tableColumns)) {
-                return false;
-            }
-        }
-
-        return true;
+        return array_all($columns, fn ($column) => in_array(strtolower($column), $tableColumns));
     }
 
     /**
@@ -324,12 +319,46 @@ class Builder
     }
 
     /**
+     * Execute a table builder callback if the given table has a given index.
+     *
+     * @param  string  $table
+     * @param  string|array  $index
+     * @param  \Closure  $callback
+     * @param  string|null  $type
+     * @return void
+     */
+    public function whenTableHasIndex(string $table, string|array $index, Closure $callback, ?string $type = null)
+    {
+        if ($this->hasIndex($table, $index, $type)) {
+            $this->table($table, fn (Blueprint $table) => $callback($table));
+        }
+    }
+
+    /**
+     * Execute a table builder callback if the given table doesn't have a given index.
+     *
+     * @param  string  $table
+     * @param  string|array  $index
+     * @param  \Closure  $callback
+     * @param  string|null  $type
+     * @return void
+     */
+    public function whenTableDoesntHaveIndex(string $table, string|array $index, Closure $callback, ?string $type = null)
+    {
+        if (! $this->hasIndex($table, $index, $type)) {
+            $this->table($table, fn (Blueprint $table) => $callback($table));
+        }
+    }
+
+    /**
      * Get the data type for the given column name.
      *
      * @param  string  $table
      * @param  string  $column
      * @param  bool  $fullDefinition
      * @return string
+     *
+     * @throws \InvalidArgumentException
      */
     public function getColumnType($table, $column, $fullDefinition = false)
     {
@@ -348,7 +377,7 @@ class Builder
      * Get the column listing for a given table.
      *
      * @param  string  $table
-     * @return array
+     * @return list<string>
      */
     public function getColumnListing($table)
     {
@@ -359,7 +388,7 @@ class Builder
      * Get the columns for a given table.
      *
      * @param  string  $table
-     * @return array
+     * @return list<array{name: string, type: string, type_name: string, collation: string|null, nullable: bool, default: mixed, auto_increment: bool, comment: string|null, generation: array{type: string, expression: string|null}|null}>
      */
     public function getColumns($table)
     {
@@ -378,7 +407,7 @@ class Builder
      * Get the indexes for a given table.
      *
      * @param  string  $table
-     * @return array
+     * @return list<array{name: string, columns: list<string>, type: string, unique: bool, primary: bool}>
      */
     public function getIndexes($table)
     {
@@ -397,7 +426,7 @@ class Builder
      * Get the names of the indexes for a given table.
      *
      * @param  string  $table
-     * @return array
+     * @return list<string>
      */
     public function getIndexListing($table)
     {
@@ -416,6 +445,8 @@ class Builder
     {
         $type = is_null($type) ? $type : strtolower($type);
 
+        $index = is_string($index) ? strtolower($index) : $index;
+
         foreach ($this->getIndexes($table) as $value) {
             $typeMatches = is_null($type)
                 || ($type === 'primary' && $value['primary'])
@@ -431,10 +462,28 @@ class Builder
     }
 
     /**
+     * Determine if the table has a given foreign key.
+     *
+     * @param  string  $table
+     * @param  array|string  $foreignKey
+     * @return bool
+     */
+    public function hasForeignKey($table, $foreignKey)
+    {
+        foreach ($this->getForeignKeys($table) as $value) {
+            if ($value['name'] === $foreignKey || $value['columns'] === $foreignKey) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Get the foreign keys for a given table.
      *
      * @param  string  $table
-     * @return array
+     * @return list<array{name: string|null, columns: list<string>, foreign_schema: string|null, foreign_table: string, foreign_columns: list<string>, on_update: string|null, on_delete: string|null}>
      */
     public function getForeignKeys($table)
     {
@@ -507,7 +556,7 @@ class Builder
      * Drop columns from a table schema.
      *
      * @param  string  $table
-     * @param  string|array  $columns
+     * @param  string|array<string>  $columns
      * @return void
      */
     public function dropColumns($table, $columns)
@@ -594,8 +643,10 @@ class Builder
     /**
      * Disable foreign key constraints during the execution of a callback.
      *
-     * @param  \Closure  $callback
-     * @return mixed
+     * @template TReturn
+     *
+     * @param  (\Closure(): TReturn)  $callback
+     * @return TReturn
      */
     public function withoutForeignKeyConstraints(Closure $callback)
     {
@@ -606,6 +657,40 @@ class Builder
         } finally {
             $this->enableForeignKeyConstraints();
         }
+    }
+
+    /**
+     * Create the vector extension on the schema if it does not exist.
+     *
+     * @param  string|null  $schema
+     * @return void
+     */
+    public function ensureVectorExtensionExists($schema = null)
+    {
+        $this->ensureExtensionExists('vector', $schema);
+    }
+
+    /**
+     * Create a new extension on the schema if it does not exist.
+     *
+     * @param  string  $name
+     * @param  string|null  $schema
+     * @return void
+     *
+     * @throws \RuntimeException
+     */
+    public function ensureExtensionExists($name, $schema = null)
+    {
+        if (! $this->getConnection() instanceof PostgresConnection) {
+            throw new RuntimeException('Extensions are only supported by Postgres.');
+        }
+
+        $name = $this->getConnection()->getSchemaGrammar()->wrap($name);
+
+        $this->getConnection()->statement(match (filled($schema)) {
+            true => "create extension if not exists {$name} schema {$this->getConnection()->getSchemaGrammar()->wrap($schema)}",
+            false => "create extension if not exists {$name}",
+        });
     }
 
     /**
@@ -634,7 +719,7 @@ class Builder
             return call_user_func($this->resolver, $connection, $table, $callback);
         }
 
-        return Container::getInstance()->make(Blueprint::class, compact('connection', 'table', 'callback'));
+        return Container::getInstance()->make(Blueprint::class, ['connection' => $connection, 'table' => $table, 'callback' => $callback]);
     }
 
     /**
@@ -662,7 +747,9 @@ class Builder
      *
      * @param  string  $reference
      * @param  string|bool|null  $withDefaultSchema
-     * @return array
+     * @return array{string|null, string}
+     *
+     * @throws \InvalidArgumentException
      */
     public function parseSchemaAndTable($reference, $withDefaultSchema = null)
     {
@@ -699,7 +786,7 @@ class Builder
     /**
      * Set the Schema Blueprint resolver callback.
      *
-     * @param  \Closure  $resolver
+     * @param  \Closure(\Illuminate\Database\Connection, string, \Closure|null): \Illuminate\Database\Schema\Blueprint  $resolver
      * @return void
      */
     public function blueprintResolver(Closure $resolver)

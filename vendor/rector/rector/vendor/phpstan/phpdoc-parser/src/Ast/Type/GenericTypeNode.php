@@ -28,7 +28,7 @@ class GenericTypeNode implements \PHPStan\PhpDocParser\Ast\Type\TypeNode
         $this->genericTypes = $genericTypes;
         $this->variances = $variances;
     }
-    public function __toString() : string
+    public function __toString(): string
     {
         $genericTypes = [];
         foreach ($this->genericTypes as $index => $type) {
@@ -42,5 +42,18 @@ class GenericTypeNode implements \PHPStan\PhpDocParser\Ast\Type\TypeNode
             }
         }
         return $this->type . '<' . implode(', ', $genericTypes) . '>';
+    }
+    /**
+     * @param array<string, mixed> $properties
+     */
+    public static function __set_state(array $properties): self
+    {
+        $instance = new self($properties['type'], $properties['genericTypes'], $properties['variances'] ?? []);
+        if (isset($properties['attributes'])) {
+            foreach ($properties['attributes'] as $key => $value) {
+                $instance->setAttribute($key, $value);
+            }
+        }
+        return $instance;
     }
 }

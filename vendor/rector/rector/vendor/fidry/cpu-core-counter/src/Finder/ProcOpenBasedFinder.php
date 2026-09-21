@@ -9,10 +9,10 @@
  * file that was distributed with this source code.
  */
 declare (strict_types=1);
-namespace RectorPrefix202502\Fidry\CpuCoreCounter\Finder;
+namespace RectorPrefix202609\Fidry\CpuCoreCounter\Finder;
 
-use RectorPrefix202502\Fidry\CpuCoreCounter\Executor\ProcessExecutor;
-use RectorPrefix202502\Fidry\CpuCoreCounter\Executor\ProcOpenExecutor;
+use RectorPrefix202609\Fidry\CpuCoreCounter\Executor\ProcessExecutor;
+use RectorPrefix202609\Fidry\CpuCoreCounter\Executor\ProcOpenExecutor;
 use function filter_var;
 use function function_exists;
 use function is_int;
@@ -30,7 +30,7 @@ abstract class ProcOpenBasedFinder implements CpuCoreFinder
     {
         $this->executor = $executor ?? new ProcOpenExecutor();
     }
-    public function diagnose() : string
+    public function diagnose(): string
     {
         if (!function_exists('proc_open')) {
             return 'The function "proc_open" is not available.';
@@ -47,7 +47,7 @@ abstract class ProcOpenBasedFinder implements CpuCoreFinder
     /**
      * @return positive-int|null
      */
-    public function find() : ?int
+    public function find(): ?int
     {
         $output = $this->executor->execute($this->getCommand());
         if (null === $output) {
@@ -62,10 +62,10 @@ abstract class ProcOpenBasedFinder implements CpuCoreFinder
      *
      * @return positive-int|null
      */
-    protected function countCpuCores(string $process) : ?int
+    protected function countCpuCores(string $process): ?int
     {
         $cpuCount = filter_var($process, FILTER_VALIDATE_INT);
         return is_int($cpuCount) && $cpuCount > 0 ? $cpuCount : null;
     }
-    protected abstract function getCommand() : string;
+    abstract protected function getCommand(): string;
 }

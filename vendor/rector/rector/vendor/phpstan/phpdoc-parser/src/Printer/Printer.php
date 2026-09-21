@@ -5,6 +5,7 @@ namespace PHPStan\PhpDocParser\Printer;
 
 use LogicException;
 use PHPStan\PhpDocParser\Ast\Attribute;
+use PHPStan\PhpDocParser\Ast\Comment;
 use PHPStan\PhpDocParser\Ast\ConstExpr\ConstExprArrayNode;
 use PHPStan\PhpDocParser\Ast\ConstExpr\ConstExprNode;
 use PHPStan\PhpDocParser\Ast\Node;
@@ -33,9 +34,11 @@ use PHPStan\PhpDocParser\Ast\PhpDoc\PhpDocTagValueNode;
 use PHPStan\PhpDocParser\Ast\PhpDoc\PhpDocTextNode;
 use PHPStan\PhpDocParser\Ast\PhpDoc\PropertyTagValueNode;
 use PHPStan\PhpDocParser\Ast\PhpDoc\PureUnlessCallableIsImpureTagValueNode;
+use PHPStan\PhpDocParser\Ast\PhpDoc\PureUnlessParameterIsPassedTagValueNode;
 use PHPStan\PhpDocParser\Ast\PhpDoc\RequireExtendsTagValueNode;
 use PHPStan\PhpDocParser\Ast\PhpDoc\RequireImplementsTagValueNode;
 use PHPStan\PhpDocParser\Ast\PhpDoc\ReturnTagValueNode;
+use PHPStan\PhpDocParser\Ast\PhpDoc\SealedTagValueNode;
 use PHPStan\PhpDocParser\Ast\PhpDoc\SelfOutTagValueNode;
 use PHPStan\PhpDocParser\Ast\PhpDoc\TemplateTagValueNode;
 use PHPStan\PhpDocParser\Ast\PhpDoc\ThrowsTagValueNode;
@@ -67,6 +70,7 @@ use PHPStan\PhpDocParser\Lexer\Lexer;
 use PHPStan\PhpDocParser\Parser\TokenIterator;
 use function array_keys;
 use function array_map;
+use function assert;
 use function count;
 use function get_class;
 use function get_object_vars;
@@ -75,6 +79,7 @@ use function in_array;
 use function is_array;
 use function preg_match_all;
 use function sprintf;
+use function str_replace;
 use function strlen;
 use function strpos;
 use function trim;
@@ -103,10 +108,10 @@ final class Printer
      */
     private array $emptyListInsertionMap = [CallableTypeNode::class . '->parameters' => ['(', '', ''], ArrayShapeNode::class . '->items' => ['{', '', ''], ObjectShapeNode::class . '->items' => ['{', '', ''], DoctrineArray::class . '->items' => ['{', '', ''], DoctrineAnnotation::class . '->arguments' => ['(', '', '']];
     /** @var array<string, list<class-string<TypeNode>>> */
-    private array $parenthesesMap = [CallableTypeNode::class . '->returnType' => [CallableTypeNode::class, UnionTypeNode::class, IntersectionTypeNode::class], ArrayTypeNode::class . '->type' => [CallableTypeNode::class, UnionTypeNode::class, IntersectionTypeNode::class, ConstTypeNode::class, NullableTypeNode::class], OffsetAccessTypeNode::class . '->type' => [CallableTypeNode::class, UnionTypeNode::class, IntersectionTypeNode::class, NullableTypeNode::class]];
+    private array $parenthesesMap = [CallableTypeNode::class . '->returnType' => [CallableTypeNode::class, UnionTypeNode::class, IntersectionTypeNode::class], ArrayTypeNode::class . '->type' => [CallableTypeNode::class, UnionTypeNode::class, IntersectionTypeNode::class, ConstTypeNode::class, NullableTypeNode::class], OffsetAccessTypeNode::class . '->type' => [CallableTypeNode::class, UnionTypeNode::class, IntersectionTypeNode::class, NullableTypeNode::class], NullableTypeNode::class . '->type' => [UnionTypeNode::class, IntersectionTypeNode::class, NullableTypeNode::class], ConditionalTypeNode::class . '->subjectType' => [UnionTypeNode::class, IntersectionTypeNode::class, NullableTypeNode::class]];
     /** @var array<string, list<class-string<TypeNode>>> */
     private array $parenthesesListMap = [IntersectionTypeNode::class . '->types' => [IntersectionTypeNode::class, UnionTypeNode::class, NullableTypeNode::class], UnionTypeNode::class . '->types' => [IntersectionTypeNode::class, UnionTypeNode::class, NullableTypeNode::class]];
-    public function printFormatPreserving(PhpDocNode $node, PhpDocNode $originalNode, TokenIterator $originalTokens) : string
+    public function printFormatPreserving(PhpDocNode $node, PhpDocNode $originalNode, TokenIterator $originalTokens): string
     {
         $this->differ = new \PHPStan\PhpDocParser\Printer\Differ(static function ($a, $b) {
             if ($a instanceof Node && $b instanceof Node) {
@@ -121,10 +126,10 @@ final class Printer
         }
         return $this->print($node);
     }
-    public function print(Node $node) : string
+    public function print(Node $node): string
     {
         if ($node instanceof PhpDocNode) {
-            return "/**\n *" . implode("\n *", array_map(function (PhpDocChildNode $child) : string {
+            return "/**\n *" . implode("\n *", array_map(function (PhpDocChildNode $child): string {
                 $s = $this->print($child);
                 return $s === '' ? '' : ' ' . $s;
             }, $node->children)) . "\n */";
@@ -193,7 +198,7 @@ final class Printer
         }
         throw new LogicException(sprintf('Unknown node type %s', get_class($node)));
     }
-    private function printTagValue(PhpDocTagValueNode $node) : string
+    private function printTagValue(PhpDocTagValueNode $node): string
     {
         // only nodes that contain another node are handled here
         // the rest falls back on (string) $node
@@ -239,6 +244,10 @@ final class Printer
             $type = $this->printType($node->type);
             return trim("{$type} {$node->description}");
         }
+        if ($node instanceof SealedTagValueNode) {
+            $type = $this->printType($node->type);
+            return trim("{$type} {$node->description}");
+        }
         if ($node instanceof ParamOutTagValueNode) {
             $type = $this->printType($node->type);
             return trim("{$type} {$node->parameterName} {$node->description}");
@@ -259,6 +268,9 @@ final class Printer
             return trim("{$node->type} {$node->parameterName} {$node->description}");
         }
         if ($node instanceof PureUnlessCallableIsImpureTagValueNode) {
+            return trim("{$node->parameterName} {$node->description}");
+        }
+        if ($node instanceof PureUnlessParameterIsPassedTagValueNode) {
             return trim("{$node->parameterName} {$node->description}");
         }
         if ($node instanceof PropertyTagValueNode) {
@@ -300,7 +312,7 @@ final class Printer
         }
         return (string) $node;
     }
-    private function printType(TypeNode $node) : string
+    private function printType(TypeNode $node): string
     {
         if ($node instanceof ArrayShapeNode) {
             $items = array_map(fn(ArrayShapeItemNode $item): string => $this->print($item), $node->items);
@@ -326,7 +338,7 @@ final class Printer
             return sprintf('(%s %s %s ? %s : %s)', $node->parameterName, $node->negated ? 'is not' : 'is', $this->printType($node->targetType), $this->printType($node->if), $this->printType($node->else));
         }
         if ($node instanceof ConditionalTypeNode) {
-            return sprintf('(%s %s %s ? %s : %s)', $this->printType($node->subjectType), $node->negated ? 'is not' : 'is', $this->printType($node->targetType), $this->printType($node->if), $this->printType($node->else));
+            return sprintf('(%s %s %s ? %s : %s)', $this->printConditionalSubjectType($node->subjectType), $node->negated ? 'is not' : 'is', $this->printType($node->targetType), $this->printType($node->if), $this->printType($node->else));
         }
         if ($node instanceof ConstTypeNode) {
             return $this->printConstExpr($node->constExpr);
@@ -363,7 +375,7 @@ final class Printer
             return (string) $node;
         }
         if ($node instanceof NullableTypeNode) {
-            if ($node->type instanceof IntersectionTypeNode || $node->type instanceof UnionTypeNode) {
+            if ($node->type instanceof IntersectionTypeNode || $node->type instanceof UnionTypeNode || $node->type instanceof NullableTypeNode) {
                 return '?(' . $this->printType($node->type) . ')';
             }
             return '?' . $this->printType($node->type);
@@ -380,18 +392,33 @@ final class Printer
         }
         throw new LogicException(sprintf('Unknown node type %s', get_class($node)));
     }
-    private function wrapInParentheses(TypeNode $node) : string
+    private function wrapInParentheses(TypeNode $node): string
     {
         return '(' . $this->printType($node) . ')';
     }
-    private function printOffsetAccessType(TypeNode $type) : string
+    /**
+     * What a conditional type asks about, written so that it is read back as
+     * the very same type.
+     *
+     * "?Foo is Bar ? ... : ..." and "Foo|Bar is Baz ? ... : ..." both read as a
+     * type followed by something the type says nothing about, so a subject of
+     * either kind keeps its parentheses.
+     */
+    private function printConditionalSubjectType(TypeNode $type): string
+    {
+        if ($type instanceof UnionTypeNode || $type instanceof IntersectionTypeNode || $type instanceof NullableTypeNode) {
+            return $this->wrapInParentheses($type);
+        }
+        return $this->printType($type);
+    }
+    private function printOffsetAccessType(TypeNode $type): string
     {
         if ($type instanceof CallableTypeNode || $type instanceof UnionTypeNode || $type instanceof IntersectionTypeNode || $type instanceof NullableTypeNode) {
             return $this->wrapInParentheses($type);
         }
         return $this->printType($type);
     }
-    private function printConstExpr(ConstExprNode $node) : string
+    private function printConstExpr(ConstExprNode $node): string
     {
         // this is fine - ConstExprNode classes do not contain nodes that need smart printer logic
         return (string) $node;
@@ -400,7 +427,7 @@ final class Printer
      * @param Node[] $nodes
      * @param Node[] $originalNodes
      */
-    private function printArrayFormatPreserving(array $nodes, array $originalNodes, TokenIterator $originalTokens, int &$tokenIndex, string $parentNodeClass, string $subNodeName) : ?string
+    private function printArrayFormatPreserving(array $nodes, array $originalNodes, TokenIterator $originalTokens, int &$tokenIndex, string $parentNodeClass, string $subNodeName): ?string
     {
         $diff = $this->differ->diffWithReplacements($originalNodes, $nodes);
         $mapKey = $parentNodeClass . '->' . $subNodeName;
@@ -415,26 +442,37 @@ final class Printer
         }
         foreach ($diff as $i => $diffElem) {
             $diffType = $diffElem->type;
-            $newNode = $diffElem->new;
-            $originalNode = $diffElem->old;
+            $arrItem = $diffElem->new;
+            $origArrayItem = $diffElem->old;
             if ($diffType === \PHPStan\PhpDocParser\Printer\DiffElem::TYPE_KEEP || $diffType === \PHPStan\PhpDocParser\Printer\DiffElem::TYPE_REPLACE) {
                 $beforeFirstKeepOrReplace = \false;
-                if (!$newNode instanceof Node || !$originalNode instanceof Node) {
+                if (!$arrItem instanceof Node || !$origArrayItem instanceof Node) {
                     return null;
                 }
                 /** @var int $itemStartPos */
-                $itemStartPos = $originalNode->getAttribute(Attribute::START_INDEX);
+                $itemStartPos = $origArrayItem->getAttribute(Attribute::START_INDEX);
                 /** @var int $itemEndPos */
-                $itemEndPos = $originalNode->getAttribute(Attribute::END_INDEX);
+                $itemEndPos = $origArrayItem->getAttribute(Attribute::END_INDEX);
                 if ($itemStartPos < 0 || $itemEndPos < 0 || $itemStartPos < $tokenIndex) {
                     throw new LogicException();
                 }
+                $comments = $arrItem->getAttribute(Attribute::COMMENTS) ?? [];
+                $origComments = $origArrayItem->getAttribute(Attribute::COMMENTS) ?? [];
+                $commentStartPos = count($origComments) > 0 ? $origComments[0]->startIndex : $itemStartPos;
+                assert($commentStartPos >= 0);
                 $result .= $originalTokens->getContentBetween($tokenIndex, $itemStartPos);
                 if (count($delayedAdd) > 0) {
                     foreach ($delayedAdd as $delayedAddNode) {
                         $parenthesesNeeded = isset($this->parenthesesListMap[$mapKey]) && in_array(get_class($delayedAddNode), $this->parenthesesListMap[$mapKey], \true);
                         if ($parenthesesNeeded) {
                             $result .= '(';
+                        }
+                        if ($insertNewline) {
+                            $delayedAddComments = $delayedAddNode->getAttribute(Attribute::COMMENTS) ?? [];
+                            if (count($delayedAddComments) > 0) {
+                                $result .= $this->printComments($delayedAddComments, $beforeAsteriskIndent, $afterAsteriskIndent);
+                                $result .= sprintf('%s%s*%s', $originalTokens->getDetectedNewline() ?? "\n", $beforeAsteriskIndent, $afterAsteriskIndent);
+                            }
                         }
                         $result .= $this->printNodeFormatPreserving($delayedAddNode, $originalTokens);
                         if ($parenthesesNeeded) {
@@ -448,12 +486,18 @@ final class Printer
                     }
                     $delayedAdd = [];
                 }
-                $parenthesesNeeded = isset($this->parenthesesListMap[$mapKey]) && in_array(get_class($newNode), $this->parenthesesListMap[$mapKey], \true) && !in_array(get_class($originalNode), $this->parenthesesListMap[$mapKey], \true);
+                $parenthesesNeeded = isset($this->parenthesesListMap[$mapKey]) && in_array(get_class($arrItem), $this->parenthesesListMap[$mapKey], \true) && !in_array(get_class($origArrayItem), $this->parenthesesListMap[$mapKey], \true);
                 $addParentheses = $parenthesesNeeded && !$originalTokens->hasParentheses($itemStartPos, $itemEndPos);
                 if ($addParentheses) {
                     $result .= '(';
                 }
-                $result .= $this->printNodeFormatPreserving($newNode, $originalTokens);
+                if ($comments !== $origComments) {
+                    if (count($comments) > 0) {
+                        $result .= $this->printComments($comments, $beforeAsteriskIndent, $afterAsteriskIndent);
+                        $result .= sprintf('%s%s*%s', $originalTokens->getDetectedNewline() ?? "\n", $beforeAsteriskIndent, $afterAsteriskIndent);
+                    }
+                }
+                $result .= $this->printNodeFormatPreserving($arrItem, $originalTokens);
                 if ($addParentheses) {
                     $result .= ')';
                 }
@@ -462,42 +506,48 @@ final class Printer
                 if ($insertStr === null) {
                     return null;
                 }
-                if (!$newNode instanceof Node) {
+                if (!$arrItem instanceof Node) {
                     return null;
                 }
-                if ($insertStr === ', ' && $isMultiline) {
+                if ($insertStr === ', ' && $isMultiline || count($arrItem->getAttribute(Attribute::COMMENTS) ?? []) > 0) {
                     $insertStr = ',';
                     $insertNewline = \true;
                 }
                 if ($beforeFirstKeepOrReplace) {
                     // Will be inserted at the next "replace" or "keep" element
-                    $delayedAdd[] = $newNode;
+                    $delayedAdd[] = $arrItem;
                     continue;
                 }
                 /** @var int $itemEndPos */
                 $itemEndPos = $tokenIndex - 1;
                 if ($insertNewline) {
-                    $result .= $insertStr . sprintf('%s%s*%s', $originalTokens->getDetectedNewline() ?? "\n", $beforeAsteriskIndent, $afterAsteriskIndent);
+                    $comments = $arrItem->getAttribute(Attribute::COMMENTS) ?? [];
+                    $result .= $insertStr;
+                    if (count($comments) > 0) {
+                        $result .= sprintf('%s%s*%s', $originalTokens->getDetectedNewline() ?? "\n", $beforeAsteriskIndent, $afterAsteriskIndent);
+                        $result .= $this->printComments($comments, $beforeAsteriskIndent, $afterAsteriskIndent);
+                    }
+                    $result .= sprintf('%s%s*%s', $originalTokens->getDetectedNewline() ?? "\n", $beforeAsteriskIndent, $afterAsteriskIndent);
                 } else {
                     $result .= $insertStr;
                 }
-                $parenthesesNeeded = isset($this->parenthesesListMap[$mapKey]) && in_array(get_class($newNode), $this->parenthesesListMap[$mapKey], \true);
+                $parenthesesNeeded = isset($this->parenthesesListMap[$mapKey]) && in_array(get_class($arrItem), $this->parenthesesListMap[$mapKey], \true);
                 if ($parenthesesNeeded) {
                     $result .= '(';
                 }
-                $result .= $this->printNodeFormatPreserving($newNode, $originalTokens);
+                $result .= $this->printNodeFormatPreserving($arrItem, $originalTokens);
                 if ($parenthesesNeeded) {
                     $result .= ')';
                 }
                 $tokenIndex = $itemEndPos + 1;
             } elseif ($diffType === \PHPStan\PhpDocParser\Printer\DiffElem::TYPE_REMOVE) {
-                if (!$originalNode instanceof Node) {
+                if (!$origArrayItem instanceof Node) {
                     return null;
                 }
                 /** @var int $itemStartPos */
-                $itemStartPos = $originalNode->getAttribute(Attribute::START_INDEX);
+                $itemStartPos = $origArrayItem->getAttribute(Attribute::START_INDEX);
                 /** @var int $itemEndPos */
-                $itemEndPos = $originalNode->getAttribute(Attribute::END_INDEX);
+                $itemEndPos = $origArrayItem->getAttribute(Attribute::END_INDEX);
                 if ($itemStartPos < 0 || $itemEndPos < 0) {
                     throw new LogicException();
                 }
@@ -548,10 +598,21 @@ final class Printer
         return $result;
     }
     /**
+     * @param list<Comment> $comments
+     */
+    private function printComments(array $comments, string $beforeAsteriskIndent, string $afterAsteriskIndent): string
+    {
+        $formattedComments = [];
+        foreach ($comments as $comment) {
+            $formattedComments[] = str_replace("\n", "\n" . $beforeAsteriskIndent . '*' . $afterAsteriskIndent, $comment->getReformattedText());
+        }
+        return implode("\n{$beforeAsteriskIndent}*{$afterAsteriskIndent}", $formattedComments);
+    }
+    /**
      * @param array<Node|null> $nodes
      * @return array{bool, string, string}
      */
-    private function isMultiline(int $initialIndex, array $nodes, TokenIterator $originalTokens) : array
+    private function isMultiline(int $initialIndex, array $nodes, TokenIterator $originalTokens): array
     {
         $isMultiline = count($nodes) > 1;
         $pos = $initialIndex;
@@ -572,9 +633,9 @@ final class Printer
             }
             $pos = $endPos;
         }
-        $c = preg_match_all('~\\n(?<before>[\\x09\\x20]*)\\*(?<after>\\x20*)~', $allText, $matches, PREG_SET_ORDER);
+        $c = preg_match_all('~\n(?<before>[\x09\x20]*)\*(?<after>\x20*)~', $allText, $matches, PREG_SET_ORDER);
         if ($c === 0) {
-            return [$isMultiline, '', ''];
+            return [$isMultiline, ' ', '  '];
         }
         $before = '';
         $after = '';
@@ -587,9 +648,11 @@ final class Printer
             }
             $after = $match['after'];
         }
+        $before = strlen($before) === 0 ? ' ' : $before;
+        $after = strlen($after) === 0 ? '  ' : $after;
         return [$isMultiline, $before, $after];
     }
-    private function printNodeFormatPreserving(Node $node, TokenIterator $originalTokens) : string
+    private function printNodeFormatPreserving(Node $node, TokenIterator $originalTokens): string
     {
         /** @var Node|null $originalNode */
         $originalNode = $node->getAttribute(Attribute::ORIGINAL_NODE);

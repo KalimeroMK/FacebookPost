@@ -3,9 +3,9 @@
 declare (strict_types=1);
 namespace Rector\Console\Formatter;
 
-use RectorPrefix202502\Nette\Utils\Strings;
+use RectorPrefix202609\Nette\Utils\Strings;
 use Rector\Util\NewLineSplitter;
-use RectorPrefix202502\Symfony\Component\Console\Formatter\OutputFormatter;
+use RectorPrefix202609\Symfony\Component\Console\Formatter\OutputFormatter;
 /**
  * Inspired by @see https://github.com/FriendsOfPHP/PHP-CS-Fixer/blob/master/src/Differ/DiffConsoleFormatter.php to be
  * used as standalone class, without need to require whole package by Dariusz Rumiński <dariusz.ruminski@gmail.com>
@@ -15,65 +15,81 @@ use RectorPrefix202502\Symfony\Component\Console\Formatter\OutputFormatter;
 final class ColorConsoleDiffFormatter
 {
     /**
-     * @var string
      * @see https://regex101.com/r/ovLMDF/1
-     */
-    private const PLUS_START_REGEX = '#^(\\+.*)#';
-    /**
      * @var string
+     */
+    private const PLUS_START_REGEX = '#^(\+.*)#';
+    /**
      * @see https://regex101.com/r/xwywpa/1
-     */
-    private const MINUT_START_REGEX = '#^(\\-.*)#';
-    /**
      * @var string
+     */
+    private const MINUS_START_REGEX = '#^(\-.*)#';
+    /**
      * @see https://regex101.com/r/CMlwa8/1
+     * @var string
      */
     private const AT_START_REGEX = '#^(@.*)#';
+    /**
+     * @see https://regex101.com/r/8MXnfa/2
+     * @var string
+     */
+    private const AT_DIFF_LINE_REGEX = '#^\<fg=cyan\>@@ \-(\d+),\d+ \+\d+,\d+ @@\<\/fg=cyan\>$#';
     /**
      * @readonly
      */
     private string $template;
     public function __construct()
     {
-        $this->template = \sprintf('<comment>    ---------- begin diff ----------</comment>%s%%s%s<comment>    ----------- end diff -----------</comment>' . \PHP_EOL, \PHP_EOL, \PHP_EOL);
+        $this->template = sprintf('<comment>    ---------- begin diff ----------</comment>%s%%s%s<comment>    ----------- end diff -----------</comment>' . \PHP_EOL, \PHP_EOL, \PHP_EOL);
     }
-    public function format(string $diff) : string
+    public function format(string $diff): string
     {
         return $this->formatWithTemplate($diff, $this->template);
     }
-    private function formatWithTemplate(string $diff, string $template) : string
+    private function formatWithTemplate(string $diff, string $template): string
     {
-        $escapedDiff = OutputFormatter::escape(\rtrim($diff));
+        $escapedDiff = OutputFormatter::escape(rtrim($diff));
         $escapedDiffLines = NewLineSplitter::split($escapedDiff);
-        // remove description of added + remove; obvious on diffs
+        // remove description of added + remove, obvious on diffs
+        // decorize lines
         foreach ($escapedDiffLines as $key => $escapedDiffLine) {
             if ($escapedDiffLine === '--- Original') {
                 unset($escapedDiffLines[$key]);
+                continue;
             }
             if ($escapedDiffLine === '+++ New') {
                 unset($escapedDiffLines[$key]);
+                continue;
             }
+            if ($escapedDiffLine === ' ') {
+                $escapedDiffLines[$key] = '';
+                continue;
+            }
+            $escapedDiffLine = $this->makePlusLinesGreen($escapedDiffLine);
+            $escapedDiffLine = $this->makeMinusLinesRed($escapedDiffLine);
+            $escapedDiffLine = $this->makeAtNoteCyan($escapedDiffLine);
+            $escapedDiffLine = $this->normalizeLineAtDiff($escapedDiffLine);
+            // final decorized line
+            $escapedDiffLines[$key] = $escapedDiffLine;
         }
-        $coloredLines = \array_map(function (string $string) : string {
-            $string = $this->makePlusLinesGreen($string);
-            $string = $this->makeMinusLinesRed($string);
-            $string = $this->makeAtNoteCyan($string);
-            if ($string === ' ') {
-                return '';
-            }
-            return $string;
-        }, $escapedDiffLines);
-        return \sprintf($template, \implode(\PHP_EOL, $coloredLines));
+        return sprintf($template, implode(\PHP_EOL, $escapedDiffLines));
     }
-    private function makePlusLinesGreen(string $string) : string
+    /**
+     * Simplify diff line info, eg; @@ -67,6 +67,8 @@ to become @@ Line 67 @@
+     */
+    private function normalizeLineAtDiff(string $string): string
+    {
+        return Strings::replace($string, self::AT_DIFF_LINE_REGEX, '<fg=cyan>@@ Line $1 @@</fg=cyan>');
+    }
+    private function makePlusLinesGreen(string $string): string
     {
         return Strings::replace($string, self::PLUS_START_REGEX, '<fg=green>$1</fg=green>');
     }
-    private function makeMinusLinesRed(string $string) : string
+    private function makeMinusLinesRed(string $string): string
     {
-        return Strings::replace($string, self::MINUT_START_REGEX, '<fg=red>$1</fg=red>');
+        return Strings::replace($string, self::MINUS_START_REGEX, '<fg=red>$1</fg=red>');
     }
-    private function makeAtNoteCyan(string $string) : string
+    private function makeAtNoteCyan(string $string): string
     {
         return Strings::replace($string, self::AT_START_REGEX, '<fg=cyan>$1</fg=cyan>');
     }

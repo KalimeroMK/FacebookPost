@@ -3,7 +3,7 @@
 declare (strict_types=1);
 namespace Rector\Symfony\Symfony28\Rector\StaticCall;
 
-use RectorPrefix202502\Nette\Utils\Strings;
+use RectorPrefix202609\Nette\Utils\Strings;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr\StaticCall;
@@ -14,37 +14,43 @@ use Rector\NodeTypeResolver\Node\AttributeKey;
 use Rector\PhpParser\Printer\BetterStandardPrinter;
 use Rector\Rector\AbstractRector;
 use Rector\Util\StringUtils;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
  * @see \Rector\Symfony\Tests\Symfony28\Rector\StaticCall\ParseFileRector\ParseFileRectorTest
  */
-final class ParseFileRector extends AbstractRector
+final class ParseFileRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @readonly
      */
     private BetterStandardPrinter $betterStandardPrinter;
     /**
-     * @var string
      * @changelog https://regex101.com/r/ZaY42i/1
-     */
-    private const YAML_SUFFIX_IN_QUOTE_REGEX = '#\\.(yml|yaml)(\'|\\")$#';
-    /**
      * @var string
+     */
+    private const YAML_SUFFIX_IN_QUOTE_REGEX = '#\.(yml|yaml)(\'|\")$#';
+    /**
      * @changelog https://regex101.com/r/YHA05g/1
+     * @var string
      */
     private const FILE_SUFFIX_REGEX = '#File$#';
     /**
-     * @var string
      * @changelog https://regex101.com/r/JmNhZj/1
+     * @var string
      */
-    private const YAML_SUFFIX_REGEX = '#\\.(yml|yaml)$#';
+    private const YAML_SUFFIX_REGEX = '#\.(yml|yaml)$#';
     public function __construct(BetterStandardPrinter $betterStandardPrinter)
     {
         $this->betterStandardPrinter = $betterStandardPrinter;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('symfony/yaml', '>=2.8');
+    }
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Replaces deprecated Yaml::parse() of file argument with file contents', [new CodeSample(<<<'CODE_SAMPLE'
 use Symfony\Component\Yaml\Yaml;
@@ -61,7 +67,7 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [StaticCall::class];
     }
@@ -70,12 +76,12 @@ CODE_SAMPLE
      *
      * @param StaticCall $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$this->isName($node->name, 'parse')) {
             return null;
         }
-        if (!$this->isObjectType($node->class, new ObjectType('Symfony\\Component\\Yaml\\Yaml'))) {
+        if (!$this->isObjectType($node->class, new ObjectType('Symfony\Component\Yaml\Yaml'))) {
             return null;
         }
         if (!$this->isArgumentYamlFile($node)) {
@@ -85,7 +91,7 @@ CODE_SAMPLE
         $node->args[0] = new Arg($funcCall);
         return $node;
     }
-    private function isArgumentYamlFile(StaticCall $staticCall) : bool
+    private function isArgumentYamlFile(StaticCall $staticCall): bool
     {
         $firstArg = $staticCall->args[0];
         if (!$firstArg instanceof Arg) {

@@ -11,7 +11,7 @@ use PHPStan\Type\Type;
 use Rector\Exception\NotImplementedYetException;
 use Rector\PHPStanStaticTypeMapper\Contract\TypeMapperInterface;
 use Rector\PHPStanStaticTypeMapper\Enum\TypeKind;
-use RectorPrefix202502\Webmozart\Assert\Assert;
+use RectorPrefix202609\Webmozart\Assert\Assert;
 final class PHPStanStaticTypeMapper
 {
     /**
@@ -27,15 +27,13 @@ final class PHPStanStaticTypeMapper
         $this->typeMappers = $typeMappers;
         Assert::notEmpty($typeMappers);
     }
-    public function mapToPHPStanPhpDocTypeNode(Type $type) : TypeNode
+    public function mapToPHPStanPhpDocTypeNode(Type $type): TypeNode
     {
-        foreach ($this->typeMappers as $typeMapper) {
-            if (!\is_a($type, $typeMapper->getNodeClass(), \true)) {
-                continue;
-            }
-            return $typeMapper->mapToPHPStanPhpDocTypeNode($type);
+        $typeMapper = $this->matchTypeMapper($type);
+        if (!$typeMapper instanceof TypeMapperInterface) {
+            throw new NotImplementedYetException(__METHOD__ . ' for ' . get_class($type));
         }
-        throw new NotImplementedYetException(__METHOD__ . ' for ' . \get_class($type));
+        return $typeMapper->mapToPHPStanPhpDocTypeNode($type);
     }
     /**
      * @param TypeKind::* $typeKind
@@ -43,12 +41,33 @@ final class PHPStanStaticTypeMapper
      */
     public function mapToPhpParserNode(Type $type, string $typeKind)
     {
-        foreach ($this->typeMappers as $typeMapper) {
-            if (!\is_a($type, $typeMapper->getNodeClass(), \true)) {
-                continue;
-            }
-            return $typeMapper->mapToPhpParserNode($type, $typeKind);
+        $typeMapper = $this->matchTypeMapper($type);
+        if (!$typeMapper instanceof TypeMapperInterface) {
+            throw new NotImplementedYetException(__METHOD__ . ' for ' . get_class($type));
         }
-        throw new NotImplementedYetException(__METHOD__ . ' for ' . \get_class($type));
+        return $typeMapper->mapToPhpParserNode($type, $typeKind);
+    }
+    /**
+     * Match the most specific mapper: when a type is handled by both a mapper for a parent
+     * class and one for its subclass, the subclass mapper wins, regardless of registration order.
+     *
+     * @return TypeMapperInterface<Type>|null
+     */
+    private function matchTypeMapper(Type $type): ?TypeMapperInterface
+    {
+        $matchedTypeMapper = null;
+        $matchedNodeClass = null;
+        foreach ($this->typeMappers as $typeMapper) {
+            foreach ($typeMapper->getNodeClasses() as $nodeClass) {
+                if (!$type instanceof $nodeClass) {
+                    continue;
+                }
+                if ($matchedNodeClass === null || is_a($nodeClass, $matchedNodeClass, \true)) {
+                    $matchedNodeClass = $nodeClass;
+                    $matchedTypeMapper = $typeMapper;
+                }
+            }
+        }
+        return $matchedTypeMapper;
     }
 }

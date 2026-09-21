@@ -5,8 +5,8 @@ namespace Illuminate\Support\Testing\Fakes;
 use Carbon\CarbonImmutable;
 use Illuminate\Bus\Batch;
 use Illuminate\Bus\UpdatedBatchJobCounts;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Throwable;
 
 class BatchFake extends Batch
 {
@@ -37,7 +37,6 @@ class BatchFake extends Batch
      * @param  \Carbon\CarbonImmutable  $createdAt
      * @param  \Carbon\CarbonImmutable|null  $cancelledAt
      * @param  \Carbon\CarbonImmutable|null  $finishedAt
-     * @return void
      */
     public function __construct(
         string $id,
@@ -68,6 +67,7 @@ class BatchFake extends Batch
      *
      * @return self
      */
+    #[\Override]
     public function fresh()
     {
         return $this;
@@ -79,6 +79,7 @@ class BatchFake extends Batch
      * @param  \Illuminate\Support\Enumerable|object|array  $jobs
      * @return self
      */
+    #[\Override]
     public function add($jobs)
     {
         $jobs = Collection::wrap($jobs);
@@ -98,6 +99,7 @@ class BatchFake extends Batch
      * @param  string  $jobId
      * @return void
      */
+    #[\Override]
     public function recordSuccessfulJob(string $jobId)
     {
         //
@@ -107,8 +109,9 @@ class BatchFake extends Batch
      * Decrement the pending jobs for the batch.
      *
      * @param  string  $jobId
-     * @return \Illuminate\Bus\UpdatedBatchJobCounts
+     * @return void
      */
+    #[\Override]
     public function decrementPendingJobs(string $jobId)
     {
         //
@@ -121,6 +124,7 @@ class BatchFake extends Batch
      * @param  \Throwable  $e
      * @return void
      */
+    #[\Override]
     public function recordFailedJob(string $jobId, $e)
     {
         //
@@ -132,6 +136,7 @@ class BatchFake extends Batch
      * @param  string  $jobId
      * @return \Illuminate\Bus\UpdatedBatchJobCounts
      */
+    #[\Override]
     public function incrementFailedJobs(string $jobId)
     {
         return new UpdatedBatchJobCounts;
@@ -142,9 +147,10 @@ class BatchFake extends Batch
      *
      * @return void
      */
-    public function cancel()
+    #[\Override]
+    public function cancel(?Throwable $exception = null)
     {
-        $this->cancelledAt = Carbon::now();
+        $this->cancelledAt = CarbonImmutable::now();
     }
 
     /**
@@ -152,6 +158,7 @@ class BatchFake extends Batch
      *
      * @return void
      */
+    #[\Override]
     public function delete()
     {
         $this->deleted = true;

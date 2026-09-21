@@ -3,12 +3,16 @@
 namespace Illuminate\Queue;
 
 use Illuminate\Contracts\Queue\Queue as QueueContract;
+use Illuminate\Queue\Attributes\Delay;
 use Illuminate\Queue\Jobs\BeanstalkdJob;
+use Illuminate\Support\Collection;
 use Pheanstalk\Contract\JobIdInterface;
 use Pheanstalk\Pheanstalk;
 use Pheanstalk\Values\Job;
 use Pheanstalk\Values\JobId;
 use Pheanstalk\Values\TubeName;
+
+use function Illuminate\Support\enum_value;
 
 class BeanstalkdQueue extends Queue implements QueueContract
 {
@@ -48,7 +52,6 @@ class BeanstalkdQueue extends Queue implements QueueContract
      * @param  int  $timeToRun
      * @param  int  $blockFor
      * @param  bool  $dispatchAfterCommit
-     * @return void
      */
     public function __construct(
         $pheanstalk,
@@ -67,12 +70,164 @@ class BeanstalkdQueue extends Queue implements QueueContract
     /**
      * Get the size of the queue.
      *
-     * @param  string|null  $queue
+     * @param  \UnitEnum|string|null  $queue
      * @return int
      */
     public function size($queue = null)
     {
-        return (int) $this->pheanstalk->statsTube(new TubeName($this->getQueue($queue)))->currentJobsReady;
+        $stats = $this->pheanstalk->statsTube(new TubeName($this->getQueue($queue)));
+
+        return $stats->currentJobsReady
+            + $stats->currentJobsDelayed
+            + $stats->currentJobsReserved;
+    }
+
+    /**
+     * Get the number of pending jobs.
+     *
+     * @param  \UnitEnum|string|null  $queue
+     * @return int
+     */
+    public function pendingSize($queue = null)
+    {
+        return $this->pheanstalk->statsTube(new TubeName($this->getQueue($queue)))->currentJobsReady;
+    }
+
+    /**
+     * Get the number of delayed jobs.
+     *
+     * @param  \UnitEnum|string|null  $queue
+     * @return int
+     */
+    public function delayedSize($queue = null)
+    {
+        return $this->pheanstalk->statsTube(new TubeName($this->getQueue($queue)))->currentJobsDelayed;
+    }
+
+    /**
+     * Get the number of reserved jobs.
+     *
+     * @param  \UnitEnum|string|null  $queue
+     * @return int
+     */
+    public function reservedSize($queue = null)
+    {
+        return $this->pheanstalk->statsTube(new TubeName($this->getQueue($queue)))->currentJobsReserved;
+    }
+
+    /**
+     * Get the number of jobs across every queue.
+     *
+     * @return int
+     */
+    public function totalSize()
+    {
+        return 0;
+    }
+
+    /**
+     * Get the number of pending jobs across every queue.
+     *
+     * @return int
+     */
+    public function totalPendingSize()
+    {
+        return 0;
+    }
+
+    /**
+     * Get the number of delayed jobs across every queue.
+     *
+     * @return int
+     */
+    public function totalDelayedSize()
+    {
+        return 0;
+    }
+
+    /**
+     * Get the number of reserved jobs across every queue.
+     *
+     * @return int
+     */
+    public function totalReservedSize()
+    {
+        return 0;
+    }
+
+    /**
+     * Get the pending jobs for the given queue.
+     *
+     * @param  \UnitEnum|string|null  $queue
+     * @return \Illuminate\Support\Collection
+     */
+    public function pendingJobs($queue = null): Collection
+    {
+        return new Collection;
+    }
+
+    /**
+     * Get the delayed jobs for the given queue.
+     *
+     * @param  \UnitEnum|string|null  $queue
+     * @return \Illuminate\Support\Collection
+     */
+    public function delayedJobs($queue = null): Collection
+    {
+        return new Collection;
+    }
+
+    /**
+     * Get the reserved jobs for the given queue.
+     *
+     * @param  \UnitEnum|string|null  $queue
+     * @return \Illuminate\Support\Collection
+     */
+    public function reservedJobs($queue = null): Collection
+    {
+        return new Collection;
+    }
+
+    /**
+     * Get all pending jobs across every queue.
+     *
+     * @return \Illuminate\Support\Collection
+     */
+    public function allPendingJobs(): Collection
+    {
+        return new Collection;
+    }
+
+    /**
+     * Get all delayed jobs across every queue.
+     *
+     * @return \Illuminate\Support\Collection
+     */
+    public function allDelayedJobs(): Collection
+    {
+        return new Collection;
+    }
+
+    /**
+     * Get all reserved jobs across every queue.
+     *
+     * @return \Illuminate\Support\Collection
+     */
+    public function allReservedJobs(): Collection
+    {
+        return new Collection;
+    }
+
+    /**
+     * Get the creation timestamp of the oldest pending job, excluding delayed jobs.
+     *
+     * @param  \UnitEnum|string|null  $queue
+     * @return int|null
+     */
+    public function creationTimeOfOldestPendingJob($queue = null)
+    {
+        // Not supported by Beanstalkd...
+        return null;
     }
 
     /**
@@ -80,7 +235,7 @@ class BeanstalkdQueue extends Queue implements QueueContract
      *
      * @param  string  $job
      * @param  mixed  $data
-     * @param  string|null  $queue
+     * @param  \UnitEnum|string|null  $queue
      * @return mixed
      */
     public function push($job, $data = '', $queue = null)
@@ -100,7 +255,7 @@ class BeanstalkdQueue extends Queue implements QueueContract
      * Push a raw payload onto the queue.
      *
      * @param  string  $payload
-     * @param  string|null  $queue
+     * @param  \UnitEnum|string|null  $queue
      * @param  array  $options
      * @return mixed
      */
@@ -119,14 +274,14 @@ class BeanstalkdQueue extends Queue implements QueueContract
      * @param  \DateTimeInterface|\DateInterval|int  $delay
      * @param  string  $job
      * @param  mixed  $data
-     * @param  string|null  $queue
+     * @param  \UnitEnum|string|null  $queue
      * @return mixed
      */
     public function later($delay, $job, $data = '', $queue = null)
     {
         return $this->enqueueUsing(
             $job,
-            $this->createPayload($job, $this->getQueue($queue), $data),
+            $this->createPayload($job, $this->getQueue($queue), $data, $delay),
             $queue,
             $delay,
             function ($payload, $queue, $delay) {
@@ -147,14 +302,16 @@ class BeanstalkdQueue extends Queue implements QueueContract
      *
      * @param  array  $jobs
      * @param  mixed  $data
-     * @param  string|null  $queue
+     * @param  \UnitEnum|string|null  $queue
      * @return void
      */
     public function bulk($jobs, $data = '', $queue = null)
     {
         foreach ((array) $jobs as $job) {
-            if (isset($job->delay)) {
-                $this->later($job->delay, $job, $data, $queue);
+            $delay = is_object($job) ? $this->getAttributeValue($job, Delay::class, 'delay') : null;
+
+            if (isset($delay)) {
+                $this->later($delay, $job, $data, $queue);
             } else {
                 $this->push($job, $data, $queue);
             }
@@ -164,7 +321,7 @@ class BeanstalkdQueue extends Queue implements QueueContract
     /**
      * Pop the next job off of the queue.
      *
-     * @param  string|null  $queue
+     * @param  \UnitEnum|string|null  $queue
      * @return \Illuminate\Contracts\Queue\Job|null
      */
     public function pop($queue = null)
@@ -191,7 +348,7 @@ class BeanstalkdQueue extends Queue implements QueueContract
     /**
      * Delete a message from the Beanstalk queue.
      *
-     * @param  string  $queue
+     * @param  \UnitEnum|string  $queue
      * @param  string|int  $id
      * @return void
      */
@@ -205,12 +362,12 @@ class BeanstalkdQueue extends Queue implements QueueContract
     /**
      * Get the queue or return the default.
      *
-     * @param  string|null  $queue
+     * @param  \UnitEnum|string|null  $queue
      * @return string
      */
     public function getQueue($queue)
     {
-        return $queue ?: $this->default;
+        return $this->resolveQueue(enum_value($queue) ?: $this->default);
     }
 
     /**

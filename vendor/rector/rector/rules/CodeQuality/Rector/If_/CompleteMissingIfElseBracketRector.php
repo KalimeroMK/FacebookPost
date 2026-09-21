@@ -8,6 +8,8 @@ use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\Else_;
 use PhpParser\Node\Stmt\ElseIf_;
 use PhpParser\Node\Stmt\If_;
+use PhpParser\Token;
+use Rector\Contract\Rector\HTMLAverseRectorInterface;
 use Rector\NodeTypeResolver\Node\AttributeKey;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
@@ -15,9 +17,9 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
  * @see \Rector\Tests\CodeQuality\Rector\If_\CompleteMissingIfElseBracketRector\CompleteMissingIfElseBracketRectorTest
  */
-final class CompleteMissingIfElseBracketRector extends AbstractRector
+final class CompleteMissingIfElseBracketRector extends AbstractRector implements HTMLAverseRectorInterface
 {
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Complete missing if/else brackets', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
@@ -45,19 +47,19 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [If_::class, ElseIf_::class, Else_::class];
     }
     /**
      * @param If_|ElseIf_|Else_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($this->isBareNewNode($node)) {
             return null;
         }
-        $oldTokens = $this->file->getOldTokens();
+        $oldTokens = $this->getFile()->getOldTokens();
         if ($this->isIfConditionFollowedByOpeningCurlyBracket($node, $oldTokens)) {
             return null;
         }
@@ -66,12 +68,12 @@ CODE_SAMPLE
         return $node;
     }
     /**
-     * @param mixed[] $oldTokens
+     * @param Token[] $oldTokens
      * @param \PhpParser\Node\Stmt\If_|\PhpParser\Node\Stmt\ElseIf_|\PhpParser\Node\Stmt\Else_ $if
      */
-    private function isIfConditionFollowedByOpeningCurlyBracket($if, array $oldTokens) : bool
+    private function isIfConditionFollowedByOpeningCurlyBracket($if, array $oldTokens): bool
     {
-        $startStmt = \current($if->stmts);
+        $startStmt = current($if->stmts);
         if (!$startStmt instanceof Stmt) {
             return \true;
         }
@@ -82,7 +84,7 @@ CODE_SAMPLE
             if ($i === $condEndTokenPos) {
                 return \false;
             }
-            if (\in_array((string) $oldTokens[$i], ['{', ':'], \true)) {
+            if (in_array((string) $oldTokens[$i], ['{', ':'], \true)) {
                 // all good
                 return \true;
             }
@@ -96,7 +98,7 @@ CODE_SAMPLE
     /**
      * @param \PhpParser\Node\Stmt\If_|\PhpParser\Node\Stmt\ElseIf_|\PhpParser\Node\Stmt\Else_ $if
      */
-    private function isBareNewNode($if) : bool
+    private function isBareNewNode($if): bool
     {
         $originalNode = $if->getAttribute(AttributeKey::ORIGINAL_NODE);
         if (!$originalNode instanceof Node) {

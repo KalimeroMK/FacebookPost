@@ -10,9 +10,9 @@ use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\Else_;
 use PhpParser\Node\Stmt\If_;
 use PhpParser\Node\Stmt\Return_;
-use Rector\Contract\PhpParser\Node\StmtsAwareInterface;
 use Rector\NodeManipulator\IfManipulator;
 use Rector\NodeManipulator\StmtsManipulator;
+use Rector\PhpParser\Enum\NodeGroup;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
@@ -34,7 +34,7 @@ final class ChangeIfElseValueAssignToEarlyReturnRector extends AbstractRector
         $this->ifManipulator = $ifManipulator;
         $this->stmtsManipulator = $stmtsManipulator;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Change if/else value to early return', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
@@ -68,14 +68,15 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
-        return [StmtsAwareInterface::class];
+        return NodeGroup::STMTS_AWARE;
     }
     /**
-     * @param StmtsAwareInterface $node
+     * @param StmtsAware $node
+     * @return ?StmtsAware
      */
-    public function refactor(Node $node) : ?StmtsAwareInterface
+    public function refactor(Node $node): ?Node
     {
         if ($node->stmts === null) {
             return null;
@@ -95,7 +96,7 @@ CODE_SAMPLE
             if (!$this->ifManipulator->isIfAndElseWithSameVariableAssignAsLastStmts($if, $stmt->expr)) {
                 continue;
             }
-            $lastIfStmtKey = \array_key_last($if->stmts);
+            $lastIfStmtKey = array_key_last($if->stmts);
             /** @var Assign $assign */
             $assign = $this->stmtsManipulator->getUnwrappedLastStmt($if->stmts);
             $returnLastIf = new Return_($assign->expr);
@@ -110,9 +111,9 @@ CODE_SAMPLE
             $this->mirrorComments($stmt, $assign);
             $if->else = null;
             $stmt->expr = $assign->expr;
-            $lastStmt = \array_pop($node->stmts);
-            $elseStmtsExceptLast = \array_slice($elseStmts, 0, -1);
-            $node->stmts = [...$node->stmts, ...$elseStmtsExceptLast, $lastStmt];
+            $lastStmt = array_pop($node->stmts);
+            $elseStmtsExceptLast = array_slice($elseStmts, 0, -1);
+            $node->stmts = array_merge($node->stmts, $elseStmtsExceptLast, [$lastStmt]);
             return $node;
         }
         return null;

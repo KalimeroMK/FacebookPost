@@ -6,12 +6,12 @@ namespace Rector\Symfony\CodeQuality\Rector\ClassMethod;
 use PhpParser\Node;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\MethodCall;
-use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Return_;
+use PhpParser\Node\UnionType as PhpParserUnionType;
 use PHPStan\Type\ObjectType;
 use PHPStan\Type\Type;
 use PHPStan\Type\UnionType;
@@ -24,10 +24,12 @@ use Rector\StaticTypeMapper\StaticTypeMapper;
 use Rector\Symfony\CodeQuality\Enum\ResponseClass;
 use Rector\Symfony\Enum\SensioAttribute;
 use Rector\Symfony\Enum\SymfonyAnnotation;
+use Rector\Symfony\Enum\SymfonyClass;
 use Rector\Symfony\TypeAnalyzer\ControllerAnalyzer;
 use Rector\TypeDeclaration\NodeAnalyzer\ReturnAnalyzer;
 use Rector\TypeDeclaration\TypeInferer\ReturnTypeInferer;
 use Rector\ValueObject\PhpVersionFeature;
+use Rector\VendorLocker\ParentClassMethodTypeOverrideGuard;
 use Rector\VersionBonding\Contract\MinPhpVersionInterface;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
@@ -60,7 +62,11 @@ final class ResponseReturnTypeControllerActionRector extends AbstractRector impl
      * @readonly
      */
     private ReturnTypeInferer $returnTypeInferer;
-    public function __construct(ControllerAnalyzer $controllerAnalyzer, AttrinationFinder $attrinationFinder, BetterNodeFinder $betterNodeFinder, ReturnAnalyzer $returnAnalyzer, StaticTypeMapper $staticTypeMapper, ReturnTypeInferer $returnTypeInferer)
+    /**
+     * @readonly
+     */
+    private ParentClassMethodTypeOverrideGuard $parentClassMethodTypeOverrideGuard;
+    public function __construct(ControllerAnalyzer $controllerAnalyzer, AttrinationFinder $attrinationFinder, BetterNodeFinder $betterNodeFinder, ReturnAnalyzer $returnAnalyzer, StaticTypeMapper $staticTypeMapper, ReturnTypeInferer $returnTypeInferer, ParentClassMethodTypeOverrideGuard $parentClassMethodTypeOverrideGuard)
     {
         $this->controllerAnalyzer = $controllerAnalyzer;
         $this->attrinationFinder = $attrinationFinder;
@@ -68,8 +74,9 @@ final class ResponseReturnTypeControllerActionRector extends AbstractRector impl
         $this->returnAnalyzer = $returnAnalyzer;
         $this->staticTypeMapper = $staticTypeMapper;
         $this->returnTypeInferer = $returnTypeInferer;
+        $this->parentClassMethodTypeOverrideGuard = $parentClassMethodTypeOverrideGuard;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Add Response object return type to controller actions', [new CodeSample(<<<'CODE_SAMPLE'
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -103,14 +110,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [ClassMethod::class];
     }
     /**
      * @param ClassMethod $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$node->isPublic()) {
             return null;
@@ -122,7 +129,11 @@ CODE_SAMPLE
         if (!$this->controllerAnalyzer->isInsideController($node)) {
             return null;
         }
-        if (!$this->attrinationFinder->hasByOne($node, SymfonyAnnotation::ROUTE)) {
+        // adding a return type would break child classes of user-guarded classes
+        if ($this->parentClassMethodTypeOverrideGuard->isTypeGuardedClass($node)) {
+            return null;
+        }
+        if (!$this->isActionClassMethod($node)) {
             return null;
         }
         if (!$this->hasReturn($node)) {
@@ -131,7 +142,7 @@ CODE_SAMPLE
         if ($this->attrinationFinder->hasByOne($node, SensioAttribute::TEMPLATE) || $this->attrinationFinder->hasByOne($node, SymfonyAnnotation::TWIG_TEMPLATE)) {
             $returnType = $this->returnTypeInferer->inferFunctionLike($node);
             $types = $returnType instanceof UnionType ? $returnType->getTypes() : [$returnType];
-            $objectType = new ObjectType('Symfony\\Component\\HttpFoundation\\Response');
+            $objectType = new ObjectType(SymfonyClass::RESPONSE);
             foreach ($types as $type) {
                 if ($type instanceof ObjectType && $objectType->isSuperTypeOf($type)->yes()) {
                     return null;
@@ -145,14 +156,14 @@ CODE_SAMPLE
         }
         return $this->refactorResponse($node);
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::SCALAR_TYPES;
     }
     /**
      * @param array<string> $methods
      */
-    private function isResponseReturnMethod(ClassMethod $classMethod, array $methods) : bool
+    private function isResponseReturnMethod(ClassMethod $classMethod, array $methods): bool
     {
         $returns = $this->betterNodeFinder->findInstancesOfInFunctionLikeScoped($classMethod, Return_::class);
         foreach ($returns as $return) {
@@ -164,17 +175,24 @@ CODE_SAMPLE
                 return \false;
             }
             $functionName = $this->getName($methodCall->name);
-            if (!\in_array($functionName, $methods, \true)) {
+            if (!in_array($functionName, $methods, \true)) {
                 return \false;
             }
         }
         return \true;
     }
-    private function hasReturn(ClassMethod $classMethod) : bool
+    private function isActionClassMethod(ClassMethod $classMethod): bool
     {
-        return $this->betterNodeFinder->hasInstancesOf($classMethod, [Return_::class]);
+        if ($this->attrinationFinder->hasByOne($classMethod, SymfonyAnnotation::ROUTE)) {
+            return \true;
+        }
+        return substr_compare($this->getName($classMethod), 'Action', -strlen('Action')) === 0;
     }
-    private function refactorResponse(ClassMethod $classMethod) : ?ClassMethod
+    private function hasReturn(ClassMethod $classMethod): bool
+    {
+        return $this->betterNodeFinder->hasInstancesOfInFunctionLikeScoped($classMethod, Return_::class);
+    }
+    private function refactorResponse(ClassMethod $classMethod): ?ClassMethod
     {
         if ($this->isResponseReturnMethod($classMethod, ['redirectToRoute', 'redirect'])) {
             $classMethod->returnType = new FullyQualified(ResponseClass::REDIRECT);
@@ -196,14 +214,10 @@ CODE_SAMPLE
             $classMethod->returnType = new FullyQualified(ResponseClass::BASIC);
             return $classMethod;
         }
-        return $this->refatorWithNew($classMethod);
+        return $this->refactorReturnedType($classMethod);
     }
-    private function refatorWithNew(ClassMethod $classMethod) : ?ClassMethod
+    private function refactorReturnedType(ClassMethod $classMethod): ?ClassMethod
     {
-        // early check
-        if (!$this->betterNodeFinder->hasInstancesOf($classMethod, [New_::class])) {
-            return null;
-        }
         $returns = $this->betterNodeFinder->findReturnsScoped($classMethod);
         if (!$this->returnAnalyzer->hasOnlyReturnWithExpr($classMethod, $returns)) {
             return null;
@@ -213,7 +227,7 @@ CODE_SAMPLE
             return null;
         }
         $returnType = $this->staticTypeMapper->mapPHPStanTypeToPhpParserNode($responseReturnType, TypeKind::RETURN);
-        if (!$returnType instanceof FullyQualified) {
+        if (!$returnType instanceof FullyQualified && !$returnType instanceof PhpParserUnionType) {
             return null;
         }
         $classMethod->returnType = $returnType;
@@ -222,7 +236,7 @@ CODE_SAMPLE
     /**
      * @param Return_[] $returns
      */
-    private function resolveResponseOnlyReturnType(array $returns) : ?Type
+    private function resolveResponseOnlyReturnType(array $returns): ?Type
     {
         $returnedTypes = [];
         foreach ($returns as $return) {
@@ -237,6 +251,6 @@ CODE_SAMPLE
             }
             $returnedTypes[] = $returnedType;
         }
-        return \count($returnedTypes) > 1 ? new UnionType($returnedTypes) : $returnedTypes[0];
+        return count($returnedTypes) > 1 ? new UnionType($returnedTypes) : $returnedTypes[0];
     }
 }

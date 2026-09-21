@@ -8,7 +8,7 @@
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\Symfony\Component\Console\Attribute;
+namespace RectorPrefix202609\Symfony\Component\Console\Attribute;
 
 /**
  * Service tag to autoconfigure commands.
@@ -25,11 +25,11 @@ class AsCommand
         if (!$hidden && !$aliases) {
             return;
         }
-        $name = \explode('|', $name);
-        $name = \array_merge($name, $aliases);
+        $name = explode('|', $name);
+        $name = array_merge($name, $aliases);
         if ($hidden && '' !== $name[0]) {
-            \array_unshift($name, '');
+            array_unshift($name, '');
         }
-        $this->name = \implode('|', $name);
+        $this->name = implode('|', $name);
     }
 }

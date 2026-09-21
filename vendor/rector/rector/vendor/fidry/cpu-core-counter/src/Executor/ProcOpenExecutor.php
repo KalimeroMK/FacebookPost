@@ -9,7 +9,7 @@
  * file that was distributed with this source code.
  */
 declare (strict_types=1);
-namespace RectorPrefix202502\Fidry\CpuCoreCounter\Executor;
+namespace RectorPrefix202609\Fidry\CpuCoreCounter\Executor;
 
 use function fclose;
 use function function_exists;
@@ -19,7 +19,7 @@ use function proc_open;
 use function stream_get_contents;
 final class ProcOpenExecutor implements ProcessExecutor
 {
-    public function execute(string $command) : ?array
+    public function execute(string $command): ?array
     {
         if (!function_exists('proc_open')) {
             return null;
@@ -31,12 +31,14 @@ final class ProcOpenExecutor implements ProcessExecutor
             // stdout
             ['pipe', 'wb'],
         ], $pipes);
+        // https://github.com/phpstan/phpstan/issues/13197
+        /** @var array{resource, resource, resource} $pipes */
         if (!is_resource($process)) {
             return null;
         }
         fclose($pipes[0]);
-        $stdout = (string) stream_get_contents($pipes[1]);
-        $stderr = (string) stream_get_contents($pipes[2]);
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
         proc_close($process);
         return [$stdout, $stderr];
     }

@@ -5,12 +5,14 @@ namespace Rector\DowngradePhp80\Rector\Class_;
 
 use PhpParser\Node;
 use PhpParser\Node\Attribute;
+use PhpParser\Node\AttributeGroup;
 use PhpParser\Node\Param;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Function_;
 use PhpParser\Node\Stmt\Interface_;
 use PhpParser\Node\Stmt\Property;
+use PHPStan\Analyser\Scope;
 use PHPStan\PhpDocParser\Ast\PhpDoc\GenericTagValueNode;
 use PHPStan\PhpDocParser\Ast\PhpDoc\PhpDocTagNode;
 use Rector\BetterPhpDocParser\PhpDocInfo\PhpDocInfoFactory;
@@ -18,10 +20,11 @@ use Rector\Comments\NodeDocBlock\DocBlockUpdater;
 use Rector\Contract\Rector\ConfigurableRectorInterface;
 use Rector\DowngradePhp80\ValueObject\DowngradeAttributeToAnnotation;
 use Rector\NodeFactory\DoctrineAnnotationFactory;
+use Rector\NodeTypeResolver\Node\AttributeKey;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\ConfiguredCodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
-use RectorPrefix202502\Webmozart\Assert\Assert;
+use RectorPrefix202609\Webmozart\Assert\Assert;
 /**
  * @changelog https://php.watch/articles/php-attributes#syntax
  *
@@ -44,7 +47,7 @@ final class DowngradeAttributeToAnnotationRector extends AbstractRector implemen
     /**
      * @var string[]
      */
-    private const SKIPPED_ATTRIBUTES = ['Attribute', 'ReturnTypeWillChange', 'AllowDynamicProperties'];
+    private const SKIPPED_ATTRIBUTES = ['Attribute', 'ReturnTypeWillChange', 'AllowDynamicProperties', 'Override'];
     /**
      * @var DowngradeAttributeToAnnotation[]
      */
@@ -56,7 +59,7 @@ final class DowngradeAttributeToAnnotationRector extends AbstractRector implemen
         $this->docBlockUpdater = $docBlockUpdater;
         $this->phpDocInfoFactory = $phpDocInfoFactory;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Refactor PHP attribute markers to annotations notation', [new ConfiguredCodeSample(<<<'CODE_SAMPLE'
 use Symfony\Component\Routing\Annotation\Route;
@@ -82,19 +85,19 @@ class SymfonyRoute
     }
 }
 CODE_SAMPLE
-, [new DowngradeAttributeToAnnotation('Symfony\\Component\\Routing\\Annotation\\Route')])]);
+, [new DowngradeAttributeToAnnotation('Symfony\Component\Routing\Annotation\Route')])]);
     }
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class, ClassMethod::class, Property::class, Interface_::class, Param::class, Function_::class];
     }
     /**
      * @param Class_|ClassMethod|Property|Interface_|Param|Function_  $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($node->attrGroups === []) {
             return null;
@@ -105,9 +108,11 @@ CODE_SAMPLE
         foreach ($node->attrGroups as $attrGroup) {
             foreach ($attrGroup->attrs as $key => $attribute) {
                 if ($this->shouldSkipAttribute($attribute)) {
-                    if (isset($oldTokens[$attrGroup->getEndTokenPos() + 1]) && \strpos((string) $oldTokens[$attrGroup->getEndTokenPos() + 1], "\n") === \false) {
+                    $endTokenPos = $attrGroup->getEndTokenPos();
+                    $nextTokenPos = $endTokenPos + 1;
+                    if ($endTokenPos >= 0 && isset($oldTokens[$nextTokenPos]) && strpos((string) $oldTokens[$nextTokenPos], "\n") === \false) {
                         // add new line
-                        $oldTokens[$attrGroup->getEndTokenPos() + 1]->text = "\n" . $oldTokens[$attrGroup->getEndTokenPos() + 1]->text;
+                        $oldTokens[$nextTokenPos]->text = "\n" . $this->resolveIndentation($node, $attrGroup, $attribute) . $oldTokens[$nextTokenPos]->text;
                         $this->isDowngraded = \true;
                     }
                     continue;
@@ -120,7 +125,7 @@ CODE_SAMPLE
                 }
                 unset($attrGroup->attrs[$key]);
                 $this->isDowngraded = \true;
-                if (\strpos($attributeToAnnotation->getTag(), '\\') === \false) {
+                if (strpos($attributeToAnnotation->getTag(), '\\') === \false) {
                     $phpDocInfo->addPhpDocTagNode(new PhpDocTagNode('@' . $attributeToAnnotation->getTag(), new GenericTagValueNode('')));
                     $this->docBlockUpdater->updateRefactoredNodeWithPhpDocInfo($node);
                     continue;
@@ -140,15 +145,27 @@ CODE_SAMPLE
     /**
      * @param DowngradeAttributeToAnnotation[] $configuration
      */
-    public function configure(array $configuration) : void
+    public function configure(array $configuration): void
     {
         Assert::allIsAOf($configuration, DowngradeAttributeToAnnotation::class);
         $this->attributesToAnnotations = $configuration;
     }
+    private function resolveIndentation(Node $node, AttributeGroup $attributeGroup, Attribute $attribute): string
+    {
+        $scope = $node->getAttribute(AttributeKey::SCOPE);
+        if (!$scope instanceof Scope) {
+            return '';
+        }
+        if ($node->getStartTokenPos() === strlen($attribute->name->toString()) - 2 || $node instanceof Class_ && $scope->isInFirstLevelStatement()) {
+            return '';
+        }
+        $indent = $attributeGroup->getEndTokenPos() - $node->getStartTokenPos() + 2;
+        return $indent > 0 ? str_repeat(' ', $indent) : '';
+    }
     /**
      * @param \PhpParser\Node\Stmt\ClassMethod|\PhpParser\Node\Stmt\Property|\PhpParser\Node\Stmt\Class_|\PhpParser\Node\Stmt\Interface_|\PhpParser\Node\Param|\PhpParser\Node\Stmt\Function_ $node
      */
-    private function cleanupEmptyAttrGroups($node) : void
+    private function cleanupEmptyAttrGroups($node): void
     {
         foreach ($node->attrGroups as $key => $attrGroup) {
             if ($attrGroup->attrs !== []) {
@@ -161,7 +178,7 @@ CODE_SAMPLE
     /**
      * @param DowngradeAttributeToAnnotation[] $attributesToAnnotations
      */
-    private function matchAttributeToAnnotation(Attribute $attribute, array $attributesToAnnotations) : ?DowngradeAttributeToAnnotation
+    private function matchAttributeToAnnotation(Attribute $attribute, array $attributesToAnnotations): ?DowngradeAttributeToAnnotation
     {
         foreach ($attributesToAnnotations as $attributeToAnnotation) {
             if (!$this->isName($attribute->name, $attributeToAnnotation->getAttributeClass())) {
@@ -171,9 +188,9 @@ CODE_SAMPLE
         }
         return null;
     }
-    private function shouldSkipAttribute(Attribute $attribute) : bool
+    private function shouldSkipAttribute(Attribute $attribute): bool
     {
         $attributeName = $attribute->name->toString();
-        return \in_array($attributeName, self::SKIPPED_ATTRIBUTES, \true);
+        return in_array($attributeName, self::SKIPPED_ATTRIBUTES, \true);
     }
 }

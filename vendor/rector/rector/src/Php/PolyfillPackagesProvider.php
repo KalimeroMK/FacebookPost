@@ -3,8 +3,8 @@
 declare (strict_types=1);
 namespace Rector\Php;
 
-use RectorPrefix202502\Nette\Utils\FileSystem;
-use RectorPrefix202502\Nette\Utils\Json;
+use RectorPrefix202609\Nette\Utils\FileSystem;
+use RectorPrefix202609\Nette\Utils\Json;
 use Rector\Configuration\Option;
 use Rector\Configuration\Parameter\SimpleParameterProvider;
 use Rector\ValueObject\PolyfillPackage;
@@ -17,7 +17,7 @@ final class PolyfillPackagesProvider
     /**
      * @return array<int, PolyfillPackage::*>
      */
-    public function provide() : array
+    public function provide(): array
     {
         // disable cache in tests
         if (SimpleParameterProvider::hasParameter(Option::POLYFILL_PACKAGES)) {
@@ -27,8 +27,8 @@ final class PolyfillPackagesProvider
         if ($this->cachedPolyfillPackages !== null) {
             return $this->cachedPolyfillPackages;
         }
-        $projectComposerJson = \getcwd() . '/composer.json';
-        if (!\file_exists($projectComposerJson)) {
+        $projectComposerJson = getcwd() . '/composer.json';
+        if (!file_exists($projectComposerJson)) {
             $this->cachedPolyfillPackages = [];
             return $this->cachedPolyfillPackages;
         }
@@ -41,8 +41,8 @@ final class PolyfillPackagesProvider
      * @param array<string, string> $require
      * @return array<int, PolyfillPackage::*>
      */
-    private function filterPolyfillPackages(array $require) : array
+    private function filterPolyfillPackages(array $require): array
     {
-        return \array_filter(\array_keys($require), static fn(string $packageName): bool => \strncmp($packageName, 'symfony/polyfill-', \strlen('symfony/polyfill-')) === 0);
+        return array_filter(array_keys($require), static fn(string $packageName): bool => strncmp($packageName, 'symfony/polyfill-', strlen('symfony/polyfill-')) === 0);
     }
 }

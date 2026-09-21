@@ -5,6 +5,7 @@ namespace Rector\DeadCode\Rector\Cast;
 
 use PhpParser\Node;
 use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\ArrayDimFetch;
 use PhpParser\Node\Expr\Cast;
 use PhpParser\Node\Expr\Cast\Array_;
 use PhpParser\Node\Expr\Cast\Bool_;
@@ -58,9 +59,9 @@ final class RecastingRemovalRector extends AbstractRector
         $this->reflectionResolver = $reflectionResolver;
         $this->exprAnalyzer = $exprAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
-        return new RuleDefinition('Removes recasting of the same type', [new CodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Remove recasting of the same type', [new CodeSample(<<<'CODE_SAMPLE'
 $string = '';
 $string = (string) $string;
 
@@ -79,16 +80,16 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Cast::class];
     }
     /**
      * @param Cast $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
-        $nodeClass = \get_class($node);
+        $nodeClass = get_class($node);
         if (!isset(self::CAST_CLASS_TO_NODE_TYPE[$nodeClass])) {
             return null;
         }
@@ -117,7 +118,7 @@ CODE_SAMPLE
         }
         return $node->expr;
     }
-    private function shouldSkipCall(Expr $expr) : bool
+    private function shouldSkipCall(Expr $expr): bool
     {
         if (!$expr instanceof MethodCall && !$expr instanceof StaticCall) {
             return \false;
@@ -125,8 +126,12 @@ CODE_SAMPLE
         $type = $this->nodeTypeResolver->getNativeType($expr);
         return $type instanceof MixedType && !$type->isExplicitMixed();
     }
-    private function shouldSkip(Expr $expr) : bool
+    private function shouldSkip(Expr $expr): bool
     {
+        // array dim fetch value can be anything, the type is often inaccurate
+        if ($expr instanceof ArrayDimFetch) {
+            return \true;
+        }
         $type = $this->getType($expr);
         if ($type instanceof UnionType) {
             foreach ($type->getTypes() as $unionedType) {

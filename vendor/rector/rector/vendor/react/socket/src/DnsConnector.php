@@ -1,10 +1,10 @@
 <?php
 
-namespace RectorPrefix202502\React\Socket;
+namespace RectorPrefix202609\React\Socket;
 
-use RectorPrefix202502\React\Dns\Resolver\ResolverInterface;
-use RectorPrefix202502\React\Promise;
-use RectorPrefix202502\React\Promise\PromiseInterface;
+use RectorPrefix202609\React\Dns\Resolver\ResolverInterface;
+use RectorPrefix202609\React\Promise;
+use RectorPrefix202609\React\Promise\PromiseInterface;
 final class DnsConnector implements ConnectorInterface
 {
     private $connector;
@@ -37,18 +37,20 @@ final class DnsConnector implements ConnectorInterface
         }
         $promise = $this->resolver->resolve($host);
         $resolved = null;
-        return new Promise\Promise(function ($resolve, $reject) use(&$promise, &$resolved, $uri, $connector, $host, $parts) {
+        return new Promise\Promise(function ($resolve, $reject) use (&$promise, &$resolved, $uri, $connector, $host, $parts) {
             // resolve/reject with result of DNS lookup
-            $promise->then(function ($ip) use(&$promise, &$resolved, $uri, $connector, $host, $parts) {
+            $promise->then(function ($ip) use (&$promise, &$resolved, $uri, $connector, $host, $parts) {
                 $resolved = $ip;
-                return $promise = $connector->connect(Connector::uri($parts, $host, $ip))->then(null, function (\Exception $e) use($uri) {
+                return $promise = $connector->connect(Connector::uri($parts, $host, $ip))->then(null, function (\Exception $e) use ($uri) {
                     if ($e instanceof \RuntimeException) {
                         $message = \preg_replace('/^(Connection to [^ ]+)[&?]hostname=[^ &]+/', '$1', $e->getMessage());
                         $e = new \RuntimeException('Connection to ' . $uri . ' failed: ' . $message, $e->getCode(), $e);
                         // avoid garbage references by replacing all closures in call stack.
                         // what a lovely piece of code!
                         $r = new \ReflectionProperty('Exception', 'trace');
-                        $r->setAccessible(\true);
+                        if (\PHP_VERSION_ID < 80100) {
+                            $r->setAccessible(\true);
+                        }
                         $trace = $r->getValue($e);
                         // Exception trace arguments are not available on some PHP 7.4 installs
                         // @codeCoverageIgnoreStart
@@ -66,10 +68,10 @@ final class DnsConnector implements ConnectorInterface
                     }
                     throw $e;
                 });
-            }, function ($e) use($uri, $reject) {
+            }, function ($e) use ($uri, $reject) {
                 $reject(new \RuntimeException('Connection to ' . $uri . ' failed during DNS lookup: ' . $e->getMessage(), 0, $e));
             })->then($resolve, $reject);
-        }, function ($_, $reject) use(&$promise, &$resolved, $uri) {
+        }, function ($_, $reject) use (&$promise, &$resolved, $uri) {
             // cancellation should reject connection attempt
             // reject DNS resolution with custom reason, otherwise rely on connection cancellation below
             if ($resolved === null) {

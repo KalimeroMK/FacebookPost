@@ -5,6 +5,9 @@ namespace Orchestra\Testbench\Foundation;
 use Illuminate\Console\Application as Artisan;
 use Illuminate\Console\Scheduling\ScheduleListCommand;
 use Illuminate\Console\Signals;
+use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Database\Schema\Builder as SchemaBuilder;
 use Illuminate\Foundation\Bootstrap\HandleExceptions;
 use Illuminate\Foundation\Bootstrap\LoadEnvironmentVariables;
@@ -12,24 +15,33 @@ use Illuminate\Foundation\Bootstrap\RegisterProviders;
 use Illuminate\Foundation\Console\AboutCommand;
 use Illuminate\Foundation\Console\ChannelListCommand;
 use Illuminate\Foundation\Console\RouteListCommand;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull;
+use Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance;
 use Illuminate\Foundation\Http\Middleware\TrimStrings;
-use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Http\Middleware\TrustHosts;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Http\Resources\JsonApi\JsonApiResource;
+use Illuminate\Mail\Markdown;
 use Illuminate\Queue\Console\WorkCommand;
 use Illuminate\Queue\Queue;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Arr;
+use Illuminate\Support\EncodedHtmlString;
 use Illuminate\Support\Once;
 use Illuminate\Support\Sleep;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Validator;
 use Illuminate\View\Component;
+use Orchestra\Sidekick\Env;
 use Orchestra\Testbench\Concerns\CreatesApplication;
 use Orchestra\Testbench\Console\Commander;
 use Orchestra\Testbench\Contracts\Config as ConfigContract;
 use Orchestra\Testbench\Workbench\Workbench;
 
-use function Orchestra\Sidekick\join_paths;
+use function Orchestra\Sidekick\Filesystem\join_paths;
 
 /**
  * @api
@@ -104,9 +116,10 @@ class Application
      * @param  string|null  $basePath
      * @param  (callable(\Illuminate\Foundation\Application):(void))|null  $resolvingCallback
      * @param  array<string, mixed>  $options
-     * @return static
      *
      * @phpstan-param TConfig  $options
+     *
+     * @return static
      */
     public static function make(?string $basePath = null, ?callable $resolvingCallback = null, array $options = [])
     {
@@ -119,9 +132,10 @@ class Application
      * @param  \Orchestra\Testbench\Contracts\Config  $config
      * @param  (callable(\Illuminate\Foundation\Application):(void))|null  $resolvingCallback
      * @param  array<string, mixed>  $options
-     * @return static
      *
      * @phpstan-param TConfig  $options
+     *
+     * @return static
      */
     public static function makeFromConfig(ConfigContract $config, ?callable $resolvingCallback = null, array $options = [])
     {
@@ -174,9 +188,10 @@ class Application
      * @param  string|null  $basePath
      * @param  (callable(\Illuminate\Foundation\Application):(void))|null  $resolvingCallback
      * @param  array<string, mixed>  $options
-     * @return \Illuminate\Foundation\Application
      *
      * @phpstan-param TConfig  $options
+     *
+     * @return \Illuminate\Foundation\Application
      */
     public static function create(?string $basePath = null, ?callable $resolvingCallback = null, array $options = [])
     {
@@ -189,9 +204,10 @@ class Application
      * @param  \Orchestra\Testbench\Contracts\Config  $config
      * @param  (callable(\Illuminate\Foundation\Application):(void))|null  $resolvingCallback
      * @param  array<string, mixed>  $options
-     * @return \Illuminate\Foundation\Application
      *
      * @phpstan-param TConfig  $options
+     *
+     * @return \Illuminate\Foundation\Application
      */
     public static function createFromConfig(ConfigContract $config, ?callable $resolvingCallback = null, array $options = [])
     {
@@ -213,13 +229,27 @@ class Application
         Component::forgetComponentsResolver();
         Component::forgetFactory();
         ConvertEmptyStringsToNull::flushState();
+        EncodedHtmlString::flushState();
+        Factory::flushState();
+        FormRequest::flushState();
 
         if (! $instance instanceof Commander) {
-            HandleExceptions::flushState();
+            HandleExceptions::flushState($instance);
         }
 
-        JsonResource::wrap('data');
+        JsonResource::flushState();
+        JsonApiResource::flushState();
+        Markdown::flushState();
+        Migrator::withoutMigrations([]);
+        Model::handleDiscardedAttributeViolationUsing(null);
+        Model::handleLazyLoadingViolationUsing(null);
+        Model::handleMissingAttributeViolationUsing(null);
+        Model::automaticallyEagerLoadRelationships(false);
+        Model::preventAccessingMissingAttributes(false);
+        Model::preventLazyLoading(false);
+        Model::preventSilentlyDiscardingAttributes(false);
         Once::flush();
+        PreventRequestsDuringMaintenance::flushState();
         Queue::createPayloadUsing(null);
         RegisterProviders::flushState();
         RouteListCommand::resolveTerminalWidthUsing(null);
@@ -228,10 +258,13 @@ class Application
         SchemaBuilder::$defaultMorphKeyType = 'int';
         Signals::resolveAvailabilityUsing(null); // @phpstan-ignore argument.type
         Sleep::fake(false);
+        Str::resetFactoryState();
         ThrottleRequests::shouldHashKeys();
         TrimStrings::flushState();
         TrustProxies::flushState();
-        VerifyCsrfToken::flushState();
+        TrustHosts::flushState();
+        Validator::flushState();
+        ValidateCsrfToken::flushState();
         WorkCommand::flushState();
     }
 
@@ -239,9 +272,10 @@ class Application
      * Configure the application options.
      *
      * @param  array<string, mixed>  $options
-     * @return $this
      *
      * @phpstan-param TConfig  $options
+     *
+     * @return $this
      */
     public function configure(array $options)
     {

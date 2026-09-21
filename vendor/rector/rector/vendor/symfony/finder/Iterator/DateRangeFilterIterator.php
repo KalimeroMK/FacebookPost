@@ -8,9 +8,9 @@
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\Symfony\Component\Finder\Iterator;
+namespace RectorPrefix202609\Symfony\Component\Finder\Iterator;
 
-use RectorPrefix202502\Symfony\Component\Finder\Comparator\DateComparator;
+use RectorPrefix202609\Symfony\Component\Finder\Comparator\DateComparator;
 /**
  * DateRangeFilterIterator filters out files that are not in the given date range (last modified dates).
  *
@@ -33,10 +33,10 @@ class DateRangeFilterIterator extends \FilterIterator
     /**
      * Filters the iterator values.
      */
-    public function accept() : bool
+    public function accept(): bool
     {
         $fileinfo = $this->current();
-        if (!\file_exists($fileinfo->getPathname())) {
+        if (!file_exists($fileinfo->getPathname())) {
             return \false;
         }
         $filedate = $fileinfo->getMTime();

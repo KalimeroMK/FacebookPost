@@ -9,8 +9,10 @@ use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PHPStan\Type\ObjectType;
-use Rector\NodeTypeResolver\Node\AttributeKey;
+use Rector\PHPUnit\Enum\PHPUnitClassName;
 use Rector\Rector\AbstractRector;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -20,26 +22,33 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  * @changelog https://github.com/sebastianbergmann/phpunit/tree/master/src/Runner/Hook
  * @see \Rector\PHPUnit\Tests\PHPUnit90\Rector\Class_\TestListenerToHooksRector\TestListenerToHooksRectorTest
  */
-final class TestListenerToHooksRector extends AbstractRector
+final class TestListenerToHooksRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
+    /**
+     * inherited from the PHPUnit 9.0 set; the hook interfaces were removed in PHPUnit 10.0
+     */
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('phpunit/phpunit', '>=9.0 <10.0');
+    }
     /**
      * @var array<string, array<class-string|string>>
      */
     private const LISTENER_METHOD_TO_HOOK_INTERFACES = [
-        'addIncompleteTest' => ['PHPUnit\\Runner\\AfterIncompleteTestHook', 'executeAfterIncompleteTest'],
-        'addRiskyTest' => ['PHPUnit\\Runner\\AfterRiskyTestHook', 'executeAfterRiskyTest'],
-        'addSkippedTest' => ['PHPUnit\\Runner\\AfterSkippedTestHook', 'executeAfterSkippedTest'],
-        'addError' => ['PHPUnit\\Runner\\AfterTestErrorHook', 'executeAfterTestError'],
-        'addFailure' => ['PHPUnit\\Runner\\AfterTestFailureHook', 'executeAfterTestFailure'],
-        'addWarning' => ['PHPUnit\\Runner\\AfterTestWarningHook', 'executeAfterTestWarning'],
+        'addIncompleteTest' => ['PHPUnit\Runner\AfterIncompleteTestHook', 'executeAfterIncompleteTest'],
+        'addRiskyTest' => ['PHPUnit\Runner\AfterRiskyTestHook', 'executeAfterRiskyTest'],
+        'addSkippedTest' => ['PHPUnit\Runner\AfterSkippedTestHook', 'executeAfterSkippedTest'],
+        'addError' => ['PHPUnit\Runner\AfterTestErrorHook', 'executeAfterTestError'],
+        'addFailure' => ['PHPUnit\Runner\AfterTestFailureHook', 'executeAfterTestFailure'],
+        'addWarning' => ['PHPUnit\Runner\AfterTestWarningHook', 'executeAfterTestWarning'],
         # test
-        'startTest' => ['PHPUnit\\Runner\\BeforeTestHook', 'executeBeforeTest'],
-        'endTest' => ['PHPUnit\\Runner\\AfterTestHook', 'executeAfterTest'],
+        'startTest' => ['PHPUnit\Runner\BeforeTestHook', 'executeBeforeTest'],
+        'endTest' => ['PHPUnit\Runner\AfterTestHook', 'executeAfterTest'],
         # suite
-        'startTestSuite' => ['PHPUnit\\Runner\\BeforeFirstTestHook', 'executeBeforeFirstTest'],
-        'endTestSuite' => ['PHPUnit\\Runner\\AfterLastTestHook', 'executeAfterLastTest'],
+        'startTestSuite' => ['PHPUnit\Runner\BeforeFirstTestHook', 'executeBeforeFirstTest'],
+        'endTestSuite' => ['PHPUnit\Runner\AfterLastTestHook', 'executeAfterLastTest'],
     ];
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Refactor "*TestListener.php" to particular "*Hook.php" files', [new CodeSample(<<<'CODE_SAMPLE'
 namespace App\Tests;
@@ -114,7 +123,7 @@ CODE_SAMPLE
      *
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
@@ -123,23 +132,26 @@ CODE_SAMPLE
      *
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
-        if (!$this->isObjectType($node, new ObjectType('PHPUnit\\Framework\\TestListener'))) {
+        if (!$this->isObjectType($node, new ObjectType(PHPUnitClassName::TEST_LISTENER))) {
             return null;
         }
         foreach ($node->implements as $key => $implement) {
-            if (!$this->isName($implement, 'PHPUnit\\Framework\\TestListener')) {
+            if (!$this->isName($implement, PHPUnitClassName::TEST_LISTENER)) {
                 continue;
             }
             unset($node->implements[$key]);
         }
-        foreach ($node->getMethods() as $classMethod) {
-            $this->processClassMethod($node, $classMethod);
+        foreach ($node->stmts as $key => $classStmt) {
+            if (!$classStmt instanceof ClassMethod) {
+                continue;
+            }
+            $this->processClassMethod($node, $key, $classStmt);
         }
         return $node;
     }
-    private function processClassMethod(Class_ $class, ClassMethod $classMethod) : void
+    private function processClassMethod(Class_ $class, int $classMethodPosition, ClassMethod $classMethod): void
     {
         foreach (self::LISTENER_METHOD_TO_HOOK_INTERFACES as $methodName => $hookClassAndMethod) {
             /** @var string $methodName */
@@ -148,8 +160,7 @@ CODE_SAMPLE
             }
             // remove empty methods
             if ($classMethod->stmts === [] || $classMethod->stmts === null) {
-                $stmtKey = $classMethod->getAttribute(AttributeKey::STMT_KEY);
-                unset($class->stmts[$stmtKey]);
+                unset($class->stmts[$classMethodPosition]);
             } else {
                 $class->implements[] = new FullyQualified($hookClassAndMethod[0]);
                 $classMethod->name = new Identifier($hookClassAndMethod[1]);

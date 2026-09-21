@@ -9,19 +9,11 @@ use PHPStan\Type\ConstantScalarType;
 use PHPStan\Type\MixedType;
 use PHPStan\Type\ObjectType;
 use PHPStan\Type\Type;
+use PHPStan\Type\TypeCombinator;
 use PHPStan\Type\UnionType;
-use Rector\PHPStanStaticTypeMapper\TypeAnalyzer\UnionTypeAnalyzer;
 final class StaticTypeAnalyzer
 {
-    /**
-     * @readonly
-     */
-    private UnionTypeAnalyzer $unionTypeAnalyzer;
-    public function __construct(UnionTypeAnalyzer $unionTypeAnalyzer)
-    {
-        $this->unionTypeAnalyzer = $unionTypeAnalyzer;
-    }
-    public function isAlwaysTruableType(Type $type) : bool
+    public function isAlwaysTruableType(Type $type): bool
     {
         if ($type instanceof MixedType) {
             return \false;
@@ -32,7 +24,7 @@ final class StaticTypeAnalyzer
         if ($type instanceof ArrayType) {
             return $this->isAlwaysTruableArrayType($type);
         }
-        if ($type instanceof UnionType && $this->unionTypeAnalyzer->isNullable($type)) {
+        if ($type instanceof UnionType && TypeCombinator::containsNull($type)) {
             return \false;
         }
         // always trueish
@@ -47,19 +39,21 @@ final class StaticTypeAnalyzer
         }
         return $this->isAlwaysTruableUnionType($type);
     }
-    private function isAlwaysTruableUnionType(Type $type) : bool
+    private function isAlwaysTruableUnionType(Type $type): bool
     {
         if (!$type instanceof UnionType) {
             return \false;
         }
+        $found = \true;
         foreach ($type->getTypes() as $unionedType) {
             if (!$this->isAlwaysTruableType($unionedType)) {
-                return \false;
+                $found = \false;
+                break;
             }
         }
-        return \true;
+        return $found;
     }
-    private function isAlwaysTruableArrayType(ArrayType $arrayType) : bool
+    private function isAlwaysTruableArrayType(ArrayType $arrayType): bool
     {
         $itemType = $arrayType->getIterableValueType();
         if (!$itemType instanceof ConstantScalarType) {

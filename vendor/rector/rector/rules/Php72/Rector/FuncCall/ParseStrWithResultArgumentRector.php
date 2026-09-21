@@ -9,7 +9,7 @@ use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\Expression;
-use Rector\Contract\PhpParser\Node\StmtsAwareInterface;
+use Rector\PhpParser\Enum\NodeGroup;
 use Rector\Rector\AbstractRector;
 use Rector\ValueObject\PhpVersionFeature;
 use Rector\VersionBonding\Contract\MinPhpVersionInterface;
@@ -20,11 +20,11 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  */
 final class ParseStrWithResultArgumentRector extends AbstractRector implements MinPhpVersionInterface
 {
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::RESULT_ARG_IN_PARSE_STR;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Use $result argument in parse_str() function', [new CodeSample(<<<'CODE_SAMPLE'
 parse_str($this->query);
@@ -39,23 +39,28 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
-        return [StmtsAwareInterface::class];
+        return NodeGroup::STMTS_AWARE;
     }
     /**
-     * @param StmtsAwareInterface $node
+     * @param StmtsAware $node
+     * @return StmtsAware
      */
-    public function refactor(Node $node) : ?StmtsAwareInterface
+    public function refactor(Node $node): ?Node
     {
         return $this->processStrWithResult($node, \false);
     }
-    private function processStrWithResult(StmtsAwareInterface $stmtsAware, bool $hasChanged, int $jumpToKey = 0) : ?\Rector\Contract\PhpParser\Node\StmtsAwareInterface
+    /**
+     * @param StmtsAware $stmtsAware
+     * @return StmtsAware|null
+     */
+    private function processStrWithResult(Node $stmtsAware, bool $hasChanged, int $jumpToKey = 0): ?\PhpParser\Node
     {
         if ($stmtsAware->stmts === null) {
             return null;
         }
-        $totalKeys = \array_key_last($stmtsAware->stmts);
+        $totalKeys = array_key_last($stmtsAware->stmts);
         for ($key = $jumpToKey; $key < $totalKeys; ++$key) {
             if (!isset($stmtsAware->stmts[$key], $stmtsAware->stmts[$key + 1])) {
                 break;
@@ -64,15 +69,13 @@ CODE_SAMPLE
             if ($this->shouldSkip($stmt)) {
                 continue;
             }
-            /**
-             * @var Expression $stmt
-             * @var FuncCall $expr
-             */
+            /** @var Expression $stmt */
+            /** @var FuncCall $expr */
             $expr = $stmt->expr;
             $resultVariable = new Variable('result');
             $expr->args[1] = new Arg($resultVariable);
             $nextExpression = $stmtsAware->stmts[$key + 1];
-            $this->traverseNodesWithCallable($nextExpression, function (Node $node) use($resultVariable, &$hasChanged) : ?Variable {
+            $this->traverseNodesWithCallable($nextExpression, function (Node $node) use ($resultVariable, &$hasChanged): ?Variable {
                 if (!$node instanceof FuncCall) {
                     return null;
                 }
@@ -89,7 +92,7 @@ CODE_SAMPLE
         }
         return null;
     }
-    private function shouldSkip(Stmt $stmt) : bool
+    private function shouldSkip(Stmt $stmt): bool
     {
         if (!$stmt instanceof Expression) {
             return \true;

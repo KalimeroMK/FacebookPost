@@ -8,7 +8,7 @@ use PhpParser\NodeTraverser;
 use Rector\Configuration\Option;
 use Rector\Configuration\Parameter\SimpleParameterProvider;
 use Rector\Configuration\RenamedClassesDataCollector;
-use Rector\Contract\DependencyInjection\ResetableInterface;
+use Rector\Contract\DependencyInjection\ResettableInterface;
 use Rector\PostRector\Contract\Rector\PostRectorInterface;
 use Rector\PostRector\Rector\ClassRenamingPostRector;
 use Rector\PostRector\Rector\DocblockNameImportingPostRector;
@@ -18,7 +18,7 @@ use Rector\PostRector\Rector\UseAddingPostRector;
 use Rector\Renaming\Rector\Name\RenameClassRector;
 use Rector\Skipper\Skipper\Skipper;
 use Rector\ValueObject\Application\File;
-final class PostFileProcessor implements ResetableInterface
+final class PostFileProcessor implements ResettableInterface
 {
     /**
      * @readonly
@@ -62,7 +62,7 @@ final class PostFileProcessor implements ResetableInterface
         $this->unusedImportRemovingPostRector = $unusedImportRemovingPostRector;
         $this->renamedClassesDataCollector = $renamedClassesDataCollector;
     }
-    public function reset() : void
+    public function reset(): void
     {
         $this->postRectors = [];
     }
@@ -70,7 +70,7 @@ final class PostFileProcessor implements ResetableInterface
      * @param Stmt[] $stmts
      * @return Stmt[]
      */
-    public function traverse(array $stmts, File $file) : array
+    public function traverse(array $stmts, File $file): array
     {
         foreach ($this->getPostRectors() as $postRector) {
             // file must be set early into PostRector class to ensure its usage
@@ -87,7 +87,7 @@ final class PostFileProcessor implements ResetableInterface
     /**
      * @param Stmt[] $stmts
      */
-    private function shouldSkipPostRector(PostRectorInterface $postRector, string $filePath, array $stmts) : bool
+    private function shouldSkipPostRector(PostRectorInterface $postRector, string $filePath, array $stmts): bool
     {
         if ($this->skipper->shouldSkipElementAndFilePath($postRector, $filePath)) {
             return \true;
@@ -99,30 +99,29 @@ final class PostFileProcessor implements ResetableInterface
         return !$postRector->shouldTraverse($stmts);
     }
     /**
-     * Load on the fly, to allow test reset with different configuration
+     * Lazy load, to enable test reset with different configuration
      * @return PostRectorInterface[]
      */
-    private function getPostRectors() : array
+    private function getPostRectors(): array
     {
         if ($this->postRectors !== []) {
             return $this->postRectors;
         }
         $isRenamedClassEnabled = $this->renamedClassesDataCollector->getOldToNewClasses() !== [];
         $isNameImportingEnabled = SimpleParameterProvider::provideBoolParameter(Option::AUTO_IMPORT_NAMES);
-        $isDocblockNameImportingEnabled = SimpleParameterProvider::provideBoolParameter(Option::AUTO_IMPORT_DOC_BLOCK_NAMES);
         $isRemovingUnusedImportsEnabled = SimpleParameterProvider::provideBoolParameter(Option::REMOVE_UNUSED_IMPORTS);
         $postRectors = [];
         // sorted by priority, to keep removed imports in order
-        if ($isRenamedClassEnabled) {
+        if ($isRenamedClassEnabled && $isNameImportingEnabled) {
             $postRectors[] = $this->classRenamingPostRector;
         }
         // import names
         if ($isNameImportingEnabled) {
             $postRectors[] = $this->nameImportingPostRector;
-        }
-        // import docblocks
-        if ($isNameImportingEnabled && $isDocblockNameImportingEnabled) {
-            $postRectors[] = $this->docblockNameImportingPostRector;
+            // import docblocks
+            if (SimpleParameterProvider::provideBoolParameter(Option::AUTO_IMPORT_DOC_BLOCK_NAMES)) {
+                $postRectors[] = $this->docblockNameImportingPostRector;
+            }
         }
         $postRectors[] = $this->useAddingPostRector;
         if ($isRemovingUnusedImportsEnabled) {

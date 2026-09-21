@@ -8,9 +8,9 @@
  * For the full copyright and license information, please view
  * the LICENSE file that was distributed with this source code.
  */
-namespace RectorPrefix202502\Composer\Semver;
+namespace RectorPrefix202609\Composer\Semver;
 
-use RectorPrefix202502\Composer\Semver\Constraint\Constraint;
+use RectorPrefix202609\Composer\Semver\Constraint\Constraint;
 class Semver
 {
     const SORT_ASC = 1;
@@ -41,21 +41,21 @@ class Semver
      * @param string[] $versions
      * @param string   $constraints
      *
-     * @return string[]
+     * @return list<string>
      */
     public static function satisfiedBy(array $versions, $constraints)
     {
-        $versions = \array_filter($versions, function ($version) use($constraints) {
+        $versions = array_filter($versions, function ($version) use ($constraints) {
             return Semver::satisfies($version, $constraints);
         });
-        return \array_values($versions);
+        return array_values($versions);
     }
     /**
      * Sort given array of versions.
      *
      * @param string[] $versions
      *
-     * @return string[]
+     * @return list<string>
      */
     public static function sort(array $versions)
     {
@@ -66,7 +66,7 @@ class Semver
      *
      * @param string[] $versions
      *
-     * @return string[]
+     * @return list<string>
      */
     public static function rsort(array $versions)
     {
@@ -76,7 +76,7 @@ class Semver
      * @param string[] $versions
      * @param int      $direction
      *
-     * @return string[]
+     * @return list<string>
      */
     private static function usort(array $versions, $direction)
     {
@@ -92,7 +92,7 @@ class Semver
             $normalizedVersion = $versionParser->normalizeDefaultBranch($normalizedVersion);
             $normalized[] = array($normalizedVersion, $key);
         }
-        \usort($normalized, function (array $left, array $right) use($direction) {
+        usort($normalized, function (array $left, array $right) use ($direction) {
             if ($left[0] === $right[0]) {
                 return 0;
             }

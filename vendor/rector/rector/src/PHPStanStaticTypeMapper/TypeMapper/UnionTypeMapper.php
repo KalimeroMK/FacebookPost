@@ -11,18 +11,21 @@ use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\NullableType;
 use PhpParser\Node\UnionType as PhpParserUnionType;
-use PHPStan\PhpDocParser\Ast\Type\TypeNode;
+use PHPStan\Type\ArrayType;
+use PHPStan\Type\MixedType;
+use PHPStan\Type\NeverType;
 use PHPStan\Type\Type;
 use PHPStan\Type\UnionType;
 use Rector\BetterPhpDocParser\ValueObject\Type\BracketsAwareUnionTypeNode;
+use Rector\BetterPhpDocParser\ValueObject\Type\SpacingAwareArrayTypeNode;
 use Rector\NodeAnalyzer\PropertyAnalyzer;
 use Rector\Php\PhpVersionProvider;
 use Rector\PHPStanStaticTypeMapper\Contract\TypeMapperInterface;
 use Rector\PHPStanStaticTypeMapper\Enum\TypeKind;
 use Rector\PHPStanStaticTypeMapper\PHPStanStaticTypeMapper;
 use Rector\ValueObject\PhpVersionFeature;
-use RectorPrefix202502\Webmozart\Assert\Assert;
-use RectorPrefix202502\Webmozart\Assert\InvalidArgumentException;
+use RectorPrefix202609\Webmozart\Assert\Assert;
+use RectorPrefix202609\Webmozart\Assert\InvalidArgumentException;
 /**
  * @implements TypeMapperInterface<UnionType>
  */
@@ -42,29 +45,50 @@ final class UnionTypeMapper implements TypeMapperInterface
         $this->phpVersionProvider = $phpVersionProvider;
         $this->propertyAnalyzer = $propertyAnalyzer;
     }
-    public function autowire(PHPStanStaticTypeMapper $phpStanStaticTypeMapper) : void
+    public function autowire(PHPStanStaticTypeMapper $phpStanStaticTypeMapper): void
     {
         $this->phpStanStaticTypeMapper = $phpStanStaticTypeMapper;
     }
-    public function getNodeClass() : string
+    /**
+     * @return array<class-string<Type>>
+     */
+    public function getNodeClasses(): array
     {
-        return UnionType::class;
+        return [UnionType::class];
     }
     /**
      * @param UnionType $type
      */
-    public function mapToPHPStanPhpDocTypeNode(Type $type) : TypeNode
+    public function mapToPHPStanPhpDocTypeNode(Type $type): BracketsAwareUnionTypeNode
     {
         $unionTypesNodes = [];
+        $existingTypes = [];
         foreach ($type->getTypes() as $unionedType) {
-            $unionTypesNodes[] = $this->phpStanStaticTypeMapper->mapToPHPStanPhpDocTypeNode($unionedType);
+            if ($unionedType instanceof ArrayType && $unionedType->getItemType() instanceof NeverType) {
+                $unionedType = new ArrayType($unionedType->getKeyType(), new MixedType());
+            }
+            $unionedType = $this->phpStanStaticTypeMapper->mapToPHPStanPhpDocTypeNode($unionedType);
+            if ($unionedType instanceof SpacingAwareArrayTypeNode && $unionedType->type instanceof BracketsAwareUnionTypeNode) {
+                foreach ($unionedType->type->types as $key => $innerTypeNode) {
+                    $printedInnerType = (string) $innerTypeNode;
+                    if (in_array($printedInnerType, $existingTypes, \true)) {
+                        unset($unionedType->type->types[$key]);
+                        continue;
+                    }
+                    $existingTypes[] = $printedInnerType;
+                }
+                if ($unionedType->type->types === []) {
+                    continue;
+                }
+            }
+            $unionTypesNodes[] = $unionedType;
         }
         return new BracketsAwareUnionTypeNode($unionTypesNodes);
     }
     /**
      * @param UnionType $type
      */
-    public function mapToPhpParserNode(Type $type, string $typeKind) : ?Node
+    public function mapToPhpParserNode(Type $type, string $typeKind): ?Node
     {
         $phpParserUnionType = $this->matchPhpParserUnionType($type, $typeKind);
         if ($phpParserUnionType instanceof PhpParserUnionType) {
@@ -79,9 +103,9 @@ final class UnionTypeMapper implements TypeMapperInterface
      */
     private function resolveTypeWithNullablePHPParserUnionType(PhpParserUnionType $phpParserUnionType)
     {
-        $totalTypes = \count($phpParserUnionType->types);
+        $totalTypes = count($phpParserUnionType->types);
         if ($totalTypes === 2) {
-            $phpParserUnionType->types = \array_values($phpParserUnionType->types);
+            $phpParserUnionType->types = array_values($phpParserUnionType->types);
             $firstType = $phpParserUnionType->types[0];
             $secondType = $phpParserUnionType->types[1];
             try {
@@ -128,14 +152,14 @@ final class UnionTypeMapper implements TypeMapperInterface
         $types[] = new Identifier('null');
         return new PhpParserUnionType($types);
     }
-    private function resolveUnionTypes(PhpParserUnionType $phpParserUnionType) : ?PhpParserUnionType
+    private function resolveUnionTypes(PhpParserUnionType $phpParserUnionType): ?PhpParserUnionType
     {
         if (!$this->phpVersionProvider->isAtLeastPhpVersion(PhpVersionFeature::UNION_TYPES)) {
             return null;
         }
         return $phpParserUnionType;
     }
-    private function hasObjectAndStaticType(PhpParserUnionType $phpParserUnionType) : bool
+    private function hasObjectAndStaticType(PhpParserUnionType $phpParserUnionType): bool
     {
         $hasAnonymousObjectType = \false;
         $hasObjectType = \false;
@@ -154,7 +178,7 @@ final class UnionTypeMapper implements TypeMapperInterface
     /**
      * @return Name|FullyQualified|ComplexType|Identifier|null
      */
-    private function matchPhpParserUnionType(UnionType $unionType, string $typeKind) : ?Node
+    private function matchPhpParserUnionType(UnionType $unionType, string $typeKind): ?Node
     {
         $phpParserUnionedTypes = [];
         foreach ($unionType->getTypes() as $unionedType) {
@@ -171,14 +195,14 @@ final class UnionTypeMapper implements TypeMapperInterface
             $phpParserUnionedTypes[] = $phpParserNode;
         }
         /** @var Identifier[]|Name[] $phpParserUnionedTypes */
-        $phpParserUnionedTypes = \array_unique($phpParserUnionedTypes, \SORT_REGULAR);
-        $countPhpParserUnionedTypes = \count($phpParserUnionedTypes);
+        $phpParserUnionedTypes = array_unique($phpParserUnionedTypes, \SORT_REGULAR);
+        $countPhpParserUnionedTypes = count($phpParserUnionedTypes);
         if ($countPhpParserUnionedTypes === 1) {
             return $phpParserUnionedTypes[0];
         }
         return $this->resolveTypeWithNullablePHPParserUnionType(new PhpParserUnionType($phpParserUnionedTypes));
     }
-    private function resolveUnionTypeNode(PhpParserUnionType $phpParserUnionType) : ?PhpParserUnionType
+    private function resolveUnionTypeNode(PhpParserUnionType $phpParserUnionType): ?PhpParserUnionType
     {
         if (!$this->phpVersionProvider->isAtLeastPhpVersion(PhpVersionFeature::UNION_TYPES)) {
             return null;

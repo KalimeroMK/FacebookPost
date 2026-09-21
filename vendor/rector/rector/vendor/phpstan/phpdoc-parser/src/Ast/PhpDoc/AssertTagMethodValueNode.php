@@ -25,10 +25,23 @@ class AssertTagMethodValueNode implements \PHPStan\PhpDocParser\Ast\PhpDoc\PhpDo
         $this->isEquality = $isEquality;
         $this->description = $description;
     }
-    public function __toString() : string
+    public function __toString(): string
     {
         $isNegated = $this->isNegated ? '!' : '';
         $isEquality = $this->isEquality ? '=' : '';
         return trim("{$isNegated}{$isEquality}{$this->type} {$this->parameter}->{$this->method}() {$this->description}");
+    }
+    /**
+     * @param array<string, mixed> $properties
+     */
+    public static function __set_state(array $properties): self
+    {
+        $instance = new self($properties['type'], $properties['parameter'], $properties['method'], $properties['isNegated'], $properties['description'], $properties['isEquality']);
+        if (isset($properties['attributes'])) {
+            foreach ($properties['attributes'] as $key => $value) {
+                $instance->setAttribute($key, $value);
+            }
+        }
+        return $instance;
     }
 }

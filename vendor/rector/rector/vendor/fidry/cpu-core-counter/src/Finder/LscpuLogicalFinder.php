@@ -9,7 +9,7 @@
  * file that was distributed with this source code.
  */
 declare (strict_types=1);
-namespace RectorPrefix202502\Fidry\CpuCoreCounter\Finder;
+namespace RectorPrefix202609\Fidry\CpuCoreCounter\Finder;
 
 use function count;
 use function explode;
@@ -23,21 +23,21 @@ use const PHP_EOL;
  */
 final class LscpuLogicalFinder extends ProcOpenBasedFinder
 {
-    public function getCommand() : string
+    public function getCommand(): string
     {
         return 'lscpu -p';
     }
-    protected function countCpuCores(string $process) : ?int
+    protected function countCpuCores(string $process): ?int
     {
         $lines = explode(PHP_EOL, $process);
-        $actualLines = preg_grep('/^\\d+,/', $lines);
+        $actualLines = preg_grep('/^\d+,/', $lines);
         if (!is_array($actualLines)) {
             return null;
         }
         $count = count($actualLines);
         return 0 === $count ? null : $count;
     }
-    public function toString() : string
+    public function toString(): string
     {
         return 'LscpuLogicalFinder';
     }

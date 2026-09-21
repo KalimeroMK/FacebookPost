@@ -52,7 +52,7 @@ final class DowngradeArraySpreadRector extends AbstractRector
         $this->astResolver = $astResolver;
         $this->betterNodeFinder = $betterNodeFinder;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Replace array spread with array_merge function', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
@@ -95,14 +95,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Array_::class, ClassConst::class];
     }
     /**
      * @param Array_|ClassConst $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($node instanceof ClassConst) {
             return $this->refactorUnderClassConst($node);
@@ -114,25 +114,30 @@ CODE_SAMPLE
         $scope = ScopeFetcher::fetch($node);
         return $this->arrayMergeFromArraySpreadFactory->createFromArray($node, $scope);
     }
-    private function refactorUnderClassConst(ClassConst $classConst) : ?ClassConst
+    private function refactorUnderClassConst(ClassConst $classConst): ?ClassConst
     {
         $arrays = $this->betterNodeFinder->findInstanceOf($classConst->consts, Array_::class);
         if ($arrays === []) {
             return null;
         }
         $hasChanged = \false;
-        foreach ($arrays as $array) {
-            $refactorArrayConstValue = $this->refactorArrayConstValue($array);
+        $this->traverseNodesWithCallable($classConst->consts, function (Node $subNode) use (&$hasChanged): ?Node {
+            if (!$subNode instanceof Array_) {
+                return null;
+            }
+            $refactorArrayConstValue = $this->refactorArrayConstValue($subNode);
             if ($refactorArrayConstValue instanceof Array_) {
                 $hasChanged = \true;
+                return $refactorArrayConstValue;
             }
-        }
+            return null;
+        });
         if ($hasChanged) {
             return $classConst;
         }
         return null;
     }
-    private function resolveItemType(?ArrayItem $arrayItem) : ?Type
+    private function resolveItemType(?ArrayItem $arrayItem): ?Type
     {
         if (!$arrayItem instanceof ArrayItem) {
             return null;
@@ -151,22 +156,21 @@ CODE_SAMPLE
         }
         return $this->nodeTypeResolver->getType($arrayItem->value->class);
     }
-    private function refactorArrayConstValue(Array_ $array) : ?Array_
+    private function refactorArrayConstValue(Array_ $array): ?Array_
     {
         $hasChanged = \false;
-        foreach ($array->items as $key => $item) {
+        $newArray = clone $array;
+        $newArray->items = [];
+        foreach ($array->items as $item) {
+            $newArray->items[] = $item;
             $type = $this->resolveItemType($item);
             if (!$type instanceof FullyQualifiedObjectType) {
                 continue;
             }
-            /**
-             * @var ArrayItem $item
-             * @var ClassConstFetch $value
-             * @var Identifier $name
-             */
             $value = $item->value;
-            /** @var Identifier $name */
+            /** @var ClassConstFetch $value */
             $name = $value->name;
+            /** @var Identifier $name */
             $classLike = $this->astResolver->resolveClassFromName($type->getClassName());
             if (!$classLike instanceof ClassLike) {
                 continue;
@@ -175,14 +179,14 @@ CODE_SAMPLE
             foreach ($constants as $constant) {
                 $const = $constant->consts[0];
                 if ($const->name->toString() === $name->toString() && $const->value instanceof Array_) {
-                    unset($array->items[$key]);
-                    \array_splice($array->items, $key, 0, $const->value->items);
+                    array_pop($newArray->items);
+                    $newArray->items = array_merge($newArray->items, $const->value->items);
                     $hasChanged = \true;
                 }
             }
         }
         if ($hasChanged) {
-            return $array;
+            return $newArray;
         }
         return null;
     }

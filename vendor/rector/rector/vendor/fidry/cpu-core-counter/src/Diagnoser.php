@@ -9,9 +9,9 @@
  * file that was distributed with this source code.
  */
 declare (strict_types=1);
-namespace RectorPrefix202502\Fidry\CpuCoreCounter;
+namespace RectorPrefix202609\Fidry\CpuCoreCounter;
 
-use RectorPrefix202502\Fidry\CpuCoreCounter\Finder\CpuCoreFinder;
+use RectorPrefix202609\Fidry\CpuCoreCounter\Finder\CpuCoreFinder;
 use function array_map;
 use function explode;
 use function implode;
@@ -30,9 +30,9 @@ final class Diagnoser
      *
      * @param list<CpuCoreFinder> $finders
      */
-    public static function diagnose(array $finders) : string
+    public static function diagnose(array $finders): string
     {
-        $diagnoses = array_map(static function (CpuCoreFinder $finder) : string {
+        $diagnoses = array_map(static function (CpuCoreFinder $finder): string {
             return self::diagnoseFinder($finder);
         }, $finders);
         return implode(PHP_EOL, $diagnoses);
@@ -42,15 +42,15 @@ final class Diagnoser
      *
      * @param list<CpuCoreFinder> $finders
      */
-    public static function execute(array $finders) : string
+    public static function execute(array $finders): string
     {
-        $diagnoses = array_map(static function (CpuCoreFinder $finder) : string {
+        $diagnoses = array_map(static function (CpuCoreFinder $finder): string {
             $coresCount = $finder->find();
             return implode('', [$finder->toString(), ': ', null === $coresCount ? 'NULL' : $coresCount]);
         }, $finders);
         return implode(PHP_EOL, $diagnoses);
     }
-    private static function diagnoseFinder(CpuCoreFinder $finder) : string
+    private static function diagnoseFinder(CpuCoreFinder $finder): string
     {
         $diagnosis = $finder->diagnose();
         $maxLineLength = max(array_map('strlen', explode(PHP_EOL, $diagnosis)));

@@ -4,8 +4,7 @@ declare (strict_types=1);
 namespace PhpParser\Node\Stmt;
 
 use PhpParser\Node;
-use Rector\Contract\PhpParser\Node\StmtsAwareInterface;
-class Foreach_ extends Node\Stmt implements StmtsAwareInterface
+class Foreach_ extends Node\Stmt
 {
     /** @var Node\Expr Expression to iterate */
     public Node\Expr $expr;
@@ -41,11 +40,11 @@ class Foreach_ extends Node\Stmt implements StmtsAwareInterface
         $this->valueVar = $valueVar;
         $this->stmts = $subNodes['stmts'] ?? [];
     }
-    public function getSubNodeNames() : array
+    public function getSubNodeNames(): array
     {
         return ['expr', 'keyVar', 'byRef', 'valueVar', 'stmts'];
     }
-    public function getType() : string
+    public function getType(): string
     {
         return 'Stmt_Foreach';
     }

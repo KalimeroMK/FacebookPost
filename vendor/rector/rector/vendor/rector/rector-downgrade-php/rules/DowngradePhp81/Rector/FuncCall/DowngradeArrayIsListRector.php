@@ -14,10 +14,10 @@ use PhpParser\Node\Stmt\Expression;
 use PhpParser\Node\Stmt\Return_;
 use PhpParser\Node\Stmt\Switch_;
 use PHPStan\Analyser\Scope;
-use Rector\Contract\PhpParser\Node\StmtsAwareInterface;
 use Rector\Exception\ShouldNotHappenException;
 use Rector\NodeAnalyzer\ExprInTopStmtMatcher;
 use Rector\NodeTypeResolver\Node\AttributeKey;
+use Rector\PhpParser\Enum\NodeGroup;
 use Rector\PhpParser\Parser\InlineCodeParser;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
@@ -43,7 +43,7 @@ final class DowngradeArrayIsListRector extends AbstractRector
         $this->inlineCodeParser = $inlineCodeParser;
         $this->exprInTopStmtMatcher = $exprInTopStmtMatcher;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Replace array_is_list() function', [new CodeSample(<<<'CODE_SAMPLE'
 array_is_list([1 => 'apple', 'orange']);
@@ -75,17 +75,18 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
-        return [StmtsAwareInterface::class, Switch_::class, Return_::class, Expression::class, Echo_::class];
+        $stmtsAware = NodeGroup::STMTS_AWARE;
+        return array_merge($stmtsAware, [Switch_::class, Return_::class, Expression::class, Echo_::class]);
     }
     /**
-     * @param StmtsAwareInterface|Switch_|Return_|Expression|Echo_ $node
+     * @param StmtsAware|Switch_|Return_|Expression|Echo_ $node
      * @return Node[]|null
      */
-    public function refactor(Node $node) : ?array
+    public function refactor(Node $node): ?array
     {
-        $expr = $this->exprInTopStmtMatcher->match($node, function (Node $subNode) : bool {
+        $expr = $this->exprInTopStmtMatcher->match($node, function (Node $subNode): bool {
             if (!$subNode instanceof FuncCall) {
                 return \false;
             }
@@ -101,7 +102,7 @@ CODE_SAMPLE
         $expr->name = $variable;
         return [$expression, $node];
     }
-    private function createClosure() : Closure
+    private function createClosure(): Closure
     {
         if ($this->cachedClosure instanceof Closure) {
             return clone $this->cachedClosure;
@@ -116,12 +117,12 @@ CODE_SAMPLE
         $this->cachedClosure = $expr;
         return $expr;
     }
-    private function shouldSkip(CallLike $callLike) : bool
+    private function shouldSkip(CallLike $callLike): bool
     {
         if (!$callLike instanceof FuncCall) {
             return \false;
         }
-        if (!$this->nodeNameResolver->isName($callLike, 'array_is_list')) {
+        if (!$this->isName($callLike, 'array_is_list')) {
             return \true;
         }
         $scope = $callLike->getAttribute(AttributeKey::SCOPE);
@@ -129,6 +130,6 @@ CODE_SAMPLE
             return \true;
         }
         $args = $callLike->getArgs();
-        return \count($args) !== 1;
+        return count($args) !== 1;
     }
 }

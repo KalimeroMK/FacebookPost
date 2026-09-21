@@ -15,13 +15,13 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  */
 final class SensitiveDefineRector extends AbstractRector implements MinPhpVersionInterface
 {
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::DEPRECATE_INSENSITIVE_CONSTANT_DEFINE;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
-        return new RuleDefinition('Changes case insensitive constants to sensitive ones.', [new CodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Change case insensitive constant definition to sensitive one', [new CodeSample(<<<'CODE_SAMPLE'
 define('FOO', 42, true);
 CODE_SAMPLE
 , <<<'CODE_SAMPLE'
@@ -32,14 +32,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [FuncCall::class];
     }
     /**
      * @param FuncCall $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$this->isName($node, 'define')) {
             return null;

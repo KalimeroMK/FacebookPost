@@ -9,9 +9,9 @@
  * file that was distributed with this source code.
  */
 declare (strict_types=1);
-namespace RectorPrefix202502\Fidry\CpuCoreCounter\Finder;
+namespace RectorPrefix202609\Fidry\CpuCoreCounter\Finder;
 
-use RectorPrefix202502\Fidry\CpuCoreCounter\Executor\ProcessExecutor;
+use RectorPrefix202609\Fidry\CpuCoreCounter\Executor\ProcessExecutor;
 use function sprintf;
 /**
  * The number of (logical) cores.
@@ -36,11 +36,11 @@ final class NProcFinder extends ProcOpenBasedFinder
         parent::__construct($executor);
         $this->all = $all;
     }
-    public function toString() : string
+    public function toString(): string
     {
         return sprintf('NProcFinder(all=%s)', $this->all ? 'true' : 'false');
     }
-    protected function getCommand() : string
+    protected function getCommand(): string
     {
         return 'nproc' . ($this->all ? ' --all' : '');
     }

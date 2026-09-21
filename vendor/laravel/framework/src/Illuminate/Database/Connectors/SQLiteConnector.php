@@ -20,6 +20,7 @@ class SQLiteConnector extends Connector implements ConnectorInterface
 
         $connection = $this->createConnection("sqlite:{$path}", $config, $options);
 
+        $this->configurePragmas($connection, $config);
         $this->configureForeignKeyConstraints($connection, $config);
         $this->configureBusyTimeout($connection, $config);
         $this->configureJournalMode($connection, $config);
@@ -45,12 +46,13 @@ class SQLiteConnector extends Connector implements ConnectorInterface
         // querying. In-memory databases shall be anonymous (:memory:) or named.
         if ($path === ':memory:' ||
             str_contains($path, '?mode=memory') ||
-            str_contains($path, '&mode=memory')
+            str_contains($path, '&mode=memory') ||
+            str_starts_with($path, 'file:')
         ) {
             return $path;
         }
 
-        $path = realpath($path) ?: realpath(base_path($path));
+        $path = realpath($path) ?: (function_exists('base_path') ? realpath(base_path($path)) : false);
 
         // Here we'll verify that the SQLite database exists before going any further
         // as the developer probably wants to know if the database exists and this
@@ -60,6 +62,24 @@ class SQLiteConnector extends Connector implements ConnectorInterface
         }
 
         return $path;
+    }
+
+    /**
+     * Set miscellaneous user-configured pragmas.
+     *
+     * @param  \PDO  $connection
+     * @param  array  $config
+     * @return void
+     */
+    protected function configurePragmas($connection, array $config): void
+    {
+        if (! isset($config['pragmas'])) {
+            return;
+        }
+
+        foreach ($config['pragmas'] as $pragma => $value) {
+            $connection->prepare("pragma {$pragma} = {$value}")->execute();
+        }
     }
 
     /**

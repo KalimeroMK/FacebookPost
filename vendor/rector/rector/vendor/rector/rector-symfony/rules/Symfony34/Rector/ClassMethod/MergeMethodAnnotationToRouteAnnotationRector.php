@@ -15,6 +15,8 @@ use Rector\Comments\NodeDocBlock\DocBlockUpdater;
 use Rector\Rector\AbstractRector;
 use Rector\Symfony\Enum\SensioAttribute;
 use Rector\Symfony\Enum\SymfonyAnnotation;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -23,7 +25,7 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  *
  * @see \Rector\Symfony\Tests\Symfony34\Rector\ClassMethod\MergeMethodAnnotationToRouteAnnotationRector\MergeMethodAnnotationToRouteAnnotationRectorTest
  */
-final class MergeMethodAnnotationToRouteAnnotationRector extends AbstractRector
+final class MergeMethodAnnotationToRouteAnnotationRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @readonly
@@ -43,7 +45,11 @@ final class MergeMethodAnnotationToRouteAnnotationRector extends AbstractRector
         $this->docBlockUpdater = $docBlockUpdater;
         $this->phpDocInfoFactory = $phpDocInfoFactory;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('symfony/routing', '>=3.4');
+    }
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Merge removed @Method annotation to @Route one', [new CodeSample(<<<'CODE_SAMPLE'
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Method;
@@ -78,14 +84,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [ClassLike::class];
     }
     /**
      * @param ClassLike $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         $hasChanged = \false;
         foreach ($node->getMethods() as $classMethod) {
@@ -117,7 +123,7 @@ CODE_SAMPLE
         }
         return null;
     }
-    private function resolveMethodsCurlyListNode(DoctrineAnnotationTagValueNode $doctrineAnnotationTagValueNode) : ?\Rector\BetterPhpDocParser\ValueObject\PhpDoc\DoctrineAnnotation\CurlyListNode
+    private function resolveMethodsCurlyListNode(DoctrineAnnotationTagValueNode $doctrineAnnotationTagValueNode): ?\Rector\BetterPhpDocParser\ValueObject\PhpDoc\DoctrineAnnotation\CurlyListNode
     {
         $methodsParameter = $doctrineAnnotationTagValueNode->getValue('methods');
         if ($methodsParameter instanceof ArrayItemNode && $methodsParameter->value instanceof CurlyListNode) {
@@ -138,7 +144,7 @@ CODE_SAMPLE
     /**
      * @param DoctrineAnnotationTagValueNode[] $symfonyDoctrineAnnotationTagValueNodes
      */
-    private function decorateRoutesWithMethods(array $symfonyDoctrineAnnotationTagValueNodes, CurlyListNode $sensioMethodsCurlyListNode) : void
+    private function decorateRoutesWithMethods(array $symfonyDoctrineAnnotationTagValueNodes, CurlyListNode $sensioMethodsCurlyListNode): void
     {
         foreach ($symfonyDoctrineAnnotationTagValueNodes as $symfonyDoctrineAnnotationTagValueNode) {
             $symfonyMethodsArrayItemNode = $symfonyDoctrineAnnotationTagValueNode->getValue('methods');

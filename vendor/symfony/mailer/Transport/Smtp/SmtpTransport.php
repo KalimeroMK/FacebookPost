@@ -108,6 +108,10 @@ class SmtpTransport extends AbstractTransport
      */
     public function setLocalDomain(string $domain): static
     {
+        if (preg_match('/[\x00-\x1F\x7F]/', $domain)) {
+            throw new InvalidArgumentException('The local domain name must not contain control characters.');
+        }
+
         if ('' !== $domain && '[' !== $domain[0]) {
             if (filter_var($domain, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV4)) {
                 $domain = '['.$domain.']';
@@ -138,10 +142,21 @@ class SmtpTransport extends AbstractTransport
             $message = parent::send($message, $envelope);
         } catch (TransportExceptionInterface $e) {
             if ($this->started) {
-                try {
-                    $this->executeCommand("RSET\r\n", [250]);
-                } catch (TransportExceptionInterface) {
-                    // ignore this exception as it probably means that the server error was final
+                if ($e instanceof UnexpectedResponseException && 421 !== $e->getCode()) {
+                    // The server replied with an unexpected code: the connection is
+                    // still in sync, so it can be reused after resetting the session.
+                    try {
+                        $this->executeCommand("RSET\r\n", [250]);
+                    } catch (TransportExceptionInterface) {
+                        // ignore this exception as it probably means that the server error was final
+                    }
+                } else {
+                    // A 421 means the server is closing the channel, and any other
+                    // failure (timeout, broken pipe, ...) may have left an
+                    // unread reply in the socket buffer. Reusing the connection would
+                    // desync every following command, so close it and reconnect on the
+                    // next message.
+                    $this->stop();
                 }
             }
 
@@ -155,18 +170,7 @@ class SmtpTransport extends AbstractTransport
 
     protected function parseMessageId(string $mtaResult): string
     {
-        $regexps = [
-            '/250 Ok (?P<id>[0-9a-f-]+)\r?$/mis',
-            '/250 Ok:? queued as (?P<id>[A-Z0-9]+)\r?$/mis',
-        ];
-        $matches = [];
-        foreach ($regexps as $regexp) {
-            if (preg_match($regexp, $mtaResult, $matches)) {
-                return $matches['id'];
-            }
-        }
-
-        return '';
+        return preg_match('/^250 (?:\S+ )?Ok:?+ (?:queued as |id=)?+(?P<id>[A-Z0-9._-]++)/im', $mtaResult, $matches) ? $matches['id'] : '';
     }
 
     public function __toString(): string
@@ -277,8 +281,16 @@ class SmtpTransport extends AbstractTransport
         $this->getLogger()->debug(\sprintf('Email transport "%s" starting', __CLASS__));
 
         $this->stream->initialize();
-        $this->assertResponseCode($this->getFullResponse(), [220]);
-        $this->doHeloCommand();
+
+        try {
+            $this->assertResponseCode($this->getFullResponse(), [220]);
+            $this->doHeloCommand();
+        } catch (TransportExceptionInterface $e) {
+            $this->stream->terminate();
+
+            throw $e;
+        }
+
         $this->started = true;
         $this->lastMessageTime = 0;
 
@@ -318,6 +330,12 @@ class SmtpTransport extends AbstractTransport
 
         try {
             $this->executeCommand("NOOP\r\n", [250]);
+
+            if ($this->stream->hasPendingData()) {
+                // The server queued another reply, typically a 421 closing the channel.
+                // The next command would read it as its own reply, so reconnect instead.
+                $this->stop();
+            }
         } catch (TransportExceptionInterface) {
             $this->stop();
         }
@@ -376,12 +394,12 @@ class SmtpTransport extends AbstractTransport
         $this->restartCounter = 0;
     }
 
-    public function __sleep(): array
+    public function __serialize(): array
     {
         throw new \BadMethodCallException('Cannot serialize '.__CLASS__);
     }
 
-    public function __wakeup(): void
+    public function __unserialize(array $data): void
     {
         throw new \BadMethodCallException('Cannot unserialize '.__CLASS__);
     }

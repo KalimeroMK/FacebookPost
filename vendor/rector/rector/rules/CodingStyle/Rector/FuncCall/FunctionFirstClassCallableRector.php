@@ -7,6 +7,7 @@ use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Name;
+use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\VariadicPlaceholder;
 use Rector\Rector\AbstractRector;
@@ -22,7 +23,7 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  */
 final class FunctionFirstClassCallableRector extends AbstractRector implements MinPhpVersionInterface
 {
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         // see RFC https://wiki.php.net/rfc/first_class_callable_syntax
         return new RuleDefinition('Upgrade string callback functions to first class callable', [new CodeSample(<<<'CODE_SAMPLE'
@@ -48,15 +49,15 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [FuncCall::class];
     }
-    public function refactor(Node $node) : ?FuncCall
+    /**
+     * @param FuncCall $node
+     */
+    public function refactor(Node $node): ?FuncCall
     {
-        if (!$node instanceof FuncCall) {
-            return null;
-        }
         if (!$node->name instanceof Name) {
             return null;
         }
@@ -77,18 +78,20 @@ CODE_SAMPLE
         }
         $hasChanged = \false;
         foreach ($node->getArgs() as $key => $arg) {
-            if (!\in_array($key, $callableArgs, \true)) {
+            if (!in_array($key, $callableArgs, \true)) {
                 continue;
             }
             if (!$arg->value instanceof String_) {
                 continue;
             }
-            $node->args[$key] = new Arg(new FuncCall(new Name($arg->value->value), [new VariadicPlaceholder()]), \false, \false, [], $arg->name);
+            $isFullyQualified = strncmp($arg->value->value, '\\', strlen('\\')) === 0;
+            $callableName = ltrim($arg->value->value, '\\');
+            $node->args[$key] = new Arg(new FuncCall($isFullyQualified || strpos($callableName, '\\') !== \false ? new FullyQualified($callableName) : new Name($callableName), [new VariadicPlaceholder()]), \false, \false, [], $arg->name);
             $hasChanged = \true;
         }
         return $hasChanged ? $node : null;
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersion::PHP_81;
     }

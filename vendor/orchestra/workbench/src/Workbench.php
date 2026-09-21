@@ -4,7 +4,7 @@ namespace Orchestra\Workbench;
 
 use Illuminate\Support\Arr;
 
-use function Orchestra\Sidekick\join_paths;
+use function Orchestra\Sidekick\Filesystem\join_paths;
 use function Orchestra\Testbench\package_path;
 use function Orchestra\Testbench\workbench;
 use function Orchestra\Testbench\workbench_path;
@@ -104,14 +104,18 @@ class Workbench extends \Orchestra\Testbench\Workbench\Workbench
 
     /**
      * Swap stub file by name.
+     *
+     * @codeCoverageIgnore
      */
-    public static function swapFile(string $name, ?string $file): void
+    public static function swapFile(string $name, ?string $file): StubRegistrar
     {
-        static::stub()->swap($name, $file);
+        return static::stub()->swap($name, $file);
     }
 
     /**
      * Retrieve the stub file from name.
+     *
+     * @codeCoverageIgnore
      */
     public static function stubFile(string $name): ?string
     {

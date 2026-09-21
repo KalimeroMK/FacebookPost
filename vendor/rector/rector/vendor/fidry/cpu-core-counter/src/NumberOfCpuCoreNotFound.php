@@ -9,12 +9,12 @@
  * file that was distributed with this source code.
  */
 declare (strict_types=1);
-namespace RectorPrefix202502\Fidry\CpuCoreCounter;
+namespace RectorPrefix202609\Fidry\CpuCoreCounter;
 
 use RuntimeException;
 final class NumberOfCpuCoreNotFound extends RuntimeException
 {
-    public static function create() : self
+    public static function create(): self
     {
         return new self('Could not find the number of CPU cores available.');
     }

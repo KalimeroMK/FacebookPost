@@ -8,7 +8,6 @@ use PhpParser\Node\Arg;
 use PhpParser\Node\ArrayItem;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\FuncCall;
-use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Scalar\String_;
 use Rector\Rector\AbstractRector;
 use Rector\ValueObject\PhpVersionFeature;
@@ -27,7 +26,7 @@ final class SetCookieRector extends AbstractRector implements MinPhpVersionInter
      * @var array<int, string>
      */
     private const KNOWN_OPTIONS = [2 => 'expires', 3 => 'path', 4 => 'domain', 5 => 'secure', 6 => 'httponly'];
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Convert setcookie argument to PHP7.3 option array', [new CodeSample(<<<'CODE_SAMPLE'
 setcookie('name', $value, 360);
@@ -46,14 +45,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [FuncCall::class];
     }
     /**
      * @param FuncCall $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($this->shouldSkip($node)) {
             return null;
@@ -61,11 +60,11 @@ CODE_SAMPLE
         $node->args = $this->composeNewArgs($node);
         return $node;
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::SETCOOKIE_ACCEPT_ARRAY_OPTIONS;
     }
-    private function shouldSkip(FuncCall $funcCall) : bool
+    private function shouldSkip(FuncCall $funcCall): bool
     {
         if (!$this->isNames($funcCall, ['setcookie', 'setrawcookie'])) {
             return \true;
@@ -73,22 +72,26 @@ CODE_SAMPLE
         if ($funcCall->isFirstClassCallable()) {
             return \true;
         }
-        $argsCount = \count($funcCall->args);
+        $args = $funcCall->getArgs();
+        $argsCount = count($args);
         if ($argsCount <= 2) {
             return \true;
         }
-        if ($funcCall->args[2] instanceof Arg && $funcCall->args[2]->value instanceof Array_) {
+        if ($args[2]->value instanceof Array_) {
             return \true;
         }
         if ($argsCount === 3) {
-            return $funcCall->args[2] instanceof Arg && $funcCall->args[2]->value instanceof Variable;
+            $type = $this->nodeTypeResolver->getNativeType($args[2]->value);
+            if (!$type->isInteger()->yes()) {
+                return \true;
+            }
         }
         return \false;
     }
     /**
      * @return Arg[]
      */
-    private function composeNewArgs(FuncCall $funcCall) : array
+    private function composeNewArgs(FuncCall $funcCall): array
     {
         $args = $funcCall->getArgs();
         $newArgs = [$args[0], $args[1]];

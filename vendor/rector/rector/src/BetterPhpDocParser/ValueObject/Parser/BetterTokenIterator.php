@@ -20,16 +20,18 @@ final class BetterTokenIterator extends TokenIterator
     /**
      * @param int[] $types
      */
-    public function isNextTokenTypes(array $types) : bool
+    public function isNextTokenTypes(array $types): bool
     {
+        $found = \false;
         foreach ($types as $type) {
             if ($this->isNextTokenType($type)) {
-                return \true;
+                $found = \true;
+                break;
             }
         }
-        return \false;
+        return $found;
     }
-    public function isTokenTypeOnPosition(int $tokenType, int $position) : bool
+    public function isTokenTypeOnPosition(int $tokenType, int $position): bool
     {
         $tokens = $this->getTokens();
         $token = $tokens[$position] ?? null;
@@ -38,14 +40,14 @@ final class BetterTokenIterator extends TokenIterator
         }
         return $token[1] === $tokenType;
     }
-    public function isNextTokenType(int $tokenType) : bool
+    public function isNextTokenType(int $tokenType): bool
     {
         if ($this->nextTokenType() === null) {
             return \false;
         }
         return $this->nextTokenType() === $tokenType;
     }
-    public function printFromTo(int $from, int $to) : string
+    public function printFromTo(int $from, int $to): string
     {
         if ($to < $from) {
             throw new ShouldNotHappenException('Arguments are flipped');
@@ -63,31 +65,33 @@ final class BetterTokenIterator extends TokenIterator
         }
         return $content;
     }
-    public function currentPosition() : int
+    public function currentPosition(): int
     {
         return $this->currentTokenIndex();
     }
-    public function count() : int
+    public function count(): int
     {
-        return \count($this->getTokens());
+        return count($this->getTokens());
     }
     /**
      * @return array<array{0: string, 1: int}>
      */
-    public function partialTokens(int $start, int $end) : array
+    public function partialTokens(int $start, int $end): array
     {
-        return \array_slice($this->getTokens(), $start, $end - $start + 1);
+        return array_slice($this->getTokens(), $start, $end - $start + 1);
     }
-    public function containsTokenType(int $type) : bool
+    public function containsTokenType(int $type): bool
     {
+        $found = \false;
         foreach ($this->getTokens() as $token) {
             if ($token[1] === $type) {
-                return \true;
+                $found = \true;
+                break;
             }
         }
-        return \false;
+        return $found;
     }
-    private function nextTokenType() : ?int
+    private function nextTokenType(): ?int
     {
         $tokens = $this->getTokens();
         // does next token exist?

@@ -19,6 +19,8 @@ use Symfony\Component\VarDumper\Cloner\Stub;
  * @author Nicolas Grekas <p@tchwork.com>
  *
  * @final
+ *
+ * @internal
  */
 class ReflectionCaster
 {
@@ -117,13 +119,8 @@ class ReflectionCaster
     public static function castAttribute(\ReflectionAttribute $c, array $a, Stub $stub, bool $isNested): array
     {
         $map = [
-            'name' => 'getName',
             'arguments' => 'getArguments',
         ];
-
-        if (\PHP_VERSION_ID >= 80400) {
-            unset($map['name']);
-        }
 
         self::addMap($a, $c, $map);
 

@@ -10,7 +10,9 @@ use PhpParser\Node\Expr\BinaryOp\BooleanOr;
 use PhpParser\Node\Expr\BinaryOp\Identical;
 use PhpParser\Node\Expr\BinaryOp\NotIdentical;
 use PhpParser\Node\Expr\BooleanNot;
+use PhpParser\Node\Expr\Ternary;
 use Rector\NodeManipulator\BinaryOpManipulator;
+use Rector\NodeTypeResolver\Node\AttributeKey;
 use Rector\Php71\ValueObject\TwoNodeMatch;
 use Rector\PhpParser\Node\AssignAndBinaryMap;
 use Rector\PhpParser\Node\Value\ValueResolver;
@@ -40,28 +42,28 @@ final class SimplifyConditionsRector extends AbstractRector
         $this->binaryOpManipulator = $binaryOpManipulator;
         $this->valueResolver = $valueResolver;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Simplify conditions', [new CodeSample("if (! (\$foo !== 'bar')) {...", "if (\$foo === 'bar') {...")]);
     }
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [BooleanNot::class, Identical::class];
     }
     /**
      * @param BooleanNot|Identical $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($node instanceof BooleanNot) {
             return $this->processBooleanNot($node);
         }
         return $this->processIdenticalAndNotIdentical($node);
     }
-    private function processBooleanNot(BooleanNot $booleanNot) : ?Node
+    private function processBooleanNot(BooleanNot $booleanNot): ?Node
     {
         if (!$booleanNot->expr instanceof BinaryOp) {
             return null;
@@ -71,7 +73,7 @@ final class SimplifyConditionsRector extends AbstractRector
         }
         return $this->createInversedBooleanOp($booleanNot->expr);
     }
-    private function processIdenticalAndNotIdentical(Identical $identical) : ?Node
+    private function processIdenticalAndNotIdentical(Identical $identical): ?Node
     {
         $twoNodeMatch = $this->binaryOpManipulator->matchFirstAndSecondConditionNode($identical, static fn(Node $node): bool => $node instanceof Identical || $node instanceof NotIdentical, fn(Node $node): bool => $node instanceof Expr && $this->valueResolver->isTrueOrFalse($node));
         if (!$twoNodeMatch instanceof TwoNodeMatch) {
@@ -88,7 +90,7 @@ final class SimplifyConditionsRector extends AbstractRector
     /**
      * Skip too nested binary || binary > binary combinations
      */
-    private function shouldSkip(BinaryOp $binaryOp) : bool
+    private function shouldSkip(BinaryOp $binaryOp): bool
     {
         if ($binaryOp instanceof BooleanOr) {
             return \true;
@@ -98,11 +100,17 @@ final class SimplifyConditionsRector extends AbstractRector
         }
         return $binaryOp->right instanceof BinaryOp;
     }
-    private function createInversedBooleanOp(BinaryOp $binaryOp) : ?BinaryOp
+    private function createInversedBooleanOp(BinaryOp $binaryOp): ?BinaryOp
     {
         $inversedBinaryClass = $this->assignAndBinaryMap->getInversed($binaryOp);
         if ($inversedBinaryClass === null) {
             return null;
+        }
+        if ($binaryOp->left instanceof Ternary) {
+            $binaryOp->left->setAttribute(AttributeKey::WRAPPED_IN_PARENTHESES, \true);
+        }
+        if ($binaryOp->right instanceof Ternary) {
+            $binaryOp->right->setAttribute(AttributeKey::WRAPPED_IN_PARENTHESES, \true);
         }
         return new $inversedBinaryClass($binaryOp->left, $binaryOp->right);
     }

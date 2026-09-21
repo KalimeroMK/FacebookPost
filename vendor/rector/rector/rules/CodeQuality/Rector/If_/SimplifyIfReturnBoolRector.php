@@ -15,8 +15,7 @@ use PhpParser\Node\Stmt\If_;
 use PhpParser\Node\Stmt\Return_;
 use Rector\BetterPhpDocParser\Comment\CommentsMerger;
 use Rector\CodeQuality\NodeManipulator\ExprBoolCaster;
-use Rector\Contract\PhpParser\Node\StmtsAwareInterface;
-use Rector\NodeTypeResolver\Node\AttributeKey;
+use Rector\PhpParser\Enum\NodeGroup;
 use Rector\PhpParser\Node\Value\ValueResolver;
 use Rector\PhpParser\Printer\BetterStandardPrinter;
 use Rector\Rector\AbstractRector;
@@ -50,7 +49,7 @@ final class SimplifyIfReturnBoolRector extends AbstractRector
         $this->betterStandardPrinter = $betterStandardPrinter;
         $this->valueResolver = $valueResolver;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Shortens if return false/true to direct return', [new CodeSample(<<<'CODE_SAMPLE'
 if (strpos($docToken->getContent(), "\n") === false) {
@@ -67,14 +66,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
-        return [StmtsAwareInterface::class];
+        return NodeGroup::STMTS_AWARE;
     }
     /**
-     * @param StmtsAwareInterface $node
+     * @param StmtsAware $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($node->stmts === null) {
             return null;
@@ -102,7 +101,6 @@ CODE_SAMPLE
             if (!$newReturn instanceof Return_) {
                 continue;
             }
-            $if->cond->setAttribute(AttributeKey::ORIGINAL_NODE, null);
             $this->commentsMerger->keepComments($newReturn, [$if, $return, $ifInnerNode]);
             // remove previous IF
             unset($node->stmts[$key - 1]);
@@ -111,7 +109,7 @@ CODE_SAMPLE
         }
         return null;
     }
-    private function shouldSkipIfAndReturn(If_ $if, Return_ $return) : bool
+    private function shouldSkipIfAndReturn(If_ $if, Return_ $return): bool
     {
         if ($if->elseifs !== []) {
             return \true;
@@ -129,24 +127,28 @@ CODE_SAMPLE
         if (!$return->expr instanceof Expr) {
             return \true;
         }
+        // both branches return the same boolean → condition is pointless, transform would be unsound
+        if ($this->valueResolver->isTrueOrFalse($return->expr) && $this->valueResolver->isTrue($returnedExpr) === $this->valueResolver->isTrue($return->expr)) {
+            return \true;
+        }
         // negate + negate → skip for now
         if (!$this->valueResolver->isFalse($returnedExpr)) {
             return !$this->valueResolver->isTrueOrFalse($return->expr);
         }
         $condString = $this->betterStandardPrinter->print($if->cond);
-        if (\strpos($condString, '!=') === \false) {
+        if (strpos($condString, '!=') === \false) {
             return !$this->valueResolver->isTrueOrFalse($return->expr);
         }
         return !$if->cond instanceof NotIdentical && !$if->cond instanceof NotEqual;
     }
-    private function processReturnTrue(If_ $if, Return_ $nextReturn) : Return_
+    private function processReturnTrue(If_ $if, Return_ $nextReturn): Return_
     {
         if ($if->cond instanceof BooleanNot && $nextReturn->expr instanceof Expr && $this->valueResolver->isTrue($nextReturn->expr)) {
             return new Return_($this->exprBoolCaster->boolCastOrNullCompareIfNeeded($if->cond->expr));
         }
         return new Return_($this->exprBoolCaster->boolCastOrNullCompareIfNeeded($if->cond));
     }
-    private function processReturnFalse(If_ $if, Return_ $nextReturn) : ?Return_
+    private function processReturnFalse(If_ $if, Return_ $nextReturn): ?Return_
     {
         if ($if->cond instanceof Identical) {
             $notIdentical = new NotIdentical($if->cond->left, $if->cond->right);
@@ -167,9 +169,9 @@ CODE_SAMPLE
         }
         return new Return_($this->exprBoolCaster->boolCastOrNullCompareIfNeeded(new BooleanNot($if->cond)));
     }
-    private function isIfWithSingleReturnExpr(If_ $if) : bool
+    private function isIfWithSingleReturnExpr(If_ $if): bool
     {
-        if (\count($if->stmts) !== 1) {
+        if (count($if->stmts) !== 1) {
             return \false;
         }
         if ($if->else instanceof Else_ || $if->elseifs !== []) {
@@ -182,7 +184,7 @@ CODE_SAMPLE
         // return must have value
         return $ifInnerNode->expr instanceof Expr;
     }
-    private function resolveReturn(Expr $innerExpr, If_ $if, Return_ $return) : ?Return_
+    private function resolveReturn(Expr $innerExpr, If_ $if, Return_ $return): ?Return_
     {
         if ($this->valueResolver->isTrue($innerExpr)) {
             return $this->processReturnTrue($if, $return);

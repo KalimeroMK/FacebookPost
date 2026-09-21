@@ -9,7 +9,7 @@
  * file that was distributed with this source code.
  */
 declare (strict_types=1);
-namespace RectorPrefix202502\Fidry\CpuCoreCounter\Finder;
+namespace RectorPrefix202609\Fidry\CpuCoreCounter\Finder;
 
 /**
  * Find the number of logical CPU cores for FreeSBD, Solaris and the likes.
@@ -18,11 +18,11 @@ namespace RectorPrefix202502\Fidry\CpuCoreCounter\Finder;
  */
 final class NProcessorFinder extends ProcOpenBasedFinder
 {
-    protected function getCommand() : string
+    protected function getCommand(): string
     {
         return 'getconf NPROCESSORS_ONLN';
     }
-    public function toString() : string
+    public function toString(): string
     {
         return 'NProcessorFinder';
     }

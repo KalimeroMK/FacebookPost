@@ -5,9 +5,14 @@ namespace Rector\PHPUnit\CodeQuality\Rector\Class_;
 
 use PhpParser\Node;
 use PhpParser\Node\Expr\Array_;
+use PhpParser\Node\Expr\Assign;
+use PhpParser\Node\Expr\AssignOp;
+use PhpParser\Node\Expr\AssignRef;
+use PhpParser\Node\Expr\YieldFrom;
 use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
+use PhpParser\Node\Stmt\Expression;
 use PhpParser\Node\Stmt\Return_;
 use PHPStan\PhpDocParser\Ast\PhpDoc\ReturnTagValueNode;
 use PHPStan\Type\Generic\GenericObjectType;
@@ -69,7 +74,7 @@ final class YieldDataProviderRector extends AbstractRector
         $this->phpDocTypeChanger = $phpDocTypeChanger;
         $this->docBlockUpdater = $docBlockUpdater;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Turns array return to yield in data providers', [new CodeSample(<<<'CODE_SAMPLE'
 use PHPUnit\Framework\TestCase;
@@ -100,14 +105,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Class_
+    public function refactor(Node $node): ?Class_
     {
         if (!$this->testsNodeAnalyzer->isInTestClass($node)) {
             return null;
@@ -131,12 +136,16 @@ CODE_SAMPLE
         }
         return null;
     }
-    private function collectReturnArrayNodesFromClassMethod(ClassMethod $classMethod) : ?Array_
+    private function collectReturnArrayNodesFromClassMethod(ClassMethod $classMethod): ?Array_
     {
         if ($classMethod->stmts === null) {
             return null;
         }
+        $yieldedFromExpr = null;
         foreach ($classMethod->stmts as $statement) {
+            if ($statement instanceof Expression) {
+                $statement = $statement->expr;
+            }
             if ($statement instanceof Return_) {
                 $returnedExpr = $statement->expr;
                 if (!$returnedExpr instanceof Array_) {
@@ -144,10 +153,21 @@ CODE_SAMPLE
                 }
                 return $returnedExpr;
             }
+            if ($statement instanceof YieldFrom) {
+                if (!$statement->expr instanceof Array_) {
+                    return null;
+                }
+                if ($yieldedFromExpr instanceof Array_) {
+                    return null;
+                }
+                $yieldedFromExpr = $statement->expr;
+            } elseif (!$statement instanceof Assign && !$statement instanceof AssignRef && !$statement instanceof AssignOp) {
+                return null;
+            }
         }
-        return null;
+        return $yieldedFromExpr;
     }
-    private function transformArrayToYieldsOnMethodNode(ClassMethod $classMethod, Array_ $array) : void
+    private function transformArrayToYieldsOnMethodNode(ClassMethod $classMethod, Array_ $array): void
     {
         $yields = $this->nodeTransformer->transformArrayToYields($array);
         $this->removeReturnTag($classMethod);
@@ -155,18 +175,21 @@ CODE_SAMPLE
         $classMethod->returnType = new FullyQualified('Iterator');
         $commentReturn = [];
         foreach ((array) $classMethod->stmts as $key => $classMethodStmt) {
-            if (!$classMethodStmt instanceof Return_) {
+            if ($classMethodStmt instanceof Expression) {
+                $classMethodStmt = $classMethodStmt->expr;
+            }
+            if (!$classMethodStmt instanceof Return_ && !$classMethodStmt instanceof YieldFrom) {
                 continue;
             }
             $commentReturn = $classMethodStmt->getAttribute(AttributeKey::COMMENTS) ?? [];
             unset($classMethod->stmts[$key]);
         }
         if (isset($yields[0])) {
-            $yields[0]->setAttribute(AttributeKey::COMMENTS, \array_merge($commentReturn, $yields[0]->getAttribute(AttributeKey::COMMENTS) ?? []));
+            $yields[0]->setAttribute(AttributeKey::COMMENTS, array_merge($commentReturn, $yields[0]->getAttribute(AttributeKey::COMMENTS) ?? []));
         }
-        $classMethod->stmts = \array_merge((array) $classMethod->stmts, $yields);
+        $classMethod->stmts = array_merge((array) $classMethod->stmts, $yields);
     }
-    private function removeReturnTag(ClassMethod $classMethod) : void
+    private function removeReturnTag(ClassMethod $classMethod): void
     {
         $phpDocInfo = $this->phpDocInfoFactory->createFromNodeOrEmpty($classMethod);
         if (!$phpDocInfo->getReturnTagValue() instanceof ReturnTagValueNode) {

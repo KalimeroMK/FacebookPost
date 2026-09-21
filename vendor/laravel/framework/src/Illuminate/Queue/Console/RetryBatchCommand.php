@@ -28,7 +28,7 @@ class RetryBatchCommand extends Command implements Isolatable
     /**
      * Execute the console command.
      *
-     * @return int|null
+     * @return void
      */
     public function handle()
     {
@@ -52,7 +52,7 @@ class RetryBatchCommand extends Command implements Isolatable
             foreach ($batch->failedJobIds as $failedJobId) {
                 $this->components->task(
                     $failedJobId,
-                    fn () => $this->callSilent('queue:retry', ['id' => $failedJobId]) == 0
+                    fn () => $this->callSilent('queue:retry', ['id' => $failedJobId]) === 0
                 );
             }
 

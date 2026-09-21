@@ -5,37 +5,51 @@ namespace Rector\Doctrine\Bundle210\Rector\Class_;
 
 use PhpParser\Node;
 use PhpParser\Node\Arg;
-use PhpParser\Node\ArrayItem;
 use PhpParser\Node\Attribute;
 use PhpParser\Node\AttributeGroup;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Identifier;
+use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Return_;
-use Rector\NodeTypeResolver\Node\AttributeKey;
+use PHPStan\Reflection\ReflectionProvider;
+use Rector\Doctrine\Enum\DoctrineClass;
 use Rector\Rector\AbstractRector;
 use Rector\ValueObject\PhpVersionFeature;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
 use Rector\VersionBonding\Contract\MinPhpVersionInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
- * @see https://github.com/doctrine/DoctrineBundle/pull/1664
+ * @see https://github.com/doctrine/DoctrineBundle/pull/1592
  *
  * @see \Rector\Doctrine\Tests\Bundle210\Rector\Class_\EventSubscriberInterfaceToAttributeRector\EventSubscriberInterfaceToAttributeRectorTest
  */
-final class EventSubscriberInterfaceToAttributeRector extends AbstractRector implements MinPhpVersionInterface
+final class EventSubscriberInterfaceToAttributeRector extends AbstractRector implements MinPhpVersionInterface, ComposerPackageConstraintInterface
 {
-    private Class_ $subscriberClass;
-    public function provideMinPhpVersion() : int
+    /**
+     * @readonly
+     */
+    private ReflectionProvider $reflectionProvider;
+    public function __construct(ReflectionProvider $reflectionProvider)
+    {
+        $this->reflectionProvider = $reflectionProvider;
+    }
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::ATTRIBUTES;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
     {
-        return new RuleDefinition('Replace EventSubscriberInterface with AsDoctrineListener attribute(s)', [new CodeSample(<<<'CODE_SAMPLE'
+        return new ComposerPackageConstraint('doctrine/doctrine-bundle', '>=2.8');
+    }
+    public function getRuleDefinition(): RuleDefinition
+    {
+        return new RuleDefinition('Replace EventSubscriberInterface with #[AsDoctrineListener] attribute', [new CodeSample(<<<'CODE_SAMPLE'
 use Doctrine\ORM\Event\PrePersistEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
 use Doctrine\Common\EventSubscriberInterface;
@@ -88,85 +102,95 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
-        if (!$this->hasImplements($node, 'Doctrine\\Common\\EventSubscriber') && !$this->hasImplements($node, 'Doctrine\\Bundle\\DoctrineBundle\\EventSubscriber\\EventSubscriberInterface')) {
+        if (!$this->reflectionProvider->hasClass(DoctrineClass::AS_DOCTRINE_LISTENER_ATTRIBUTE)) {
             return null;
         }
-        $this->subscriberClass = $node;
-        $getSubscribedEventsClassMethod = $node->getMethod('getSubscribedEvents');
-        if (!$getSubscribedEventsClassMethod instanceof ClassMethod) {
+        if (!$this->hasImplements($node, DoctrineClass::EVENT_SUBSCRIBER) && !$this->hasImplements($node, DoctrineClass::EVENT_SUBSCRIBER_INTERFACE)) {
             return null;
         }
-        $stmts = (array) $getSubscribedEventsClassMethod->stmts;
-        if ($stmts === []) {
-            return null;
-        }
-        if ($stmts[0] instanceof Return_ && $stmts[0]->expr instanceof Array_) {
-            $this->handleArray($stmts);
-        }
-        $this->removeImplements($node, ['Doctrine\\Common\\EventSubscriber', 'Doctrine\\Bundle\\DoctrineBundle\\EventSubscriber\\EventSubscriberInterface']);
-        unset($node->stmts[$getSubscribedEventsClassMethod->getAttribute(AttributeKey::STMT_KEY)]);
-        return $node;
-    }
-    /**
-     * @param array<int, Node\Stmt> $expressions
-     */
-    private function handleArray(array $expressions) : void
-    {
-        foreach ($expressions as $expression) {
-            if (!$expression instanceof Return_ || !$expression->expr instanceof Array_) {
+        foreach ($node->stmts as $key => $classStmt) {
+            if (!$classStmt instanceof ClassMethod) {
                 continue;
             }
-            $arguments = $this->parseArguments($expression->expr);
-            $this->addAttribute($arguments);
+            if (!$this->isName($classStmt, 'getSubscribedEvents')) {
+                continue;
+            }
+            $getSubscribedEventsClassMethod = $classStmt;
+            if ($getSubscribedEventsClassMethod->stmts === []) {
+                continue;
+            }
+            //            $firstStmt = $getSubscribedEventsClassMethod->stmts[0];
+            //            if ($firstStmt instanceof Return_ && $firstStmt->expr instanceof Array_
+            //            ) {
+            $this->refactorSubscriberArrayToClassAttributes($node, $getSubscribedEventsClassMethod);
+            //            }
+            $this->removeImplements($node, [DoctrineClass::EVENT_SUBSCRIBER, DoctrineClass::EVENT_SUBSCRIBER_INTERFACE]);
+            // remove method
+            unset($node->stmts[$key]);
+            return $node;
+        }
+        return null;
+    }
+    private function refactorSubscriberArrayToClassAttributes(Class_ $class, ClassMethod $getSubscribedEventsClassMethod): void
+    {
+        foreach ((array) $getSubscribedEventsClassMethod->stmts as $stmt) {
+            if (!$stmt instanceof Return_) {
+                continue;
+            }
+            if (!$stmt->expr instanceof Array_) {
+                continue;
+            }
+            $arguments = $this->extractArrayItemsToExprs($stmt->expr);
+            $this->addClassAttribute($class, $arguments);
         }
     }
     /**
      * @return array<Expr>
      */
-    private function parseArguments(Array_ $array) : array
+    private function extractArrayItemsToExprs(Array_ $array): array
     {
+        $arguments = [];
         foreach ($array->items as $item) {
-            if (!$item instanceof ArrayItem) {
-                continue;
-            }
             $arguments[] = $item->value;
         }
-        return $arguments ?? [];
+        return $arguments;
     }
     /**
      * @param array<Expr> $arguments
      */
-    private function addAttribute(array $arguments) : void
+    private function addClassAttribute(Class_ $class, array $arguments): void
     {
         foreach ($arguments as $argument) {
-            $this->subscriberClass->attrGroups[] = new AttributeGroup([new Attribute(new FullyQualified('Doctrine\\Bundle\\DoctrineBundle\\Attribute\\AsDoctrineListener'), [new Arg($argument, \false, \false, [], new Identifier('event'))])]);
+            $class->attrGroups[] = new AttributeGroup([new Attribute(new FullyQualified(DoctrineClass::AS_DOCTRINE_LISTENER_ATTRIBUTE), [new Arg($argument, \false, \false, [], new Identifier('event'))])]);
         }
     }
-    private function hasImplements(Class_ $class, string $interfaceFQN) : bool
+    private function hasImplements(Class_ $class, string $interfaceFQN): bool
     {
-        foreach ($class->implements as $implement) {
-            if ($this->nodeNameResolver->isName($implement, $interfaceFQN)) {
-                return \true;
+        $found = \false;
+        foreach ($class->implements as $name) {
+            if ($this->isName($name, $interfaceFQN)) {
+                $found = \true;
+                break;
             }
         }
-        return \false;
+        return $found;
     }
     /**
      * @param array<string> $interfaceFQNS
      */
-    private function removeImplements(Class_ $class, array $interfaceFQNS) : void
+    private function removeImplements(Class_ $class, array $interfaceFQNS): void
     {
         foreach ($class->implements as $key => $implement) {
-            if (!$this->nodeNameResolver->isNames($implement, $interfaceFQNS)) {
+            if (!$this->isNames($implement, $interfaceFQNS)) {
                 continue;
             }
             unset($class->implements[$key]);

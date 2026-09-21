@@ -7,37 +7,55 @@
 declare (strict_types=1);
 namespace Rector\ChangesReporting\Output;
 
-use RectorPrefix202502\Nette\Utils\Json;
+use RectorPrefix202609\Nette\Utils\Json;
 use Rector\ChangesReporting\Contract\Output\OutputFormatterInterface;
 use Rector\Util\FileHasher;
 use Rector\ValueObject\Configuration;
 use Rector\ValueObject\ProcessResult;
+/**
+ * @deprecated Will be removed in next minor version, as Rector is not a static analysis tool.
+ */
 final class GitlabOutputFormatter implements OutputFormatterInterface
 {
     /**
      * @readonly
      */
-    private Filehasher $filehasher;
+    private FileHasher $filehasher;
     /**
      * @var string
      */
-    public const NAME = 'gitlab';
+    private const NAME = 'gitlab';
+    /**
+     * @var string
+     */
     private const ERROR_TYPE_ISSUE = 'issue';
+    /**
+     * @var string
+     */
     private const ERROR_CATEGORY_BUG_RISK = 'Bug Risk';
+    /**
+     * @var string
+     */
     private const ERROR_CATEGORY_STYLE = 'Style';
+    /**
+     * @var string
+     */
     private const ERROR_SEVERITY_BLOCKER = 'blocker';
+    /**
+     * @var string
+     */
     private const ERROR_SEVERITY_MINOR = 'minor';
-    public function __construct(Filehasher $filehasher)
+    public function __construct(FileHasher $filehasher)
     {
         $this->filehasher = $filehasher;
     }
-    public function getName() : string
+    public function getName(): string
     {
         return self::NAME;
     }
-    public function report(ProcessResult $processResult, Configuration $configuration) : void
+    public function report(ProcessResult $processResult, Configuration $configuration): void
     {
-        $errorsJson = \array_merge($this->appendSystemErrors($processResult, $configuration), $this->appendFileDiffs($processResult, $configuration));
+        $errorsJson = array_merge($this->appendSystemErrors($processResult, $configuration), $this->appendFileDiffs($processResult, $configuration));
         $json = Json::encode($errorsJson, \true);
         echo $json . \PHP_EOL;
     }
@@ -56,7 +74,7 @@ final class GitlabOutputFormatter implements OutputFormatterInterface
      *      },
      *  }>
      */
-    private function appendSystemErrors(ProcessResult $processResult, Configuration $configuration) : array
+    private function appendSystemErrors(ProcessResult $processResult, Configuration $configuration): array
     {
         $errorsJson = [];
         foreach ($processResult->getSystemErrors() as $systemError) {
@@ -80,14 +98,14 @@ final class GitlabOutputFormatter implements OutputFormatterInterface
      *      },
      *  }>
      */
-    private function appendFileDiffs(ProcessResult $processResult, Configuration $configuration) : array
+    private function appendFileDiffs(ProcessResult $processResult, Configuration $configuration): array
     {
         $errorsJson = [];
         $fileDiffs = $processResult->getFileDiffs();
-        \ksort($fileDiffs);
+        ksort($fileDiffs);
         foreach ($fileDiffs as $fileDiff) {
             $filePath = $configuration->isReportingWithRealPath() ? $fileDiff->getAbsoluteFilePath() ?? '' : $fileDiff->getRelativeFilePath() ?? '';
-            $rectorClasses = \implode(' / ', $fileDiff->getRectorShortClasses());
+            $rectorClasses = implode(' / ', $fileDiff->getRectorShortClasses());
             $fingerprint = $this->filehasher->hash($filePath . ';' . $fileDiff->getDiff());
             $errorsJson[] = ['fingerprint' => $fingerprint, 'type' => self::ERROR_TYPE_ISSUE, 'categories' => [self::ERROR_CATEGORY_STYLE], 'severity' => self::ERROR_SEVERITY_MINOR, 'description' => $rectorClasses, 'content' => ['body' => $fileDiff->getDiff()], 'check_name' => $rectorClasses, 'location' => ['path' => $filePath, 'lines' => ['begin' => $fileDiff->getFirstLineNumber() ?? 0]]];
         }

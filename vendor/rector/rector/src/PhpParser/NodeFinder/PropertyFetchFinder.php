@@ -16,6 +16,7 @@ use PhpParser\Node\Expr\StaticPropertyFetch;
 use PhpParser\Node\Param;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\Class_;
+use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Property;
 use PhpParser\Node\Stmt\Trait_;
 use PHPStan\Analyser\Scope;
@@ -76,7 +77,7 @@ final class PropertyFetchFinder
      * @return array<PropertyFetch|StaticPropertyFetch>
      * @param \PhpParser\Node\Stmt\Property|\PhpParser\Node\Param $propertyOrPromotedParam
      */
-    public function findPrivatePropertyFetches(Class_ $class, $propertyOrPromotedParam, Scope $scope) : array
+    public function findPrivatePropertyFetches(Class_ $class, $propertyOrPromotedParam, Scope $scope): array
     {
         $propertyName = $this->resolvePropertyName($propertyOrPromotedParam);
         if ($propertyName === null) {
@@ -86,16 +87,18 @@ final class PropertyFetchFinder
         $nodes = [$class];
         $nodesTrait = $this->astResolver->parseClassReflectionTraits($classReflection);
         $hasTrait = $nodesTrait !== [];
-        $nodes = [...$nodes, ...$nodesTrait];
+        $nodes = array_merge($nodes, $nodesTrait);
         return $this->findPropertyFetchesInClassLike($class, $nodes, $propertyName, $hasTrait, $scope);
     }
     /**
+     * @api used by other Rector packages
      * @return PropertyFetch[]|StaticPropertyFetch[]|NullsafePropertyFetch[]
+     * @param \PhpParser\Node\Stmt\Class_|\PhpParser\Node\Stmt\ClassMethod $node
      */
-    public function findLocalPropertyFetchesByName(Class_ $class, string $paramName) : array
+    public function findLocalPropertyFetchesByName($node, string $paramName): array
     {
         /** @var PropertyFetch[]|StaticPropertyFetch[]|NullsafePropertyFetch[] $foundPropertyFetches */
-        $foundPropertyFetches = $this->betterNodeFinder->find($class->getMethods(), function (Node $subNode) use($paramName) : bool {
+        $foundPropertyFetches = $this->betterNodeFinder->find($this->resolveNodesToLocate($node), function (Node $subNode) use ($paramName): bool {
             if ($subNode instanceof PropertyFetch) {
                 return $this->propertyFetchAnalyzer->isLocalPropertyFetchName($subNode, $paramName);
             }
@@ -112,12 +115,12 @@ final class PropertyFetchFinder
     /**
      * @return ArrayDimFetch[]
      */
-    public function findLocalPropertyArrayDimFetchesAssignsByName(Class_ $class, Property $property) : array
+    public function findLocalPropertyArrayDimFetchesAssignsByName(Class_ $class, Property $property): array
     {
         $propertyName = $this->nodeNameResolver->getName($property);
         /** @var ArrayDimFetch[] $propertyArrayDimFetches */
         $propertyArrayDimFetches = [];
-        $this->simpleCallableNodeTraverser->traverseNodesWithCallable($class->getMethods(), function (Node $subNode) use(&$propertyArrayDimFetches, $propertyName) {
+        $this->simpleCallableNodeTraverser->traverseNodesWithCallable($this->resolveNodesToLocate($class), function (Node $subNode) use (&$propertyArrayDimFetches, $propertyName) {
             if (!$subNode instanceof Assign) {
                 return null;
             }
@@ -139,7 +142,7 @@ final class PropertyFetchFinder
     /**
      * @param \PhpParser\Node\Stmt\Class_|\PhpParser\Node\Stmt\Trait_ $class
      */
-    public function isLocalPropertyFetchByName(Expr $expr, $class, string $propertyName) : bool
+    public function isLocalPropertyFetchByName(Expr $expr, $class, string $propertyName): bool
     {
         if (!$expr instanceof PropertyFetch) {
             return \false;
@@ -157,14 +160,26 @@ final class PropertyFetchFinder
         return \false;
     }
     /**
+     * @return Stmt[]
+     * @param \PhpParser\Node\Stmt\Class_|\PhpParser\Node\Stmt\ClassMethod $node
+     */
+    private function resolveNodesToLocate($node): array
+    {
+        if ($node instanceof ClassMethod) {
+            return [$node];
+        }
+        $propertyWithHooks = array_filter($node->getProperties(), fn(Property $property): bool => $property->hooks !== []);
+        return array_merge($propertyWithHooks, $node->getMethods());
+    }
+    /**
      * @param Stmt[] $stmts
      * @return PropertyFetch[]|StaticPropertyFetch[]
      * @param \PhpParser\Node\Stmt\Class_|\PhpParser\Node\Stmt\Trait_ $class
      */
-    private function findPropertyFetchesInClassLike($class, array $stmts, string $propertyName, bool $hasTrait, Scope $scope) : array
+    private function findPropertyFetchesInClassLike($class, array $stmts, string $propertyName, bool $hasTrait, Scope $scope): array
     {
         /** @var PropertyFetch[]|StaticPropertyFetch[] $propertyFetches */
-        $propertyFetches = $this->betterNodeFinder->find($stmts, function (Node $subNode) use($class, $hasTrait, $propertyName, $scope) : bool {
+        $propertyFetches = $this->betterNodeFinder->find($stmts, function (Node $subNode) use ($class, $hasTrait, $propertyName, $scope): bool {
             if ($subNode instanceof MethodCall || $subNode instanceof StaticCall || $subNode instanceof FuncCall) {
                 $this->decoratePropertyFetch($subNode, $scope);
                 return \false;
@@ -182,7 +197,7 @@ final class PropertyFetchFinder
         });
         return $propertyFetches;
     }
-    private function decoratePropertyFetch(Node $node, Scope $scope) : void
+    private function decoratePropertyFetch(Node $node, Scope $scope): void
     {
         if (!$node instanceof MethodCall && !$node instanceof StaticCall && !$node instanceof FuncCall) {
             return;
@@ -203,7 +218,7 @@ final class PropertyFetchFinder
     /**
      * @param \PhpParser\Node\Expr\MethodCall|\PhpParser\Node\Expr\StaticCall|\PhpParser\Node\Expr\FuncCall $node
      */
-    private function isFoundByRefParam($node, int $key, Scope $scope) : bool
+    private function isFoundByRefParam($node, int $key, Scope $scope): bool
     {
         $functionLikeReflection = $this->reflectionResolver->resolveFunctionLikeReflectionFromCall($node);
         if ($functionLikeReflection === null) {
@@ -219,7 +234,7 @@ final class PropertyFetchFinder
     /**
      * @param \PhpParser\Node\Stmt\Class_|\PhpParser\Node\Stmt\Trait_ $class
      */
-    private function isInAnonymous(PropertyFetch $propertyFetch, $class, bool $hasTrait) : bool
+    private function isInAnonymous(PropertyFetch $propertyFetch, $class, bool $hasTrait): bool
     {
         $classReflection = $this->reflectionResolver->resolveClassReflection($propertyFetch);
         if (!$classReflection instanceof ClassReflection || !$classReflection->isClass()) {
@@ -233,7 +248,7 @@ final class PropertyFetchFinder
     /**
      * @param \PhpParser\Node\Stmt\Class_|\PhpParser\Node\Stmt\Trait_ $class
      */
-    private function isNamePropertyNameEquals(PropertyFetch $propertyFetch, string $propertyName, $class) : bool
+    private function isNamePropertyNameEquals(PropertyFetch $propertyFetch, string $propertyName, $class): bool
     {
         // early check if property fetch name is not equals with property name
         // so next check is check var name and var type only
@@ -251,7 +266,7 @@ final class PropertyFetchFinder
     /**
      * @param \PhpParser\Node\Stmt\Property|\PhpParser\Node\Param $propertyOrPromotedParam
      */
-    private function resolvePropertyName($propertyOrPromotedParam) : ?string
+    private function resolvePropertyName($propertyOrPromotedParam): ?string
     {
         if ($propertyOrPromotedParam instanceof Property) {
             return $this->nodeNameResolver->getName($propertyOrPromotedParam->props[0]);

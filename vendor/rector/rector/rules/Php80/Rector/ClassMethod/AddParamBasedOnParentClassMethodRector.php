@@ -5,21 +5,30 @@ namespace Rector\Php80\Rector\ClassMethod;
 
 use PhpParser\Comment;
 use PhpParser\Node;
+use PhpParser\Node\Arg;
+use PhpParser\Node\Attribute;
+use PhpParser\Node\AttributeGroup;
 use PhpParser\Node\ComplexType;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
+use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Param;
+use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
+use PHPStan\BetterReflection\Reflection\Adapter\ReflectionParameter;
 use PHPStan\Reflection\ClassReflection;
+use PHPStan\Reflection\ExtendedParameterReflection;
 use PHPStan\Reflection\MethodReflection;
+use PHPStan\Reflection\ParametersAcceptorSelector;
 use Rector\NodeTypeResolver\Node\AttributeKey;
-use Rector\PhpParser\AstResolver;
 use Rector\PhpParser\Node\BetterNodeFinder;
 use Rector\PhpParser\Printer\BetterStandardPrinter;
+use Rector\PHPStan\ScopeFetcher;
+use Rector\PHPStanStaticTypeMapper\Enum\TypeKind;
 use Rector\Rector\AbstractRector;
-use Rector\Reflection\ReflectionResolver;
+use Rector\StaticTypeMapper\StaticTypeMapper;
 use Rector\ValueObject\MethodName;
 use Rector\ValueObject\PhpVersionFeature;
 use Rector\VendorLocker\ParentClassMethodTypeOverrideGuard;
@@ -38,7 +47,7 @@ final class AddParamBasedOnParentClassMethodRector extends AbstractRector implem
     /**
      * @readonly
      */
-    private AstResolver $astResolver;
+    private StaticTypeMapper $staticTypeMapper;
     /**
      * @readonly
      */
@@ -47,23 +56,18 @@ final class AddParamBasedOnParentClassMethodRector extends AbstractRector implem
      * @readonly
      */
     private BetterNodeFinder $betterNodeFinder;
-    /**
-     * @readonly
-     */
-    private ReflectionResolver $reflectionResolver;
-    public function __construct(ParentClassMethodTypeOverrideGuard $parentClassMethodTypeOverrideGuard, AstResolver $astResolver, BetterStandardPrinter $betterStandardPrinter, BetterNodeFinder $betterNodeFinder, ReflectionResolver $reflectionResolver)
+    public function __construct(ParentClassMethodTypeOverrideGuard $parentClassMethodTypeOverrideGuard, StaticTypeMapper $staticTypeMapper, BetterStandardPrinter $betterStandardPrinter, BetterNodeFinder $betterNodeFinder)
     {
         $this->parentClassMethodTypeOverrideGuard = $parentClassMethodTypeOverrideGuard;
-        $this->astResolver = $astResolver;
+        $this->staticTypeMapper = $staticTypeMapper;
         $this->betterStandardPrinter = $betterStandardPrinter;
         $this->betterNodeFinder = $betterNodeFinder;
-        $this->reflectionResolver = $reflectionResolver;
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::FATAL_ERROR_ON_INCOMPATIBLE_METHOD_SIGNATURE;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Add missing parameter based on parent class method', [new CodeSample(<<<'CODE_SAMPLE'
 class A
@@ -73,7 +77,8 @@ class A
     }
 }
 
-class B extends A{
+class B extends A
+{
     public function execute()
     {
     }
@@ -87,7 +92,8 @@ class A
     }
 }
 
-class B extends A{
+class B extends A
+{
     public function execute($foo)
     {
     }
@@ -98,53 +104,73 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
-        return [ClassMethod::class];
+        return [Class_::class];
     }
     /**
-     * @param ClassMethod $node
+     * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
-        if ($this->nodeNameResolver->isName($node, MethodName::CONSTRUCT)) {
+        if ($node->extends === null && $node->implements === []) {
             return null;
         }
-        $parentMethodReflection = $this->parentClassMethodTypeOverrideGuard->getParentClassMethod($node);
-        if (!$parentMethodReflection instanceof MethodReflection) {
-            return null;
+        $hasChanged = \false;
+        foreach ($node->getMethods() as $classMethod) {
+            if ($this->isName($classMethod, MethodName::CONSTRUCT)) {
+                continue;
+            }
+            $parentMethodReflection = $this->parentClassMethodTypeOverrideGuard->getParentClassMethod($classMethod);
+            if (!$parentMethodReflection instanceof MethodReflection) {
+                continue;
+            }
+            if ($parentMethodReflection->isPrivate()) {
+                continue;
+            }
+            $scope = ScopeFetcher::fetch($node);
+            $currentClassReflection = $scope->getClassReflection();
+            $isPDO = $currentClassReflection instanceof ClassReflection && $currentClassReflection->is('PDO');
+            // It relies on phpstorm stubs that define 2 kind of query method for both php 7.4 and php 8.0
+            // @see https://github.com/JetBrains/phpstorm-stubs/blob/e2e898a29929d2f520fe95bdb2109d8fa895ba4a/PDO/PDO.php#L1096-L1126
+            if ($isPDO && $parentMethodReflection->getName() === 'query') {
+                continue;
+            }
+            $parentClassReflection = $parentMethodReflection->getDeclaringClass();
+            $nativeClassReflection = $parentClassReflection->getNativeReflection();
+            if (!$nativeClassReflection->hasMethod($parentMethodReflection->getName())) {
+                continue;
+            }
+            $currentClassMethodParams = $classMethod->getParams();
+            $parentClassMethodParams = $nativeClassReflection->getMethod($parentMethodReflection->getName())->getParameters();
+            $parentParameterReflections = ParametersAcceptorSelector::combineAcceptors($parentMethodReflection->getVariants())->getParameters();
+            $countCurrentClassMethodParams = count($currentClassMethodParams);
+            $countParentClassMethodParams = count($parentClassMethodParams);
+            if ($countCurrentClassMethodParams === $countParentClassMethodParams) {
+                continue;
+            }
+            if ($countCurrentClassMethodParams < $countParentClassMethodParams) {
+                $hasClassMethodChanged = $this->processReplaceClassMethodParams($classMethod, $currentClassMethodParams, $parentClassMethodParams, $parentParameterReflections);
+                if ($hasClassMethodChanged) {
+                    $hasChanged = \true;
+                }
+                continue;
+            }
+            $hasClassMethodChanged = $this->processAddNullDefaultParam($currentClassMethodParams, $parentClassMethodParams);
+            if ($hasClassMethodChanged) {
+                $hasChanged = \true;
+            }
         }
-        if ($parentMethodReflection->isPrivate()) {
-            return null;
+        if ($hasChanged) {
+            return $node;
         }
-        $currentClassReflection = $this->reflectionResolver->resolveClassReflection($node);
-        $isPDO = $currentClassReflection instanceof ClassReflection && $currentClassReflection->isSubclassOf('PDO');
-        // It relies on phpstorm stubs that define 2 kind of query method for both php 7.4 and php 8.0
-        // @see https://github.com/JetBrains/phpstorm-stubs/blob/e2e898a29929d2f520fe95bdb2109d8fa895ba4a/PDO/PDO.php#L1096-L1126
-        if ($isPDO && $parentMethodReflection->getName() === 'query') {
-            return null;
-        }
-        $parentClassMethod = $this->astResolver->resolveClassMethodFromMethodReflection($parentMethodReflection);
-        if (!$parentClassMethod instanceof ClassMethod) {
-            return null;
-        }
-        $currentClassMethodParams = $node->getParams();
-        $parentClassMethodParams = $parentClassMethod->getParams();
-        $countCurrentClassMethodParams = \count($currentClassMethodParams);
-        $countParentClassMethodParams = \count($parentClassMethodParams);
-        if ($countCurrentClassMethodParams === $countParentClassMethodParams) {
-            return null;
-        }
-        if ($countCurrentClassMethodParams < $countParentClassMethodParams) {
-            return $this->processReplaceClassMethodParams($node, $parentClassMethod, $currentClassMethodParams, $parentClassMethodParams);
-        }
-        return $this->processAddNullDefaultParam($node, $currentClassMethodParams, $parentClassMethodParams);
+        return null;
     }
     /**
      * @param Param[] $currentClassMethodParams
-     * @param Param[] $parentClassMethodParams
+     * @param ReflectionParameter[] $parentClassMethodParams
      */
-    private function processAddNullDefaultParam(ClassMethod $classMethod, array $currentClassMethodParams, array $parentClassMethodParams) : ?ClassMethod
+    private function processAddNullDefaultParam(array $currentClassMethodParams, array $parentClassMethodParams): bool
     {
         $hasChanged = \false;
         foreach ($currentClassMethodParams as $key => $currentClassMethodParam) {
@@ -157,76 +183,93 @@ CODE_SAMPLE
             if ($currentClassMethodParam->variadic) {
                 continue;
             }
-            $currentClassMethodParams[$key]->default = $this->nodeFactory->createNull();
+            $currentClassMethodParam->default = $this->nodeFactory->createNull();
             $hasChanged = \true;
         }
-        if (!$hasChanged) {
-            return null;
-        }
-        return $classMethod;
+        return $hasChanged;
     }
     /**
      * @param array<int, Param> $currentClassMethodParams
-     * @param array<int, Param> $parentClassMethodParams
+     * @param array<int, ReflectionParameter> $parentClassMethodParams
+     * @param array<int, ExtendedParameterReflection> $parentParameterReflections
      */
-    private function processReplaceClassMethodParams(ClassMethod $node, ClassMethod $parentClassMethod, array $currentClassMethodParams, array $parentClassMethodParams) : ?ClassMethod
+    private function processReplaceClassMethodParams(ClassMethod $classMethod, array $currentClassMethodParams, array $parentClassMethodParams, array $parentParameterReflections): bool
     {
-        $originalParams = $node->params;
+        $originalParams = $classMethod->params;
+        $hasChanged = \false;
         foreach ($parentClassMethodParams as $key => $parentClassMethodParam) {
             if (isset($currentClassMethodParams[$key])) {
-                $currentParamName = $this->nodeNameResolver->getName($currentClassMethodParams[$key]);
-                $collectParamNamesNextKey = $this->collectParamNamesNextKey($parentClassMethod, $key);
-                if (\in_array($currentParamName, $collectParamNamesNextKey, \true)) {
-                    $node->params = $originalParams;
-                    return null;
+                $currentParamName = $this->getName($currentClassMethodParams[$key]);
+                $collectParamNamesNextKey = $this->collectParamNamesNextKey($parentClassMethodParams, $key);
+                if (in_array($currentParamName, $collectParamNamesNextKey, \true)) {
+                    $classMethod->params = $originalParams;
+                    return \false;
                 }
                 continue;
             }
-            $isUsedInStmts = (bool) $this->betterNodeFinder->findFirstInFunctionLikeScoped($node, function (Node $subNode) use($parentClassMethodParam) : bool {
+            $isUsedInStmts = (bool) $this->betterNodeFinder->findFirstInFunctionLikeScoped($classMethod, function (Node $subNode) use ($parentClassMethodParam): bool {
                 if (!$subNode instanceof Variable) {
                     return \false;
                 }
-                return $this->nodeComparator->areNodesEqual($subNode, $parentClassMethodParam->var);
+                return $this->isName($subNode, $parentClassMethodParam->getName());
             });
             if ($isUsedInStmts) {
-                $node->params = $originalParams;
-                return null;
+                $classMethod->params = $originalParams;
+                return \false;
             }
-            $paramDefault = $parentClassMethodParam->default;
-            if ($paramDefault instanceof Expr) {
-                $paramDefault = $this->nodeFactory->createReprintedNode($paramDefault);
+            $paramDefault = null;
+            if ($parentClassMethodParam->isDefaultValueAvailable()) {
+                $paramDefault = $this->nodeFactory->createReprintedNode($parentClassMethodParam->getDefaultValueExpression());
             }
-            $paramName = $this->nodeNameResolver->getName($parentClassMethodParam);
-            $paramType = $this->resolveParamType($parentClassMethodParam);
-            $node->params[$key] = new Param(new Variable($paramName), $paramDefault, $paramType, $parentClassMethodParam->byRef, $parentClassMethodParam->variadic, [], $parentClassMethodParam->flags);
-            if ($parentClassMethodParam->attrGroups !== []) {
-                $attrGroupsAsComment = $this->betterStandardPrinter->print($parentClassMethodParam->attrGroups);
-                $node->params[$key]->setAttribute(AttributeKey::COMMENTS, [new Comment($attrGroupsAsComment)]);
+            $paramName = $parentClassMethodParam->getName();
+            $paramType = $this->resolveParamType($parentParameterReflections[$key] ?? null);
+            $classMethod->params[$key] = new Param(new Variable($paramName), $paramDefault, $paramType, $parentClassMethodParam->isPassedByReference(), $parentClassMethodParam->isVariadic());
+            $attributeGroups = $this->createAttributeGroups($parentClassMethodParam);
+            if ($attributeGroups !== []) {
+                $attrGroupsAsComment = $this->betterStandardPrinter->print($attributeGroups);
+                $classMethod->params[$key]->setAttribute(AttributeKey::COMMENTS, [new Comment($attrGroupsAsComment)]);
             }
+            $hasChanged = \true;
         }
-        return $node;
+        return $hasChanged;
     }
     /**
      * @return null|\PhpParser\Node\Identifier|\PhpParser\Node\Name|\PhpParser\Node\ComplexType
      */
-    private function resolveParamType(Param $param)
+    private function resolveParamType(?ExtendedParameterReflection $extendedParameterReflection)
     {
-        if (!$param->type instanceof Node) {
+        if (!$extendedParameterReflection instanceof ExtendedParameterReflection) {
             return null;
         }
-        return $this->nodeFactory->createReprintedNode($param->type);
+        return $this->staticTypeMapper->mapPHPStanTypeToPhpParserNode($extendedParameterReflection->getNativeType(), TypeKind::PARAM);
     }
     /**
+     * @param ReflectionParameter[] $parentClassMethodParams
      * @return string[]
      */
-    private function collectParamNamesNextKey(ClassMethod $classMethod, int $key) : array
+    private function collectParamNamesNextKey(array $parentClassMethodParams, int $key): array
     {
         $paramNames = [];
-        foreach ($classMethod->params as $paramKey => $param) {
+        foreach ($parentClassMethodParams as $paramKey => $param) {
             if ($paramKey > $key) {
-                $paramNames[] = $this->nodeNameResolver->getName($param);
+                $paramNames[] = $param->getName();
             }
         }
         return $paramNames;
+    }
+    /**
+     * @return AttributeGroup[]
+     */
+    private function createAttributeGroups(ReflectionParameter $reflectionParameter): array
+    {
+        $attributeGroups = [];
+        foreach (method_exists($reflectionParameter, 'getAttributes') ? $reflectionParameter->getAttributes() : [] as $reflectionAttribute) {
+            $args = [];
+            foreach ($reflectionAttribute->getArgumentsExpressions() as $name => $argumentExpression) {
+                $args[] = new Arg($this->nodeFactory->createReprintedNode($argumentExpression), \false, \false, [], is_string($name) ? new Identifier($name) : null);
+            }
+            $attributeGroups[] = new AttributeGroup([new Attribute(new FullyQualified($reflectionAttribute->getName()), $args)]);
+        }
+        return $attributeGroups;
     }
 }

@@ -3,7 +3,7 @@
 declare (strict_types=1);
 namespace Rector\TypeDeclaration\PHPStan;
 
-use RectorPrefix202502\Nette\Utils\Strings;
+use RectorPrefix202609\Nette\Utils\Strings;
 use PhpParser\Node;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Stmt\GroupUse;
@@ -52,18 +52,20 @@ final class ObjectTypeSpecifier
      */
     public function narrowToFullyQualifiedOrAliasedObjectType(Node $node, ObjectType $objectType, ?\PHPStan\Analyser\Scope $scope, bool $withPreslash = \false)
     {
-        $className = \ltrim($objectType->getClassName(), '\\');
-        if (\strncmp($objectType->getClassName(), '\\', \strlen('\\')) === 0) {
+        $className = ltrim($objectType->getClassName(), '\\');
+        if (strncmp($objectType->getClassName(), '\\', strlen('\\')) === 0) {
             return new FullyQualifiedObjectType($className);
         }
         $uses = $this->useImportsResolver->resolve();
-        $aliasedObjectType = $this->matchAliasedObjectType($objectType, $uses);
-        if ($aliasedObjectType instanceof AliasedObjectType) {
-            return $aliasedObjectType;
-        }
-        $shortenedObjectType = $this->matchShortenedObjectType($objectType, $uses);
-        if ($shortenedObjectType !== null) {
-            return $shortenedObjectType;
+        if (!$withPreslash) {
+            $aliasedObjectType = $this->matchAliasedObjectType($objectType, $uses);
+            if ($aliasedObjectType instanceof AliasedObjectType) {
+                return $aliasedObjectType;
+            }
+            $shortenedObjectType = $this->matchShortenedObjectType($objectType, $uses);
+            if ($shortenedObjectType !== null) {
+                return $shortenedObjectType;
+            }
         }
         if ($this->reflectionProvider->hasClass($className)) {
             return new FullyQualifiedObjectType($className);
@@ -98,7 +100,7 @@ final class ObjectTypeSpecifier
         // invalid type
         return $this->resolveNamespacedNonExistingObjectType($namespaceName, $className, $withPreslash);
     }
-    private function resolveNamespacedNonExistingObjectType(?string $namespacedName, string $className, bool $withPreslash) : NonExistingObjectType
+    private function resolveNamespacedNonExistingObjectType(?string $namespacedName, string $className, bool $withPreslash): NonExistingObjectType
     {
         if ($namespacedName === null) {
             return new NonExistingObjectType($className);
@@ -106,7 +108,7 @@ final class ObjectTypeSpecifier
         if ($withPreslash) {
             return new NonExistingObjectType($className);
         }
-        if (\strpos($className, '\\') !== \false) {
+        if (strpos($className, '\\') !== \false) {
             return new NonExistingObjectType($className);
         }
         return new NonExistingObjectType($namespacedName . '\\' . $className);
@@ -114,7 +116,7 @@ final class ObjectTypeSpecifier
     /**
      * @param array<Use_|GroupUse> $uses
      */
-    private function matchAliasedObjectType(ObjectType $objectType, array $uses) : ?AliasedObjectType
+    private function matchAliasedObjectType(ObjectType $objectType, array $uses): ?AliasedObjectType
     {
         if ($uses === []) {
             return null;
@@ -137,7 +139,7 @@ final class ObjectTypeSpecifier
         }
         return null;
     }
-    private function processAliasedObject(string $alias, string $className, string $useName, string $fullyQualifiedName) : ?AliasedObjectType
+    private function processAliasedObject(string $alias, string $className, string $useName, string $fullyQualifiedName): ?AliasedObjectType
     {
         // A. is alias in use statement matching this class alias
         if ($alias === $className) {
@@ -147,8 +149,8 @@ final class ObjectTypeSpecifier
         if ($useName === $className) {
             return new AliasedObjectType($className, $fullyQualifiedName);
         }
-        if (\strncmp($className, $alias . '\\', \strlen($alias . '\\')) === 0) {
-            return new AliasedObjectType($className, $fullyQualifiedName . \ltrim($className, $alias));
+        if (strncmp($className, $alias . '\\', strlen($alias . '\\')) === 0) {
+            return new AliasedObjectType($className, $fullyQualifiedName . ltrim($className, $alias));
         }
         return null;
     }
@@ -186,13 +188,13 @@ final class ObjectTypeSpecifier
         }
         return null;
     }
-    private function matchPartialNamespaceObjectType(string $prefix, ObjectType $objectType, UseItem $useItem) : ?ShortenedObjectType
+    private function matchPartialNamespaceObjectType(string $prefix, ObjectType $objectType, UseItem $useItem): ?ShortenedObjectType
     {
         if ($objectType->getClassName() === $useItem->name->getLast()) {
             return new ShortenedObjectType($objectType->getClassName(), $prefix . $useItem->name->toString());
         }
         // partial namespace
-        if (\strncmp($objectType->getClassName(), $useItem->name->getLast() . '\\', \strlen($useItem->name->getLast() . '\\')) !== 0) {
+        if (strncmp($objectType->getClassName(), $useItem->name->getLast() . '\\', strlen($useItem->name->getLast() . '\\')) !== 0) {
             return null;
         }
         $classNameWithoutLastUsePart = Strings::after($objectType->getClassName(), '\\', 1);
@@ -205,7 +207,7 @@ final class ObjectTypeSpecifier
     /**
      * @return FullyQualifiedObjectType|ShortenedObjectType|null
      */
-    private function matchClassWithLastUseImportPart(string $prefix, ObjectType $objectType, UseItem $useItem) : ?ObjectType
+    private function matchClassWithLastUseImportPart(string $prefix, ObjectType $objectType, UseItem $useItem): ?ObjectType
     {
         if ($useItem->name->getLast() !== $objectType->getClassName()) {
             return null;

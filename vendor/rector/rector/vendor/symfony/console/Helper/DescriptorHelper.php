@@ -8,16 +8,16 @@
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\Symfony\Component\Console\Helper;
+namespace RectorPrefix202609\Symfony\Component\Console\Helper;
 
-use RectorPrefix202502\Symfony\Component\Console\Descriptor\DescriptorInterface;
-use RectorPrefix202502\Symfony\Component\Console\Descriptor\JsonDescriptor;
-use RectorPrefix202502\Symfony\Component\Console\Descriptor\MarkdownDescriptor;
-use RectorPrefix202502\Symfony\Component\Console\Descriptor\ReStructuredTextDescriptor;
-use RectorPrefix202502\Symfony\Component\Console\Descriptor\TextDescriptor;
-use RectorPrefix202502\Symfony\Component\Console\Descriptor\XmlDescriptor;
-use RectorPrefix202502\Symfony\Component\Console\Exception\InvalidArgumentException;
-use RectorPrefix202502\Symfony\Component\Console\Output\OutputInterface;
+use RectorPrefix202609\Symfony\Component\Console\Descriptor\DescriptorInterface;
+use RectorPrefix202609\Symfony\Component\Console\Descriptor\JsonDescriptor;
+use RectorPrefix202609\Symfony\Component\Console\Descriptor\MarkdownDescriptor;
+use RectorPrefix202609\Symfony\Component\Console\Descriptor\ReStructuredTextDescriptor;
+use RectorPrefix202609\Symfony\Component\Console\Descriptor\TextDescriptor;
+use RectorPrefix202609\Symfony\Component\Console\Descriptor\XmlDescriptor;
+use RectorPrefix202609\Symfony\Component\Console\Exception\InvalidArgumentException;
+use RectorPrefix202609\Symfony\Component\Console\Output\OutputInterface;
 /**
  * This class adds helper method to describe objects in various formats.
  *
@@ -46,7 +46,7 @@ class DescriptorHelper extends Helper
      */
     public function describe(OutputInterface $output, ?object $object, array $options = [])
     {
-        $options = \array_merge(['raw_text' => \false, 'format' => 'txt'], $options);
+        $options = array_merge(['raw_text' => \false, 'format' => 'txt'], $options);
         if (!isset($this->descriptors[$options['format']])) {
             throw new InvalidArgumentException(\sprintf('Unsupported format "%s".', $options['format']));
         }
@@ -63,12 +63,12 @@ class DescriptorHelper extends Helper
         $this->descriptors[$format] = $descriptor;
         return $this;
     }
-    public function getName() : string
+    public function getName(): string
     {
         return 'descriptor';
     }
-    public function getFormats() : array
+    public function getFormats(): array
     {
-        return \array_keys($this->descriptors);
+        return array_keys($this->descriptors);
     }
 }

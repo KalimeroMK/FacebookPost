@@ -3,10 +3,10 @@
 declare (strict_types=1);
 namespace Rector\FileSystem;
 
-use RectorPrefix202502\Nette\Utils\Strings;
+use RectorPrefix202609\Nette\Utils\Strings;
 use Rector\Skipper\FileSystem\PathNormalizer;
-use RectorPrefix202502\Symfony\Component\Filesystem\Filesystem;
-use RectorPrefix202502\Webmozart\Assert\Assert;
+use RectorPrefix202609\Symfony\Component\Filesystem\Filesystem;
+use RectorPrefix202609\Webmozart\Assert\Assert;
 /**
  * @see \Rector\Tests\FileSystem\FilePathHelperTest
  */
@@ -20,7 +20,7 @@ final class FilePathHelper
      * @see https://regex101.com/r/d4F5Fm/1
      * @var string
      */
-    private const SCHEME_PATH_REGEX = '#^([a-z]+)\\:\\/\\/(.+)#';
+    private const SCHEME_PATH_REGEX = '#^([a-z]+)\:\/\/(.+)#';
     /**
      * @see https://regex101.com/r/no28vw/1
      * @var string
@@ -34,18 +34,18 @@ final class FilePathHelper
     {
         $this->filesystem = $filesystem;
     }
-    public function relativePath(string $fileRealPath) : string
+    public function relativePath(string $fileRealPath): string
     {
         if (!$this->filesystem->isAbsolutePath($fileRealPath)) {
             return $fileRealPath;
         }
-        return $this->relativeFilePathFromDirectory($fileRealPath, \getcwd());
+        return $this->relativeFilePathFromDirectory($fileRealPath, getcwd());
     }
     /**
      * Used from
      * https://github.com/phpstan/phpstan-src/blob/02425e61aa48f0668b4efb3e73d52ad544048f65/src/File/FileHelper.php#L40, with custom modifications
      */
-    public function normalizePathAndSchema(string $originalPath) : string
+    public function normalizePathAndSchema(string $originalPath): string
     {
         $directorySeparator = \DIRECTORY_SEPARATOR;
         $matches = Strings::match($originalPath, self::SCHEME_PATH_REGEX);
@@ -55,26 +55,27 @@ final class FilePathHelper
             $scheme = self::SCHEME_UNDEFINED;
             $path = $originalPath;
         }
-        $normalizedPath = PathNormalizer::normalize((string) $path);
+        $normalizedPath = PathNormalizer::normalize($path);
         $path = Strings::replace($normalizedPath, self::TWO_AND_MORE_SLASHES_REGEX, '/');
-        $pathRoot = \strncmp($path, '/', \strlen('/')) === 0 ? $directorySeparator : '';
-        $pathParts = \explode('/', \trim($path, '/'));
+        $pathRoot = strncmp($path, '/', strlen('/')) === 0 ? $directorySeparator : '';
+        $pathParts = explode('/', trim($path, '/'));
+        /** @var string $scheme */
         $normalizedPathParts = $this->normalizePathParts($pathParts, $scheme);
         $pathStart = $scheme !== self::SCHEME_UNDEFINED ? $scheme . '://' : '';
-        return PathNormalizer::normalize($pathStart . $pathRoot . \implode($directorySeparator, $normalizedPathParts));
+        return PathNormalizer::normalize($pathStart . $pathRoot . implode($directorySeparator, $normalizedPathParts));
     }
-    private function relativeFilePathFromDirectory(string $fileRealPath, string $directory) : string
+    private function relativeFilePathFromDirectory(string $fileRealPath, string $directory): string
     {
         Assert::directory($directory);
         $normalizedFileRealPath = PathNormalizer::normalize($fileRealPath);
         $relativeFilePath = $this->filesystem->makePathRelative($normalizedFileRealPath, $directory);
-        return \rtrim($relativeFilePath, '/');
+        return rtrim($relativeFilePath, '/');
     }
     /**
      * @param string[] $pathParts
      * @return string[]
      */
-    private function normalizePathParts(array $pathParts, string $scheme) : array
+    private function normalizePathParts(array $pathParts, string $scheme): array
     {
         $normalizedPathParts = [];
         foreach ($pathParts as $pathPart) {
@@ -86,11 +87,11 @@ final class FilePathHelper
                 continue;
             }
             /** @var string $removedPart */
-            $removedPart = \array_pop($normalizedPathParts);
+            $removedPart = array_pop($normalizedPathParts);
             if ($scheme !== 'phar') {
                 continue;
             }
-            if (\substr_compare($removedPart, '.phar', -\strlen('.phar')) !== 0) {
+            if (substr_compare($removedPart, '.phar', -strlen('.phar')) !== 0) {
                 continue;
             }
             $scheme = self::SCHEME_UNDEFINED;

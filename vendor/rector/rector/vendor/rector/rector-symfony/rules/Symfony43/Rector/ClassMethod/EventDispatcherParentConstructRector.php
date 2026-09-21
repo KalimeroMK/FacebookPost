@@ -13,12 +13,14 @@ use Rector\PhpParser\Node\BetterNodeFinder;
 use Rector\PHPStan\ScopeFetcher;
 use Rector\Rector\AbstractRector;
 use Rector\ValueObject\MethodName;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
  * @see \Rector\Symfony\Tests\Symfony43\Rector\ClassMethod\EventDispatcherParentConstructRector\EventDispatcherParentConstructRectorTest
  */
-final class EventDispatcherParentConstructRector extends AbstractRector
+final class EventDispatcherParentConstructRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @readonly
@@ -28,7 +30,11 @@ final class EventDispatcherParentConstructRector extends AbstractRector
     {
         $this->betterNodeFinder = $betterNodeFinder;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('symfony/event-dispatcher', '>=4.3');
+    }
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Removes parent construct method call in EventDispatcher class', [new CodeSample(<<<'CODE_SAMPLE'
 use Symfony\Component\EventDispatcher\EventDispatcher;
@@ -59,14 +65,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [ClassMethod::class];
     }
     /**
      * @param ClassMethod $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         $scope = ScopeFetcher::fetch($node);
         if (!$scope->isInClass()) {
@@ -76,7 +82,7 @@ CODE_SAMPLE
             return null;
         }
         $classReflection = $scope->getClassReflection();
-        if (!$classReflection->isSubclassOf('Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface')) {
+        if (!$classReflection->is('Symfony\Contracts\EventDispatcher\EventDispatcherInterface')) {
             return null;
         }
         if (!$classReflection->getParentClass() instanceof ClassReflection) {
@@ -88,17 +94,17 @@ CODE_SAMPLE
         $node->stmts[] = $this->createParentStaticCall(MethodName::CONSTRUCT);
         return $node;
     }
-    private function createParentStaticCall(string $method) : Expression
+    private function createParentStaticCall(string $method): Expression
     {
         $staticCall = $this->nodeFactory->createStaticCall(ObjectReference::PARENT, $method);
         return new Expression($staticCall);
     }
     /**
-     * Looks for "parent::<methodName>
+     * Looks for "parent::<methodName>"
      */
-    private function hasParentCallOfMethod(ClassMethod $classMethod, string $method) : bool
+    private function hasParentCallOfMethod(ClassMethod $classMethod, string $method): bool
     {
-        return (bool) $this->betterNodeFinder->findFirst((array) $classMethod->stmts, function (Node $node) use($method) : bool {
+        return (bool) $this->betterNodeFinder->findFirst((array) $classMethod->stmts, function (Node $node) use ($method): bool {
             if (!$node instanceof StaticCall) {
                 return \false;
             }

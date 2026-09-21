@@ -10,9 +10,12 @@ use PhpParser\Node\Expr\ClassConstFetch;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Scalar\InterpolatedString;
+use PhpParser\Node\Scalar\String_;
 use PHPStan\Type\BooleanType;
 use PHPStan\Type\Constant\ConstantArrayType;
 use PHPStan\Type\Constant\ConstantBooleanType;
+use PHPStan\Type\Constant\ConstantIntegerType;
+use PHPStan\Type\Constant\ConstantStringType;
 use PHPStan\Type\FloatType;
 use PHPStan\Type\IntegerType;
 use PHPStan\Type\MixedType;
@@ -21,6 +24,7 @@ use PHPStan\Type\ObjectType;
 use PHPStan\Type\StringType;
 use PHPStan\Type\Type;
 use PHPStan\Type\TypeCombinator;
+use PHPStan\Type\UnionType;
 use Rector\PHPUnit\NodeAnalyzer\IdentifierManipulator;
 use Rector\PHPUnit\NodeAnalyzer\TestsNodeAnalyzer;
 use Rector\Rector\AbstractRector;
@@ -56,26 +60,26 @@ final class AssertEqualsToSameRector extends AbstractRector
         $this->identifierManipulator = $identifierManipulator;
         $this->testsNodeAnalyzer = $testsNodeAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Turns `assertEquals()` into stricter `assertSame()` for scalar values in PHPUnit TestCase', [new CodeSample('$this->assertEquals(2, $result);', '$this->assertSame(2, $result);')]);
     }
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [MethodCall::class, StaticCall::class];
     }
     /**
      * @param MethodCall|StaticCall $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$this->testsNodeAnalyzer->isInTestClass($node)) {
             return null;
         }
-        $methodNames = \array_keys(self::RENAME_METHODS_MAP);
+        $methodNames = array_keys(self::RENAME_METHODS_MAP);
         if (!$this->isNames($node->name, $methodNames)) {
             return null;
         }
@@ -90,7 +94,7 @@ final class AssertEqualsToSameRector extends AbstractRector
         if (!$this->isScalarOrEnumValue($firstArgValue)) {
             return null;
         }
-        if ($this->shouldSkipConstantArrayType($firstArgValue)) {
+        if ($this->shouldSkipConstantArrayType($firstArgValue, $args[1]->value)) {
             return null;
         }
         if ($this->shouldSkipLooseComparison($args)) {
@@ -102,10 +106,14 @@ final class AssertEqualsToSameRector extends AbstractRector
     /**
      * @param Arg[] $args
      */
-    private function shouldSkipLooseComparison(array $args) : bool
+    private function shouldSkipLooseComparison(array $args): bool
     {
         $firstArgType = $this->nodeTypeResolver->getNativeType($args[0]->value);
         $secondArgType = TypeCombinator::removeNull($this->nodeTypeResolver->getNativeType($args[1]->value));
+        // union type can hold different types that assertEquals() compares loosely, keep it safe
+        if ($secondArgType instanceof UnionType) {
+            return \true;
+        }
         // loose comparison
         if ($firstArgType instanceof IntegerType && ($secondArgType instanceof FloatType || $secondArgType instanceof StringType)) {
             return \true;
@@ -121,17 +129,45 @@ final class AssertEqualsToSameRector extends AbstractRector
             return \true;
         }
         // can happen with magic process
-        return $secondArgType instanceof NeverType;
+        if ($secondArgType instanceof NeverType) {
+            return \true;
+        }
+        return $args[0]->value instanceof String_ && is_numeric($args[0]->value->value);
     }
-    private function shouldSkipConstantArrayType(Expr $expr) : bool
+    private function shouldSkipConstantArrayType(Expr $expectedExpr, Expr $actualExpr): bool
     {
-        $type = $this->nodeTypeResolver->getNativeType($expr);
-        if (!$type instanceof ConstantArrayType) {
+        $expectedType = $this->nodeTypeResolver->getNativeType($expectedExpr);
+        if (!$expectedType instanceof ConstantArrayType) {
             return \false;
         }
-        return $this->hasNonScalarType($type);
+        if ($this->hasNonScalarType($expectedType)) {
+            return \true;
+        }
+        // assertSame() compares arrays strictly, including key order, while assertEquals() ignores it;
+        // only safe to narrow when the actual value is a constant array with the very same keys in the same order
+        $actualType = $this->nodeTypeResolver->getNativeType($actualExpr);
+        if (!$actualType instanceof ConstantArrayType) {
+            return \true;
+        }
+        return !$this->hasSameKeyOrder($expectedType, $actualType);
     }
-    private function hasNonScalarType(ConstantArrayType $constantArrayType) : bool
+    private function hasSameKeyOrder(ConstantArrayType $expectedType, ConstantArrayType $actualType): bool
+    {
+        $expectedKeyTypes = $expectedType->getKeyTypes();
+        $actualKeyTypes = $actualType->getKeyTypes();
+        if (count($expectedKeyTypes) !== count($actualKeyTypes)) {
+            return \false;
+        }
+        $found = \true;
+        foreach ($expectedKeyTypes as $position => $expectedKeyType) {
+            if (!$expectedKeyType->equals($actualKeyTypes[$position])) {
+                $found = \false;
+                break;
+            }
+        }
+        return $found;
+    }
+    private function hasNonScalarType(ConstantArrayType $constantArrayType): bool
     {
         $valueTypes = $constantArrayType->getValueTypes();
         // empty array
@@ -149,7 +185,7 @@ final class AssertEqualsToSameRector extends AbstractRector
         }
         return \false;
     }
-    private function isScalarType(Type $valueNodeType) : bool
+    private function isScalarType(Type $valueNodeType): bool
     {
         foreach (self::SCALAR_TYPES as $scalarType) {
             if ($valueNodeType instanceof $scalarType) {
@@ -161,7 +197,7 @@ final class AssertEqualsToSameRector extends AbstractRector
         }
         return $valueNodeType instanceof BooleanType;
     }
-    private function isScalarOrEnumValue(Expr $expr) : bool
+    private function isScalarOrEnumValue(Expr $expr): bool
     {
         if ($expr instanceof ClassConstFetch) {
             return \true;

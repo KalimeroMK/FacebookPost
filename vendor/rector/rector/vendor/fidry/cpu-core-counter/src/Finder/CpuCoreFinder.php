@@ -9,7 +9,7 @@
  * file that was distributed with this source code.
  */
 declare (strict_types=1);
-namespace RectorPrefix202502\Fidry\CpuCoreCounter\Finder;
+namespace RectorPrefix202609\Fidry\CpuCoreCounter\Finder;
 
 interface CpuCoreFinder
 {
@@ -21,13 +21,13 @@ interface CpuCoreFinder
      * information for the unit tests, since integration tests are quite complicated
      * as dependent on complex infrastructures.
      */
-    public function diagnose() : string;
+    public function diagnose(): string;
     /**
      * Find the number of CPU cores. If it could not find it, returns null. The
      * means used to find the cores are at the implementation discretion.
      *
      * @return positive-int|null
      */
-    public function find() : ?int;
-    public function toString() : string;
+    public function find(): ?int;
+    public function toString(): string;
 }

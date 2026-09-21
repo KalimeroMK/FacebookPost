@@ -4,6 +4,7 @@ declare (strict_types=1);
 namespace Rector\DowngradePhp81\Rector\FunctionLike;
 
 use PhpParser\Node;
+use PhpParser\Node\Expr\ArrowFunction;
 use PhpParser\Node\Expr\Closure;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Function_;
@@ -30,11 +31,11 @@ final class DowngradeNeverTypeDeclarationRector extends AbstractRector
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
-        return [Function_::class, ClassMethod::class, Closure::class];
+        return [Function_::class, ClassMethod::class, Closure::class, ArrowFunction::class];
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Remove "never" return type, add a "@return never" tag instead', [new CodeSample(<<<'CODE_SAMPLE'
 function someFunction(): never
@@ -52,9 +53,9 @@ CODE_SAMPLE
 )]);
     }
     /**
-     * @param ClassMethod|Closure|Function_ $node
+     * @param ArrowFunction|ClassMethod|Closure|Function_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         $neverType = new NeverType();
         if (!$this->phpDocFromTypeDeclarationDecorator->decorateReturnWithSpecificType($node, $neverType)) {

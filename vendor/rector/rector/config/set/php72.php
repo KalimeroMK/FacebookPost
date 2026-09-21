@@ -1,7 +1,7 @@
 <?php
 
 declare (strict_types=1);
-namespace RectorPrefix202502;
+namespace RectorPrefix202609;
 
 use Rector\Config\RectorConfig;
 use Rector\Php72\Rector\Assign\ListEachRector;
@@ -14,13 +14,13 @@ use Rector\Php72\Rector\FuncCall\StringsAssertNakedRector;
 use Rector\Php72\Rector\Unset_\UnsetCastRector;
 use Rector\Php72\Rector\While_\WhileEachToForeachRector;
 use Rector\Renaming\Rector\FuncCall\RenameFunctionRector;
-return static function (RectorConfig $rectorConfig) : void {
+return static function (RectorConfig $rectorConfig): void {
     $rectorConfig->ruleWithConfiguration(RenameFunctionRector::class, [
         # and imagewbmp
         'jpeg2wbmp' => 'imagecreatefromjpeg',
         # or imagewbmp
         'png2wbmp' => 'imagecreatefrompng',
-        #migration72.deprecated.gmp_random-function
+        # migration72.deprecated.gmp_random-function
         # http://php.net/manual/en/migration72.deprecated.php
         # or gmp_random_range
         'gmp_random' => 'gmp_random_bits',

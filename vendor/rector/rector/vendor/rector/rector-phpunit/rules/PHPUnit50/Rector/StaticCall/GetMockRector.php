@@ -11,6 +11,8 @@ use PHPStan\Reflection\ClassReflection;
 use Rector\PHPUnit\NodeAnalyzer\TestsNodeAnalyzer;
 use Rector\Rector\AbstractRector;
 use Rector\Reflection\ReflectionResolver;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -19,7 +21,7 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  *
  * @see \Rector\PHPUnit\Tests\PHPUnit50\Rector\StaticCall\GetMockRector\GetMockRectorTest
  */
-final class GetMockRector extends AbstractRector
+final class GetMockRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @readonly
@@ -29,12 +31,19 @@ final class GetMockRector extends AbstractRector
      * @readonly
      */
     private ReflectionResolver $reflectionResolver;
+    /**
+     * createMock() was added in PHPUnit 5.4
+     */
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('phpunit/phpunit', '>=5.4');
+    }
     public function __construct(TestsNodeAnalyzer $testsNodeAnalyzer, ReflectionResolver $reflectionResolver)
     {
         $this->testsNodeAnalyzer = $testsNodeAnalyzer;
         $this->reflectionResolver = $reflectionResolver;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Turns getMock*() methods to createMock()', [new CodeSample(<<<'CODE_SAMPLE'
 use PHPUnit\Framework\TestCase;
@@ -63,14 +72,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [MethodCall::class, StaticCall::class];
     }
     /**
      * @param MethodCall|StaticCall $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$this->testsNodeAnalyzer->isPHPUnitMethodCallNames($node, ['getMock', 'getMockWithoutInvokingTheOriginalConstructor'])) {
             return null;
@@ -79,14 +88,14 @@ CODE_SAMPLE
             return null;
         }
         $classReflection = $this->reflectionResolver->resolveClassReflectionSourceObject($node);
-        if ($classReflection instanceof ClassReflection && $classReflection->getName() !== 'PHPUnit\\Framework\\TestCase') {
+        if ($classReflection instanceof ClassReflection && $classReflection->getName() !== 'PHPUnit\Framework\TestCase') {
             return null;
         }
         if ($node->isFirstClassCallable()) {
             return null;
         }
         // narrow args to one
-        if (\count($node->args) > 1) {
+        if (count($node->args) > 1) {
             $node->args = [$node->getArgs()[0]];
         }
         $node->name = new Identifier('createMock');

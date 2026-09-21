@@ -3,7 +3,7 @@
 declare (strict_types=1);
 namespace Rector\Php81\NodeFactory;
 
-use RectorPrefix202502\Nette\Utils\Strings;
+use RectorPrefix202609\Nette\Utils\Strings;
 use PhpParser\BuilderFactory;
 use PhpParser\Node\ArrayItem;
 use PhpParser\Node\Expr\Array_;
@@ -45,16 +45,16 @@ final class EnumFactory
      */
     private BetterNodeFinder $betterNodeFinder;
     /**
-     * @var string
      * @see https://stackoverflow.com/a/2560017
      * @see https://regex101.com/r/2xEQVj/1 for changing iso9001 to iso_9001
      * @see https://regex101.com/r/Ykm6ub/1 for changing XMLParser to XML_Parser
      * @see https://regex101.com/r/Zv4JhD/1 for changing needsReview to needs_Review
+     * @var string
      */
     private const PASCAL_CASE_TO_UNDERSCORE_REGEX = '/(?<=[A-Z])(?=[A-Z][a-z])|(?<=[^A-Z])(?=[A-Z])|(?<=[A-Za-z])(?=[^A-Za-z])/';
     /**
-     * @var string
      * @see https://regex101.com/r/FneU33/1
+     * @var string
      */
     private const MULTI_UNDERSCORES_REGEX = '#_{2,}#';
     public function __construct(NodeNameResolver $nodeNameResolver, PhpDocInfoFactory $phpDocInfoFactory, BuilderFactory $builderFactory, ValueResolver $valueResolver, BetterNodeFinder $betterNodeFinder)
@@ -65,7 +65,7 @@ final class EnumFactory
         $this->valueResolver = $valueResolver;
         $this->betterNodeFinder = $betterNodeFinder;
     }
-    public function createFromClass(Class_ $class) : Enum_
+    public function createFromClass(Class_ $class): Enum_
     {
         $shortClassName = $this->nodeNameResolver->getShortName($class);
         $enum = new Enum_($shortClassName, [], ['startLine' => $class->getStartLine(), 'endLine' => $class->getEndLine()]);
@@ -74,16 +74,16 @@ final class EnumFactory
         $enum->stmts = $class->getTraitUses();
         if ($constants !== []) {
             $value = $this->valueResolver->getValue($constants[0]->consts[0]->value);
-            $enum->scalarType = \is_string($value) ? new Identifier('string') : new Identifier('int');
+            $enum->scalarType = is_string($value) ? new Identifier('string') : new Identifier('int');
             // constant to cases
             foreach ($constants as $constant) {
                 $enum->stmts[] = $this->createEnumCaseFromConst($constant);
             }
         }
-        $enum->stmts = \array_merge($enum->stmts, $class->getMethods());
+        $enum->stmts = array_merge($enum->stmts, $class->getMethods());
         return $enum;
     }
-    public function createFromSpatieClass(Class_ $class, bool $enumNameInSnakeCase = \false) : Enum_
+    public function createFromSpatieClass(Class_ $class, bool $enumNameInSnakeCase = \false): Enum_
     {
         $shortClassName = $this->nodeNameResolver->getShortName($class);
         $enum = new Enum_($shortClassName, [], ['startLine' => $class->getStartLine(), 'endLine' => $class->getEndLine()]);
@@ -101,7 +101,7 @@ final class EnumFactory
         }
         return $enum;
     }
-    private function createEnumCaseFromConst(ClassConst $classConst) : EnumCase
+    private function createEnumCaseFromConst(ClassConst $classConst): EnumCase
     {
         $constConst = $classConst->consts[0];
         $enumCase = new EnumCase($constConst->name, $constConst->value, [], ['startLine' => $constConst->getStartLine(), 'endLine' => $constConst->getEndLine()]);
@@ -113,16 +113,16 @@ final class EnumFactory
     /**
      * @param array<int|string, mixed> $mapping
      */
-    private function createEnumCaseFromDocComment(PhpDocTagNode $phpDocTagNode, Class_ $class, array $mapping = [], bool $enumNameInSnakeCase = \false) : EnumCase
+    private function createEnumCaseFromDocComment(PhpDocTagNode $phpDocTagNode, Class_ $class, array $mapping = [], bool $enumNameInSnakeCase = \false): EnumCase
     {
         /** @var MethodTagValueNode $nodeValue */
         $nodeValue = $phpDocTagNode->value;
         $enumValue = $mapping[$nodeValue->methodName] ?? $nodeValue->methodName;
         if ($enumNameInSnakeCase) {
-            $enumName = \strtoupper(Strings::replace($nodeValue->methodName, self::PASCAL_CASE_TO_UNDERSCORE_REGEX, '_$0'));
+            $enumName = strtoupper(Strings::replace($nodeValue->methodName, self::PASCAL_CASE_TO_UNDERSCORE_REGEX, '_$0'));
             $enumName = Strings::replace($enumName, self::MULTI_UNDERSCORES_REGEX, '_');
         } else {
-            $enumName = \strtoupper($nodeValue->methodName);
+            $enumName = strtoupper($nodeValue->methodName);
         }
         $enumExpr = $this->builderFactory->val($enumValue);
         return new EnumCase($enumName, $enumExpr, [], ['startLine' => $class->getStartLine(), 'endLine' => $class->getEndLine()]);
@@ -130,7 +130,7 @@ final class EnumFactory
     /**
      * @return array<int|string, mixed>
      */
-    private function generateMappingFromClass(Class_ $class) : array
+    private function generateMappingFromClass(Class_ $class): array
     {
         $classMethod = $class->getMethod('values');
         if (!$classMethod instanceof ClassMethod) {
@@ -152,7 +152,7 @@ final class EnumFactory
      * @param array<int|string, mixed> $mapping
      * @return array<int|string, mixed>
      */
-    private function collectMappings(array $items, array $mapping) : array
+    private function collectMappings(array $items, array $mapping): array
     {
         foreach ($items as $item) {
             if (!$item instanceof ArrayItem) {
@@ -171,13 +171,13 @@ final class EnumFactory
     /**
      * @param array<int|string, mixed> $mapping
      */
-    private function getIdentifierTypeFromMappings(array $mapping) : string
+    private function getIdentifierTypeFromMappings(array $mapping): string
     {
-        $callableGetType = static fn($value): string => \gettype($value);
-        $valueTypes = \array_map($callableGetType, $mapping);
-        $uniqueValueTypes = \array_unique($valueTypes);
-        if (\count($uniqueValueTypes) === 1) {
-            $identifierType = \reset($uniqueValueTypes);
+        $callableGetType = \Closure::fromCallable('gettype');
+        $valueTypes = array_map($callableGetType, $mapping);
+        $uniqueValueTypes = array_unique($valueTypes);
+        if (count($uniqueValueTypes) === 1) {
+            $identifierType = reset($uniqueValueTypes);
             if ($identifierType === 'integer') {
                 $identifierType = 'int';
             }

@@ -3,11 +3,11 @@
 declare (strict_types=1);
 namespace Rector\RectorInstaller;
 
-use RectorPrefix202502\Composer\Installer\InstallationManager;
-use RectorPrefix202502\Composer\IO\IOInterface;
-use RectorPrefix202502\Composer\Package\PackageInterface;
-use RectorPrefix202502\Composer\Repository\InstalledRepositoryInterface;
-use RectorPrefix202502\Composer\Util\Filesystem as ComposerFilesystem;
+use RectorPrefix202609\Composer\Installer\InstallationManager;
+use RectorPrefix202609\Composer\IO\IOInterface;
+use RectorPrefix202609\Composer\Package\PackageInterface;
+use RectorPrefix202609\Composer\Repository\InstalledRepositoryInterface;
+use RectorPrefix202609\Composer\Util\Filesystem as ComposerFilesystem;
 /**
  * @see \Rector\RectorInstaller\Tests\PluginInstallerTest
  */
@@ -57,7 +57,7 @@ CODE_SAMPLE;
         $this->composerFilesystem = $composerFilesystem;
         $this->configurationFile = $configurationFile;
     }
-    public function install() : void
+    public function install(): void
     {
         $oldGeneratedConfigFileHash = null;
         if ($this->filesystem->isFile($this->configurationFile)) {
@@ -70,22 +70,22 @@ CODE_SAMPLE;
                 continue;
             }
             $absoluteInstallPath = $this->installationManager->getInstallPath($package);
-            $data[$package->getName()] = ['install_path' => $absoluteInstallPath, 'relative_install_path' => $this->composerFilesystem->findShortestPath(\dirname($this->configurationFile), $absoluteInstallPath, \true), 'extra' => $package->getExtra()[self::RECTOR_EXTRA_KEY] ?? null, 'version' => $package->getFullPrettyVersion()];
+            $data[$package->getName()] = ['install_path' => $absoluteInstallPath, 'relative_install_path' => $this->composerFilesystem->findShortestPath(dirname($this->configurationFile), $absoluteInstallPath, \true), 'extra' => $package->getExtra()[self::RECTOR_EXTRA_KEY] ?? null, 'version' => $package->getFullPrettyVersion()];
             $installedPackages[$package->getName()] = \true;
         }
-        \ksort($data);
-        \ksort($installedPackages);
-        $generatedConfigFileContents = \sprintf(self::$generatedFileTemplate, \var_export($data, \true), \true);
+        ksort($data);
+        ksort($installedPackages);
+        $generatedConfigFileContents = sprintf(self::$generatedFileTemplate, var_export($data, \true), \true);
         if ($this->filesystem->hashEquals((string) $oldGeneratedConfigFileHash, $generatedConfigFileContents)) {
             return;
         }
         $this->filesystem->writeFile($this->configurationFile, $generatedConfigFileContents);
         $this->io->write('<info>rector/rector-installer:</info> Extensions installed');
-        foreach (\array_keys($installedPackages) as $name) {
-            $this->io->write(\sprintf('> <info>%s:</info> installed', $name));
+        foreach (array_keys($installedPackages) as $name) {
+            $this->io->write(sprintf('> <info>%s:</info> installed', $name));
         }
     }
-    private function shouldSkip(PackageInterface $package) : bool
+    private function shouldSkip(PackageInterface $package): bool
     {
         if ($package->getType() === self::RECTOR_EXTENSION_TYPE) {
             return \false;

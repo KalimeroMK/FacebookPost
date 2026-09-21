@@ -8,9 +8,9 @@
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\Symfony\Contracts\Service;
+namespace RectorPrefix202609\Symfony\Contracts\Service;
 
-use RectorPrefix202502\Symfony\Contracts\Service\Attribute\SubscribedService;
+use RectorPrefix202609\Symfony\Contracts\Service\Attribute\SubscribedService;
 /**
  * A ServiceSubscriber exposes its dependencies via the static {@link getSubscribedServices} method.
  *
@@ -56,5 +56,5 @@ interface ServiceSubscriberInterface
      *
      * @return string[]|SubscribedService[] The required service types, optionally keyed by service names
      */
-    public static function getSubscribedServices() : array;
+    public static function getSubscribedServices(): array;
 }

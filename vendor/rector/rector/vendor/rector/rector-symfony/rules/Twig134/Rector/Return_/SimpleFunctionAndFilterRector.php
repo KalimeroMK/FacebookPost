@@ -19,6 +19,8 @@ use PHPStan\Type\Type;
 use Rector\PhpParser\Node\Value\ValueResolver;
 use Rector\Rector\AbstractRector;
 use Rector\Reflection\ReflectionResolver;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -26,7 +28,7 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  *
  * @see \Rector\Symfony\Tests\Twig134\Rector\Return_\SimpleFunctionAndFilterRector\SimpleFunctionAndFilterRectorTest
  */
-final class SimpleFunctionAndFilterRector extends AbstractRector
+final class SimpleFunctionAndFilterRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @readonly
@@ -45,7 +47,11 @@ final class SimpleFunctionAndFilterRector extends AbstractRector
         $this->reflectionResolver = $reflectionResolver;
         $this->valueResolver = $valueResolver;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('twig/twig', '>=1.34');
+    }
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Changes Twig_Function_Method to Twig_SimpleFunction calls in Twig_Extension.', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeExtension extends Twig_Extension
@@ -88,14 +94,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [ClassMethod::class];
     }
     /**
      * @param ClassMethod $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($node->stmts === null) {
             return null;
@@ -108,7 +114,7 @@ CODE_SAMPLE
             if (!$stmt instanceof Return_ || !$stmt->expr instanceof Expr) {
                 continue;
             }
-            $this->traverseNodesWithCallable($stmt->expr, function (Node $node) use(&$hasChanged) : ?Node {
+            $this->traverseNodesWithCallable($stmt->expr, function (Node $node) use (&$hasChanged): ?Node {
                 if (!$node instanceof ArrayItem) {
                     return null;
                 }
@@ -116,7 +122,10 @@ CODE_SAMPLE
                     return null;
                 }
                 $newObjectType = $this->nodeTypeResolver->getType($node->value);
-                $this->processArrayItem($node, $newObjectType, $hasChanged);
+                $hasArrayItemChanged = $this->processArrayItem($node, $newObjectType);
+                if ($hasArrayItemChanged) {
+                    $hasChanged = \true;
+                }
                 return $node;
             });
             break;
@@ -126,22 +135,23 @@ CODE_SAMPLE
         }
         return null;
     }
-    private function shouldSkip(ClassMethod $classMethod) : bool
+    private function shouldSkip(ClassMethod $classMethod): bool
     {
         $classReflection = $this->reflectionResolver->resolveClassReflection($classMethod);
         if (!$classReflection instanceof ClassReflection) {
             return \true;
         }
-        if (!$classReflection->isSubclassOf('Twig_Extension')) {
+        if (!$classReflection->is('Twig_Extension')) {
             return \true;
         }
-        return !$this->nodeNameResolver->isNames($classMethod, ['getFunctions', 'getFilters']);
+        return !$this->isNames($classMethod, ['getFunctions', 'getFilters']);
     }
-    private function processArrayItem(ArrayItem $arrayItem, Type $newNodeType, bool &$hasChanged) : void
+    private function processArrayItem(ArrayItem $arrayItem, Type $newNodeType): bool
     {
+        $hasChanged = \false;
         foreach (self::OLD_TO_NEW_CLASSES as $oldClass => $newClass) {
             $oldClassObjectType = new ObjectType($oldClass);
-            if (!$oldClassObjectType->equals($newNodeType)) {
+            if (!$newNodeType->equals($oldClassObjectType)) {
                 continue;
             }
             if (!$arrayItem->key instanceof String_) {
@@ -159,17 +169,18 @@ CODE_SAMPLE
             $hasChanged = \true;
             break;
         }
+        return $hasChanged;
     }
     /**
      * @param Arg[] $oldArguments
      */
-    private function decorateArrayItem(ArrayItem $arrayItem, array $oldArguments, string $filterName) : void
+    private function decorateArrayItem(ArrayItem $arrayItem, array $oldArguments, string $filterName): void
     {
         /** @var New_ $new */
         $new = $arrayItem->value;
         if ($oldArguments[0]->value instanceof Array_) {
             // already array, just shift it
-            $new->args = \array_merge([new Arg(new String_($filterName))], $oldArguments);
+            $new->args = array_merge([new Arg(new String_($filterName))], $oldArguments);
             return;
         }
         // not array yet, wrap to one

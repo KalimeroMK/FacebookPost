@@ -4,14 +4,14 @@ declare (strict_types=1);
 namespace Rector\Transform\Rector\Class_;
 
 use PhpParser\Node;
-use PhpParser\Node\Name;
+use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\Interface_;
 use Rector\Contract\Rector\ConfigurableRectorInterface;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\ConfiguredCodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
-use RectorPrefix202502\Webmozart\Assert\Assert;
+use RectorPrefix202609\Webmozart\Assert\Assert;
 /**
  * Covers cases like
  * - https://github.com/FriendsOfPHP/PHP-CS-Fixer/commit/a1cdb4d2dd8f45d731244eed406e1d537218cc66
@@ -25,9 +25,9 @@ final class MergeInterfacesRector extends AbstractRector implements Configurable
      * @var array<string, string>
      */
     private array $oldToNewInterfaces = [];
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
-        return new RuleDefinition('Merges old interface to a new one, that already has its methods', [new ConfiguredCodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Merge old interface to a new one, that already has its methods', [new ConfiguredCodeSample(<<<'CODE_SAMPLE'
 class SomeClass implements SomeInterface, SomeOldInterface
 {
 }
@@ -42,26 +42,26 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($node->implements === []) {
             return null;
         }
         $hasChanged = \false;
         foreach ($node->implements as $key => $implement) {
-            $oldInterfaces = \array_keys($this->oldToNewInterfaces);
+            $oldInterfaces = array_keys($this->oldToNewInterfaces);
             if (!$this->isNames($implement, $oldInterfaces)) {
                 continue;
             }
             $interface = $this->getName($implement);
-            $node->implements[$key] = new Name($this->oldToNewInterfaces[$interface]);
+            $node->implements[$key] = new FullyQualified($this->oldToNewInterfaces[$interface]);
             $hasChanged = \true;
         }
         if (!$hasChanged) {
@@ -73,20 +73,20 @@ CODE_SAMPLE
     /**
      * @param mixed[] $configuration
      */
-    public function configure(array $configuration) : void
+    public function configure(array $configuration): void
     {
-        Assert::allString(\array_keys($configuration));
+        Assert::allString(array_keys($configuration));
         Assert::allString($configuration);
         $this->oldToNewInterfaces = $configuration;
     }
-    private function makeImplementsUnique(Class_ $class) : void
+    private function makeImplementsUnique(Class_ $class): void
     {
         $alreadyAddedNames = [];
         /** @var array<int, Interface_> $implements */
         $implements = $class->implements;
         foreach ($implements as $key => $name) {
             $fqnName = $this->getName($name);
-            if (\in_array($fqnName, $alreadyAddedNames, \true)) {
+            if (in_array($fqnName, $alreadyAddedNames, \true)) {
                 unset($class->implements[$key]);
                 continue;
             }

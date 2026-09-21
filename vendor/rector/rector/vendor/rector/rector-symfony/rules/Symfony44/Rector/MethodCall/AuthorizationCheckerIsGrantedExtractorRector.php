@@ -9,10 +9,14 @@ use PhpParser\Node\ArrayItem;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\BinaryOp\BooleanOr;
 use PhpParser\Node\Expr\MethodCall;
+use PhpParser\Node\Expr\Variable;
 use PHPStan\Type\ObjectType;
 use Rector\NodeAnalyzer\ArgsAnalyzer;
 use Rector\Rector\AbstractRector;
+use Rector\Symfony\Enum\SymfonyClass;
 use Rector\Symfony\TypeAnalyzer\ControllerAnalyzer;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -20,7 +24,7 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  *
  * @see \Rector\Symfony\Tests\Symfony44\Rector\MethodCall\AuthorizationCheckerIsGrantedExtractorRector\AuthorizationCheckerIsGrantedExtractorRectorTest
  */
-final class AuthorizationCheckerIsGrantedExtractorRector extends AbstractRector
+final class AuthorizationCheckerIsGrantedExtractorRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @readonly
@@ -35,14 +39,50 @@ final class AuthorizationCheckerIsGrantedExtractorRector extends AbstractRector
         $this->argsAnalyzer = $argsAnalyzer;
         $this->controllerAnalyzer = $controllerAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('symfony/security-core', '>=4.4');
+    }
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Change `$this->authorizationChecker->isGranted([$a, $b])` to `$this->authorizationChecker->isGranted($a) || $this->authorizationChecker->isGranted($b)`, also updates AbstractController usages', [new CodeSample(<<<'CODE_SAMPLE'
-if ($this->authorizationChecker->isGranted(['ROLE_USER', 'ROLE_ADMIN'])) {
+use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
+
+final class SomeController
+{
+    public function __construct(
+        private AuthorizationCheckerInterface $authorizationChecker
+    ) {
+    }
+
+    public function hasAccess(): bool
+    {
+        if ($this->authorizationChecker->isGranted(['ROLE_USER', 'ROLE_ADMIN'])) {
+            return true;
+        }
+
+        return false;
+    }
 }
 CODE_SAMPLE
 , <<<'CODE_SAMPLE'
-if ($this->authorizationChecker->isGranted('ROLE_USER') || $this->authorizationChecker->isGranted('ROLE_ADMIN')) {
+use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
+
+final class SomeController
+{
+    public function __construct(
+        private AuthorizationCheckerInterface $authorizationChecker
+    ) {
+    }
+
+    public function hasAccess(): bool
+    {
+        if ($this->authorizationChecker->isGranted('ROLE_USER') || $this->authorizationChecker->isGranted('ROLE_ADMIN')) {
+            return true;
+        }
+
+        return false;
+    }
 }
 CODE_SAMPLE
 )]);
@@ -50,7 +90,7 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [MethodCall::class];
     }
@@ -60,18 +100,22 @@ CODE_SAMPLE
      */
     public function refactor(Node $node)
     {
-        if ($this->controllerAnalyzer->isInsideController($node)) {
-            return $this->processControllerMethods($node);
+        // native AbstractController::isGranted() call, any other object must be resolved by its type
+        if ($node->var instanceof Variable && $this->isName($node->var, 'this')) {
+            if ($this->controllerAnalyzer->isInsideController($node)) {
+                return $this->processControllerMethods($node);
+            }
+            return null;
+        }
+        if (!$this->isName($node->name, 'isGranted')) {
+            return null;
         }
         $objectType = $this->nodeTypeResolver->getType($node->var);
         if (!$objectType instanceof ObjectType) {
             return null;
         }
-        $authorizationChecker = new ObjectType('Symfony\\Component\\Security\\Core\\Authorization\\AuthorizationCheckerInterface');
+        $authorizationChecker = new ObjectType(SymfonyClass::AUTHORIZATION_CHECKER);
         if (!$authorizationChecker->isSuperTypeOf($objectType)->yes()) {
-            return null;
-        }
-        if (!$this->nodeNameResolver->isName($node->name, 'isGranted')) {
             return null;
         }
         return $this->handleIsGranted($node);
@@ -93,7 +137,7 @@ CODE_SAMPLE
         }
         $args[0]->value = $exprs[0];
         $methodCall->args = $args;
-        if (\count($exprs) === 1) {
+        if (count($exprs) === 1) {
             return $methodCall;
         }
         $rightMethodCall = clone $methodCall;
@@ -116,7 +160,7 @@ CODE_SAMPLE
      */
     private function processControllerMethods(MethodCall $methodCall)
     {
-        if ($this->nodeNameResolver->isName($methodCall->name, 'isGranted')) {
+        if ($this->isName($methodCall->name, 'isGranted')) {
             return $this->handleIsGranted($methodCall);
         }
         return null;

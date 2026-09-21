@@ -3,12 +3,12 @@
 declare (strict_types=1);
 namespace Rector\CodingStyle\Rector\Stmt;
 
-use RectorPrefix202502\Nette\Utils\Strings;
+use RectorPrefix202609\Nette\Utils\Strings;
 use PhpParser\Node;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Stmt\Namespace_;
 use PhpParser\Node\Stmt\Use_;
-use Rector\PhpParser\Node\CustomNode\FileWithoutNamespace;
+use Rector\PhpParser\Node\FileNode;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
@@ -17,7 +17,7 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  */
 final class RemoveUselessAliasInUseStatementRector extends AbstractRector
 {
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Remove useless alias in use statement as same name with last use statement name', [new CodeSample(<<<'CODE_SAMPLE'
 use App\Bar as Bar;
@@ -30,22 +30,26 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
-        return [FileWithoutNamespace::class, Namespace_::class];
+        return [FileNode::class, Namespace_::class];
     }
     /**
-     * @param FileWithoutNamespace|Namespace_ $node
-     * @return null|\Rector\PhpParser\Node\CustomNode\FileWithoutNamespace|\PhpParser\Node\Stmt\Namespace_
+     * @param Namespace_|FileNode $node
+     * @return null|\Rector\PhpParser\Node\FileNode|\PhpParser\Node\Stmt\Namespace_
      */
     public function refactor(Node $node)
     {
+        if ($node instanceof FileNode && $node->isNamespaced()) {
+            // handle in Namespace_ node
+            return null;
+        }
         $hasChanged = \false;
         foreach ($node->stmts as $stmt) {
             if (!$stmt instanceof Use_) {
                 continue;
             }
-            if (\count($stmt->uses) !== 1) {
+            if (count($stmt->uses) !== 1) {
                 continue;
             }
             if (!isset($stmt->uses[0])) {

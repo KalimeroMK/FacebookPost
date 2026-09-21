@@ -3,30 +3,31 @@
 declare (strict_types=1);
 namespace Rector\DependencyInjection;
 
-use RectorPrefix202502\Illuminate\Container\Container;
 use Rector\Autoloading\BootstrapFilesIncluder;
 use Rector\Caching\Detector\ChangedFilesDetector;
+use Rector\Config\RectorConfig;
+use Rector\NodeTypeResolver\DependencyInjection\PHPStanServicesFactory;
 use Rector\ValueObject\Bootstrap\BootstrapConfigs;
 final class RectorContainerFactory
 {
-    public function createFromBootstrapConfigs(BootstrapConfigs $bootstrapConfigs) : Container
+    public function createFromBootstrapConfigs(BootstrapConfigs $bootstrapConfigs): RectorConfig
     {
-        $container = $this->createFromConfigs($bootstrapConfigs->getConfigFiles());
+        $rectorConfig = $this->createFromConfigs($bootstrapConfigs->getConfigFiles());
         $mainConfigFile = $bootstrapConfigs->getMainConfigFile();
         if ($mainConfigFile !== null) {
             /** @var ChangedFilesDetector $changedFilesDetector */
-            $changedFilesDetector = $container->make(ChangedFilesDetector::class);
+            $changedFilesDetector = $rectorConfig->make(ChangedFilesDetector::class);
             $changedFilesDetector->setFirstResolvedConfigFileInfo($mainConfigFile);
         }
         /** @var BootstrapFilesIncluder $bootstrapFilesIncluder */
-        $bootstrapFilesIncluder = $container->get(BootstrapFilesIncluder::class);
-        $bootstrapFilesIncluder->includeBootstrapFiles();
-        return $container;
+        $bootstrapFilesIncluder = $rectorConfig->get(BootstrapFilesIncluder::class);
+        $bootstrapFilesIncluder->includeBootstrapFiles($rectorConfig->get(PHPStanServicesFactory::class)->getContainer());
+        return $rectorConfig;
     }
     /**
      * @param string[] $configFiles
      */
-    private function createFromConfigs(array $configFiles) : Container
+    private function createFromConfigs(array $configFiles): RectorConfig
     {
         $lazyContainerFactory = new \Rector\DependencyInjection\LazyContainerFactory();
         $rectorConfig = $lazyContainerFactory->create();

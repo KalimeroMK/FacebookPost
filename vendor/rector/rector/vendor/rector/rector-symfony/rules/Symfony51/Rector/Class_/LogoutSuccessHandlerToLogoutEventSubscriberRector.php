@@ -9,10 +9,13 @@ use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PHPStan\Type\ObjectType;
 use Rector\Rector\AbstractRector;
+use Rector\Symfony\Enum\SymfonyClass;
 use Rector\Symfony\NodeAnalyzer\ClassAnalyzer;
 use Rector\Symfony\NodeFactory\GetSubscribedEventsClassMethodFactory;
 use Rector\Symfony\NodeFactory\OnSuccessLogoutClassMethodFactory;
 use Rector\Symfony\ValueObject\EventReferenceToMethodNameWithPriority;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -20,7 +23,7 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  *
  * @see \Rector\Symfony\Tests\Symfony51\Rector\Class_\LogoutSuccessHandlerToLogoutEventSubscriberRector\LogoutSuccessHandlerToLogoutEventSubscriberRectorTest
  */
-final class LogoutSuccessHandlerToLogoutEventSubscriberRector extends AbstractRector
+final class LogoutSuccessHandlerToLogoutEventSubscriberRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @readonly
@@ -43,9 +46,13 @@ final class LogoutSuccessHandlerToLogoutEventSubscriberRector extends AbstractRe
         $this->onSuccessLogoutClassMethodFactory = $onSuccessLogoutClassMethodFactory;
         $this->getSubscribedEventsClassMethodFactory = $getSubscribedEventsClassMethodFactory;
         $this->classAnalyzer = $classAnalyzer;
-        $this->successHandlerObjectType = new ObjectType('Symfony\\Component\\Security\\Http\\Logout\\LogoutSuccessHandlerInterface');
+        $this->successHandlerObjectType = new ObjectType(SymfonyClass::LOGOUT_SUCCESS_HANDLER);
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('symfony/security-http', '>=5.1');
+    }
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Change logout success handler to an event listener that listens to LogoutEvent', [new CodeSample(<<<'CODE_SAMPLE'
 use Symfony\Component\Security\Http\Logout\LogoutSuccessHandlerInterface;
@@ -109,23 +116,23 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$this->isObjectType($node, $this->successHandlerObjectType)) {
             return null;
         }
-        if (!$this->classAnalyzer->hasImplements($node, 'Symfony\\Component\\Security\\Http\\Logout\\LogoutSuccessHandlerInterface')) {
+        if (!$this->classAnalyzer->hasImplements($node, SymfonyClass::LOGOUT_SUCCESS_HANDLER)) {
             return null;
         }
         $this->refactorImplements($node);
-        $node->implements[] = new FullyQualified('Symfony\\Component\\EventDispatcher\\EventSubscriberInterface');
+        $node->implements[] = new FullyQualified(SymfonyClass::EVENT_SUBSCRIBER_INTERFACE);
         // 2. refactor logout() class method to onLogout()
         $onLogoutSuccessClassMethod = null;
         foreach ($node->stmts as $key => $stmt) {
@@ -143,13 +150,13 @@ CODE_SAMPLE
         }
         $node->stmts[] = $this->onSuccessLogoutClassMethodFactory->createFromOnLogoutSuccessClassMethod($onLogoutSuccessClassMethod);
         // 3. add getSubscribedEvents() class method
-        $classConstFetch = $this->nodeFactory->createClassConstReference('Symfony\\Component\\Security\\Http\\Event\\LogoutEvent');
+        $classConstFetch = $this->nodeFactory->createClassConstReference('Symfony\Component\Security\Http\Event\LogoutEvent');
         $eventReferencesToMethodNames = [new EventReferenceToMethodNameWithPriority($classConstFetch, 'onLogout', 64)];
         $getSubscribedEventsClassMethod = $this->getSubscribedEventsClassMethodFactory->create($eventReferencesToMethodNames);
         $node->stmts[] = $getSubscribedEventsClassMethod;
         return $node;
     }
-    private function refactorImplements(Class_ $class) : void
+    private function refactorImplements(Class_ $class): void
     {
         foreach ($class->implements as $key => $implement) {
             if (!$this->isName($implement, $this->successHandlerObjectType->getClassName())) {

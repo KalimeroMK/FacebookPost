@@ -4,20 +4,16 @@ declare (strict_types=1);
 namespace Rector\CodeQuality\Rector\Class_;
 
 use PhpParser\Node;
-use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Stmt\Class_;
 use PHPStan\Reflection\ClassReflection;
 use PHPStan\Reflection\ReflectionProvider;
-use PHPStan\Type\ObjectType;
-use PHPStan\Type\Type;
-use Rector\CodeQuality\NodeAnalyzer\ClassLikeAnalyzer;
 use Rector\CodeQuality\NodeAnalyzer\LocalPropertyAnalyzer;
+use Rector\CodeQuality\NodeAnalyzer\MissingPropertiesResolver;
 use Rector\CodeQuality\NodeFactory\MissingPropertiesFactory;
 use Rector\NodeAnalyzer\ClassAnalyzer;
-use Rector\NodeAnalyzer\PropertyPresenceChecker;
 use Rector\Php80\NodeAnalyzer\PhpAttributeAnalyzer;
-use Rector\PostRector\ValueObject\PropertyMetadata;
 use Rector\Rector\AbstractRector;
+use Rector\Reflection\ClassReflectionAnalyzer;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -36,10 +32,6 @@ final class CompleteDynamicPropertiesRector extends AbstractRector
     /**
      * @readonly
      */
-    private ClassLikeAnalyzer $classLikeAnalyzer;
-    /**
-     * @readonly
-     */
     private ReflectionProvider $reflectionProvider;
     /**
      * @readonly
@@ -48,22 +40,26 @@ final class CompleteDynamicPropertiesRector extends AbstractRector
     /**
      * @readonly
      */
-    private PropertyPresenceChecker $propertyPresenceChecker;
+    private PhpAttributeAnalyzer $phpAttributeAnalyzer;
     /**
      * @readonly
      */
-    private PhpAttributeAnalyzer $phpAttributeAnalyzer;
-    public function __construct(MissingPropertiesFactory $missingPropertiesFactory, LocalPropertyAnalyzer $localPropertyAnalyzer, ClassLikeAnalyzer $classLikeAnalyzer, ReflectionProvider $reflectionProvider, ClassAnalyzer $classAnalyzer, PropertyPresenceChecker $propertyPresenceChecker, PhpAttributeAnalyzer $phpAttributeAnalyzer)
+    private MissingPropertiesResolver $missingPropertiesResolver;
+    /**
+     * @readonly
+     */
+    private ClassReflectionAnalyzer $classReflectionAnalyzer;
+    public function __construct(MissingPropertiesFactory $missingPropertiesFactory, LocalPropertyAnalyzer $localPropertyAnalyzer, ReflectionProvider $reflectionProvider, ClassAnalyzer $classAnalyzer, PhpAttributeAnalyzer $phpAttributeAnalyzer, MissingPropertiesResolver $missingPropertiesResolver, ClassReflectionAnalyzer $classReflectionAnalyzer)
     {
         $this->missingPropertiesFactory = $missingPropertiesFactory;
         $this->localPropertyAnalyzer = $localPropertyAnalyzer;
-        $this->classLikeAnalyzer = $classLikeAnalyzer;
         $this->reflectionProvider = $reflectionProvider;
         $this->classAnalyzer = $classAnalyzer;
-        $this->propertyPresenceChecker = $propertyPresenceChecker;
         $this->phpAttributeAnalyzer = $phpAttributeAnalyzer;
+        $this->missingPropertiesResolver = $missingPropertiesResolver;
+        $this->classReflectionAnalyzer = $classReflectionAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Add missing dynamic properties', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
@@ -93,49 +89,46 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($this->shouldSkipClass($node)) {
             return null;
         }
-        $className = $this->getName($node);
-        if ($className === null) {
+        $classReflection = $this->matchClassReflection($node);
+        if (!$classReflection instanceof ClassReflection) {
             return null;
         }
-        if (!$this->reflectionProvider->hasClass($className)) {
-            return null;
-        }
-        $classReflection = $this->reflectionProvider->getClass($className);
         // special case for Laravel Collection macro magic
-        $fetchedLocalPropertyNameToTypes = $this->localPropertyAnalyzer->resolveFetchedPropertiesToTypesFromClass($node);
-        $propertiesToComplete = $this->resolvePropertiesToComplete($node, $fetchedLocalPropertyNameToTypes);
-        if ($propertiesToComplete === []) {
-            return null;
-        }
-        $propertiesToComplete = $this->filterOutExistingProperties($node, $classReflection, $propertiesToComplete);
-        $newProperties = $this->missingPropertiesFactory->create($fetchedLocalPropertyNameToTypes, $propertiesToComplete);
+        $definedLocalPropertiesWithTypes = $this->localPropertyAnalyzer->resolveFetchedPropertiesToTypesFromClass($node);
+        $propertiesToComplete = $this->missingPropertiesResolver->resolve($node, $classReflection, $definedLocalPropertiesWithTypes);
+        $newProperties = $this->missingPropertiesFactory->create($propertiesToComplete);
         if ($newProperties === []) {
             return null;
         }
-        $node->stmts = \array_merge($newProperties, $node->stmts);
+        $node->stmts = array_merge($newProperties, $node->stmts);
         return $node;
     }
-    private function shouldSkipClass(Class_ $class) : bool
+    private function shouldSkipClass(Class_ $class): bool
     {
         if ($this->classAnalyzer->isAnonymousClass($class)) {
             return \true;
         }
-        $className = (string) $this->nodeNameResolver->getName($class);
+        // abstract class property might be accessed from child class
+        if ($class->isAbstract()) {
+            return \true;
+        }
+        $className = (string) $this->getName($class);
         if (!$this->reflectionProvider->hasClass($className)) {
             return \true;
         }
+        // dynamic property on purpose
         if ($this->phpAttributeAnalyzer->hasPhpAttribute($class, 'AllowDynamicProperties')) {
             return \true;
         }
@@ -147,39 +140,30 @@ CODE_SAMPLE
         if ($classReflection->hasMethod('__get')) {
             return \true;
         }
-        return $class->extends instanceof FullyQualified && !$this->reflectionProvider->hasClass($class->extends->toString());
+        // any not autoloaded ancestor may already declare the property, so we cannot safely add it
+        return $this->hasNotAutoloadedAncestor($classReflection);
     }
-    /**
-     * @param array<string, Type> $fetchedLocalPropertyNameToTypes
-     * @return string[]
-     */
-    private function resolvePropertiesToComplete(Class_ $class, array $fetchedLocalPropertyNameToTypes) : array
+    private function hasNotAutoloadedAncestor(ClassReflection $classReflection): bool
     {
-        $propertyNames = $this->classLikeAnalyzer->resolvePropertyNames($class);
-        /** @var string[] $fetchedLocalPropertyNames */
-        $fetchedLocalPropertyNames = \array_keys($fetchedLocalPropertyNameToTypes);
-        return \array_diff($fetchedLocalPropertyNames, $propertyNames);
-    }
-    /**
-     * @param string[] $propertiesToComplete
-     * @return string[]
-     */
-    private function filterOutExistingProperties(Class_ $class, ClassReflection $classReflection, array $propertiesToComplete) : array
-    {
-        $missingPropertyNames = [];
-        $className = $classReflection->getName();
-        // remove other properties that are accessible from this scope
-        foreach ($propertiesToComplete as $propertyToComplete) {
-            if ($classReflection->hasProperty($propertyToComplete)) {
-                continue;
+        $currentClassReflection = $classReflection;
+        while ($currentClassReflection instanceof ClassReflection) {
+            $parentClassName = $this->classReflectionAnalyzer->resolveParentClassName($currentClassReflection);
+            if ($parentClassName !== null && !$this->reflectionProvider->hasClass($parentClassName)) {
+                return \true;
             }
-            $propertyMetadata = new PropertyMetadata($propertyToComplete, new ObjectType($className));
-            $hasClassContextProperty = $this->propertyPresenceChecker->hasClassContextProperty($class, $propertyMetadata);
-            if ($hasClassContextProperty) {
-                continue;
-            }
-            $missingPropertyNames[] = $propertyToComplete;
+            $currentClassReflection = $currentClassReflection->getParentClass();
         }
-        return $missingPropertyNames;
+        return \false;
+    }
+    private function matchClassReflection(Class_ $class): ?ClassReflection
+    {
+        $className = $this->getName($class);
+        if ($className === null) {
+            return null;
+        }
+        if (!$this->reflectionProvider->hasClass($className)) {
+            return null;
+        }
+        return $this->reflectionProvider->getClass($className);
     }
 }

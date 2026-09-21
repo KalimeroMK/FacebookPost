@@ -39,8 +39,12 @@ final class ClassMethodReturnTypeOverrideGuard
         $this->filePathHelper = $filePathHelper;
         $this->magicClassMethodAnalyzer = $magicClassMethodAnalyzer;
     }
-    public function shouldSkipClassMethod(ClassMethod $classMethod, Scope $scope) : bool
+    public function shouldSkipClassMethod(ClassMethod $classMethod, Scope $scope): bool
     {
+        // user-guarded class: adding a return type here would break its child classes
+        if ($this->parentClassMethodTypeOverrideGuard->isTypeGuardedClass($classMethod)) {
+            return \true;
+        }
         if ($this->magicClassMethodAnalyzer->isUnsafeOverridden($classMethod)) {
             return \true;
         }
@@ -60,7 +64,7 @@ final class ClassMethodReturnTypeOverrideGuard
         }
         return !$this->isReturnTypeChangeAllowed($classMethod, $scope);
     }
-    private function isReturnTypeChangeAllowed(ClassMethod $classMethod, Scope $scope) : bool
+    private function isReturnTypeChangeAllowed(ClassMethod $classMethod, Scope $scope): bool
     {
         // make sure return type is not protected by parent contract
         $parentClassMethodReflection = $this->parentClassMethodTypeOverrideGuard->getParentClassMethod($classMethod);
@@ -78,12 +82,10 @@ final class ClassMethodReturnTypeOverrideGuard
         if ($fileName === null) {
             return \false;
         }
-        /*
+        /**
          * Below verify that both current file name and parent file name is not in the /vendor/, if yes, then allowed.
          * This can happen when rector run into /vendor/ directory while child and parent both are there.
-         *
          *  @see https://3v4l.org/Rc0RF#v8.0.13
-         *
          *     - both in /vendor/ -> allowed
          *     - one of them in /vendor/ -> not allowed
          *     - both not in /vendor/ -> allowed
@@ -94,10 +96,10 @@ final class ClassMethodReturnTypeOverrideGuard
         $currentFileName = $currentClassReflection->getFileName();
         // child (current)
         $normalizedCurrentFileName = $this->filePathHelper->normalizePathAndSchema($currentFileName);
-        $isCurrentInVendor = \strpos($normalizedCurrentFileName, '/vendor/') !== \false;
+        $isCurrentInVendor = strpos($normalizedCurrentFileName, '/vendor/') !== \false;
         // parent
         $normalizedFileName = $this->filePathHelper->normalizePathAndSchema($fileName);
-        $isParentInVendor = \strpos($normalizedFileName, '/vendor/') !== \false;
+        $isParentInVendor = strpos($normalizedFileName, '/vendor/') !== \false;
         return $isCurrentInVendor && $isParentInVendor || !$isCurrentInVendor && !$isParentInVendor;
     }
 }

@@ -3,15 +3,19 @@
 declare (strict_types=1);
 namespace Rector\Application;
 
-use RectorPrefix202502\Nette\Utils\FileSystem;
+use RectorPrefix202609\Nette\Utils\FileSystem;
+use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor\NameResolver;
 use PHPStan\AnalysedCodeException;
 use PHPStan\Parser\ParserErrorsException;
 use Rector\Caching\Detector\ChangedFilesDetector;
 use Rector\ChangesReporting\ValueObjectFactory\ErrorFactory;
 use Rector\ChangesReporting\ValueObjectFactory\FileDiffFactory;
+use Rector\CodingStyle\ClassNameImport\UsedImportsResolver;
 use Rector\Exception\ShouldNotHappenException;
 use Rector\FileSystem\FilePathHelper;
 use Rector\NodeTypeResolver\NodeScopeAndMetadataDecorator;
+use Rector\PhpParser\Node\FileNode;
 use Rector\PhpParser\NodeTraverser\RectorNodeTraverser;
 use Rector\PhpParser\Parser\ParserErrors;
 use Rector\PhpParser\Parser\RectorParser;
@@ -22,7 +26,7 @@ use Rector\ValueObject\Application\File;
 use Rector\ValueObject\Configuration;
 use Rector\ValueObject\Error\SystemError;
 use Rector\ValueObject\FileProcessResult;
-use RectorPrefix202502\Symfony\Component\Console\Style\SymfonyStyle;
+use RectorPrefix202609\Symfony\Component\Console\Style\SymfonyStyle;
 use Throwable;
 final class FileProcessor
 {
@@ -66,7 +70,11 @@ final class FileProcessor
      * @readonly
      */
     private NodeScopeAndMetadataDecorator $nodeScopeAndMetadataDecorator;
-    public function __construct(BetterStandardPrinter $betterStandardPrinter, RectorNodeTraverser $rectorNodeTraverser, SymfonyStyle $symfonyStyle, FileDiffFactory $fileDiffFactory, ChangedFilesDetector $changedFilesDetector, ErrorFactory $errorFactory, FilePathHelper $filePathHelper, PostFileProcessor $postFileProcessor, RectorParser $rectorParser, NodeScopeAndMetadataDecorator $nodeScopeAndMetadataDecorator)
+    /**
+     * @readonly
+     */
+    private UsedImportsResolver $usedImportsResolver;
+    public function __construct(BetterStandardPrinter $betterStandardPrinter, RectorNodeTraverser $rectorNodeTraverser, SymfonyStyle $symfonyStyle, FileDiffFactory $fileDiffFactory, ChangedFilesDetector $changedFilesDetector, ErrorFactory $errorFactory, FilePathHelper $filePathHelper, PostFileProcessor $postFileProcessor, RectorParser $rectorParser, NodeScopeAndMetadataDecorator $nodeScopeAndMetadataDecorator, UsedImportsResolver $usedImportsResolver)
     {
         $this->betterStandardPrinter = $betterStandardPrinter;
         $this->rectorNodeTraverser = $rectorNodeTraverser;
@@ -78,14 +86,15 @@ final class FileProcessor
         $this->postFileProcessor = $postFileProcessor;
         $this->rectorParser = $rectorParser;
         $this->nodeScopeAndMetadataDecorator = $nodeScopeAndMetadataDecorator;
+        $this->usedImportsResolver = $usedImportsResolver;
     }
-    public function processFile(File $file, Configuration $configuration) : FileProcessResult
+    public function processFile(File $file, Configuration $configuration): FileProcessResult
     {
         // 1. parse files to nodes
         $parsingSystemError = $this->parseFileAndDecorateNodes($file);
         if ($parsingSystemError instanceof SystemError) {
             // we cannot process this file as the parsing and type resolving itself went wrong
-            return new FileProcessResult([$parsingSystemError], null);
+            return new FileProcessResult([$parsingSystemError], null, \false);
         }
         $fileHasChanged = \false;
         $filePath = $file->getFilePath();
@@ -108,17 +117,20 @@ final class FileProcessor
         } while (\true);
         // 5. add as cacheable if not changed at all
         if (!$fileHasChanged) {
-            $this->changedFilesDetector->addCachableFile($filePath);
+            $this->changedFilesDetector->addCacheableFile($filePath);
         } else {
             // when changed, set final status changed to true
             // to ensure it make sense to verify in next process when needed
             $file->changeHasChanged(\true);
+        }
+        $rectorWithLineChanges = $file->getRectorWithLineChanges();
+        if ($file->hasChanged() || $rectorWithLineChanges !== []) {
             $currentFileDiff = $this->fileDiffFactory->createFileDiffWithLineChanges($configuration->shouldShowDiffs(), $file, $file->getOriginalFileContent(), $file->getFileContent(), $file->getRectorWithLineChanges());
             $file->setFileDiff($currentFileDiff);
         }
-        return new FileProcessResult([], $file->getFileDiff());
+        return new FileProcessResult([], $file->getFileDiff(), $file->hasChanged());
     }
-    private function parseFileAndDecorateNodes(File $file) : ?SystemError
+    private function parseFileAndDecorateNodes(File $file): ?SystemError
     {
         try {
             try {
@@ -146,25 +158,32 @@ final class FileProcessor
         }
         return null;
     }
-    private function printFile(File $file, Configuration $configuration, string $filePath) : void
+    private function printFile(File $file, Configuration $configuration, string $filePath): void
     {
         // only save to string first, no need to print to file when not needed
-        $newContent = $this->betterStandardPrinter->printFormatPreserving($file->getNewStmts(), $file->getOldStmts(), $file->getOldTokens());
+        $newFileContent = $this->betterStandardPrinter->printFormatPreserving($file->getNewStmts(), $file->getOldStmts(), $file->getOldTokens());
         // change file content early to make $file->hasChanged() based on new content
-        $file->changeFileContent($newContent);
+        $file->changeFileContent($newFileContent);
         if ($configuration->isDryRun()) {
             return;
         }
         if (!$file->hasChanged()) {
             return;
         }
-        FileSystem::write($filePath, $newContent, null);
+        FileSystem::write($filePath, $newFileContent, null);
     }
-    private function parseFileNodes(File $file, bool $forNewestSupportedVersion = \true) : void
+    private function parseFileNodes(File $file, bool $forNewestSupportedVersion = \true): void
     {
         // store tokens by original file content, so we don't have to print them right now
         $stmtsAndTokens = $this->rectorParser->parseFileContentToStmtsAndTokens($file->getOriginalFileContent(), $forNewestSupportedVersion);
         $oldStmts = $stmtsAndTokens->getStmts();
+        // resolve names up front, so used imports (incl. the class FQN) are resolvable at construction,
+        // before scope decoration runs; only annotates namespacedName, does not replace name nodes
+        $nameResolvingNodeTraverser = new NodeTraverser(new NameResolver(null, ['preserveOriginalNames' => \true, 'replaceNodes' => \false]));
+        $nameResolvingNodeTraverser->traverse($oldStmts);
+        // wrap in FileNode to allow file-level rules; seed used imports once, kept in sync incrementally
+        $usedImports = $this->usedImportsResolver->resolveForStmts($oldStmts);
+        $oldStmts = [new FileNode($oldStmts, $usedImports)];
         $oldTokens = $stmtsAndTokens->getTokens();
         $newStmts = $this->nodeScopeAndMetadataDecorator->decorateNodesFromFile($file->getFilePath(), $oldStmts);
         $file->hydrateStmtsAndTokens($newStmts, $oldStmts, $oldTokens);

@@ -9,7 +9,9 @@ use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Log\LogManager;
 use Illuminate\Support\Env;
 use Monolog\Handler\NullHandler;
+use PHPUnit\Framework\TestCase;
 use PHPUnit\Runner\ErrorHandler;
+use PHPUnit\Runner\Version;
 use Symfony\Component\Console\Output\ConsoleOutput;
 use Symfony\Component\ErrorHandler\Error\FatalError;
 use Throwable;
@@ -90,25 +92,31 @@ class HandleExceptions
             return;
         }
 
-        try {
-            $logger = static::$app->make(LogManager::class);
-        } catch (Exception) {
+        if (! static::$app->bound('config')) {
             return;
         }
 
-        $this->ensureDeprecationLoggerIsConfigured();
+        try {
+            $logger = static::$app->make(LogManager::class);
 
-        $options = static::$app['config']->get('logging.deprecations') ?? [];
+            $this->ensureDeprecationLoggerIsConfigured();
 
-        with($logger->channel('deprecations'), function ($log) use ($message, $file, $line, $level, $options) {
-            if ($options['trace'] ?? false) {
-                $log->warning((string) new ErrorException($message, 0, $level, $file, $line));
-            } else {
-                $log->warning(sprintf('%s in %s on line %s',
-                    $message, $file, $line
-                ));
-            }
-        });
+            $options = static::$app['config']->get('logging.deprecations') ?? [];
+
+            with($logger->channel('deprecations'), function ($log) use ($message, $file, $line, $level, $options) {
+                if ($options['trace'] ?? false) {
+                    $log->warning($message, [
+                        'exception' => new ErrorException($message, 0, $level, $file, $line),
+                    ]);
+                } else {
+                    $log->warning(sprintf('%s in %s on line %s',
+                        $message, $file, $line
+                    ));
+                }
+            });
+        } catch (Throwable) {
+            return;
+        }
     }
 
     /**
@@ -119,6 +127,7 @@ class HandleExceptions
     protected function shouldIgnoreDeprecationErrors()
     {
         return ! class_exists(LogManager::class)
+            || is_null(static::$app)
             || ! static::$app->hasBeenBootstrapped()
             || (static::$app->runningUnitTests() && ! Env::get('LOG_DEPRECATIONS_WHILE_TESTING'));
     }
@@ -130,21 +139,21 @@ class HandleExceptions
      */
     protected function ensureDeprecationLoggerIsConfigured()
     {
-        with(static::$app['config'], function ($config) {
-            if ($config->get('logging.channels.deprecations')) {
-                return;
-            }
+        $config = static::$app['config'];
 
-            $this->ensureNullLogDriverIsConfigured();
+        if ($config->get('logging.channels.deprecations')) {
+            return;
+        }
 
-            if (is_array($options = $config->get('logging.deprecations'))) {
-                $driver = $options['channel'] ?? 'null';
-            } else {
-                $driver = $options ?? 'null';
-            }
+        $this->ensureNullLogDriverIsConfigured();
 
-            $config->set('logging.channels.deprecations', $config->get("logging.channels.{$driver}"));
-        });
+        if (is_array($options = $config->get('logging.deprecations'))) {
+            $driver = $options['channel'] ?? 'null';
+        } else {
+            $driver = $options ?? 'null';
+        }
+
+        $config->set('logging.channels.deprecations', $config->get("logging.channels.{$driver}"));
     }
 
     /**
@@ -154,16 +163,16 @@ class HandleExceptions
      */
     protected function ensureNullLogDriverIsConfigured()
     {
-        with(static::$app['config'], function ($config) {
-            if ($config->get('logging.channels.null')) {
-                return;
-            }
+        $config = static::$app['config'];
 
-            $config->set('logging.channels.null', [
-                'driver' => 'monolog',
-                'handler' => NullHandler::class,
-            ]);
-        });
+        if ($config->get('logging.channels.null')) {
+            return;
+        }
+
+        $config->set('logging.channels.null', [
+            'driver' => 'monolog',
+            'handler' => NullHandler::class,
+        ]);
     }
 
     /**
@@ -304,15 +313,16 @@ class HandleExceptions
     /**
      * Flush the bootstrapper's global state.
      *
+     * @param  \PHPUnit\Framework\TestCase|null  $testCase
      * @return void
      */
-    public static function flushState()
+    public static function flushState(?TestCase $testCase = null)
     {
         if (is_null(static::$app)) {
             return;
         }
 
-        static::flushHandlersState();
+        static::flushHandlersState($testCase);
 
         static::$app = null;
 
@@ -322,31 +332,16 @@ class HandleExceptions
     /**
      * Flush the bootstrapper's global handlers state.
      *
+     * @param  \PHPUnit\Framework\TestCase|null  $testCase
      * @return void
      */
-    public static function flushHandlersState()
+    public static function flushHandlersState(?TestCase $testCase = null)
     {
-        while (true) {
-            $previousHandler = set_exception_handler(static fn () => null);
-
-            restore_exception_handler();
-
-            if ($previousHandler === null) {
-                break;
-            }
-
+        while (get_exception_handler() !== null) {
             restore_exception_handler();
         }
 
-        while (true) {
-            $previousHandler = set_error_handler(static fn () => null);
-
-            restore_error_handler();
-
-            if ($previousHandler === null) {
-                break;
-            }
-
+        while (get_error_handler() !== null) {
             restore_error_handler();
         }
 
@@ -355,7 +350,12 @@ class HandleExceptions
 
             if ((fn () => $this->enabled ?? false)->call($instance)) {
                 $instance->disable();
-                $instance->enable();
+
+                if (version_compare(Version::id(), '12.3.4', '>=')) {
+                    $instance->enable($testCase);
+                } else {
+                    $instance->enable();
+                }
             }
         }
     }

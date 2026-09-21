@@ -8,9 +8,9 @@
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\Symfony\Component\Console\Question;
+namespace RectorPrefix202609\Symfony\Component\Console\Question;
 
-use RectorPrefix202502\Symfony\Component\Console\Exception\InvalidArgumentException;
+use RectorPrefix202609\Symfony\Component\Console\Exception\InvalidArgumentException;
 /**
  * Represents a choice question.
  *
@@ -23,9 +23,9 @@ class ChoiceQuestion extends Question
     private string $prompt = ' > ';
     private string $errorMessage = 'Value "%s" is invalid';
     /**
-     * @param string                     $question The question to ask to the user
-     * @param array                      $choices  The list of available choices
-     * @param string|bool|int|float|null $default  The default answer to return
+     * @param string                                   $question The question to ask to the user
+     * @param array<string|bool|int|float|\Stringable> $choices  The list of available choices
+     * @param string|bool|int|float|null               $default  The default answer to return
      */
     public function __construct(string $question, array $choices, $default = null)
     {
@@ -38,9 +38,9 @@ class ChoiceQuestion extends Question
         $this->setAutocompleterValues($choices);
     }
     /**
-     * Returns available choices.
+     * @return array<string|bool|int|float|\Stringable>
      */
-    public function getChoices() : array
+    public function getChoices(): array
     {
         return $this->choices;
     }
@@ -60,14 +60,14 @@ class ChoiceQuestion extends Question
     /**
      * Returns whether the choices are multiselect.
      */
-    public function isMultiselect() : bool
+    public function isMultiselect(): bool
     {
         return $this->multiselect;
     }
     /**
      * Gets the prompt for choices.
      */
-    public function getPrompt() : string
+    public function getPrompt(): string
     {
         return $this->prompt;
     }
@@ -94,25 +94,25 @@ class ChoiceQuestion extends Question
         $this->setValidator($this->getDefaultValidator());
         return $this;
     }
-    private function getDefaultValidator() : callable
+    private function getDefaultValidator(): callable
     {
         $choices = $this->choices;
         $errorMessage = $this->errorMessage;
         $multiselect = $this->multiselect;
         $isAssoc = $this->isAssoc($choices);
-        return function ($selected) use($choices, $errorMessage, $multiselect, $isAssoc) {
+        return function ($selected) use ($choices, $errorMessage, $multiselect, $isAssoc) {
             if ($multiselect) {
                 // Check for a separated comma values
-                if (!\preg_match('/^[^,]+(?:,[^,]+)*$/', (string) $selected, $matches)) {
+                if (!preg_match('/^[^,]+(?:,[^,]+)*$/', (string) $selected, $matches)) {
                     throw new InvalidArgumentException(\sprintf($errorMessage, $selected));
                 }
-                $selectedChoices = \explode(',', (string) $selected);
+                $selectedChoices = explode(',', (string) $selected);
             } else {
                 $selectedChoices = [$selected];
             }
             if ($this->isTrimmable()) {
                 foreach ($selectedChoices as $k => $v) {
-                    $selectedChoices[$k] = \trim((string) $v);
+                    $selectedChoices[$k] = trim((string) $v);
                 }
             }
             $multiselectChoices = [];
@@ -124,9 +124,9 @@ class ChoiceQuestion extends Question
                     }
                 }
                 if (\count($results) > 1) {
-                    throw new InvalidArgumentException(\sprintf('The provided answer is ambiguous. Value should be one of "%s".', \implode('" or "', $results)));
+                    throw new InvalidArgumentException(\sprintf('The provided answer is ambiguous. Value should be one of "%s".', implode('" or "', $results)));
                 }
-                $result = \array_search($value, $choices);
+                $result = array_search($value, $choices);
                 if (!$isAssoc) {
                     if (\false !== $result) {
                         $result = $choices[$result];
@@ -145,7 +145,7 @@ class ChoiceQuestion extends Question
             if ($multiselect) {
                 return $multiselectChoices;
             }
-            return \current($multiselectChoices);
+            return current($multiselectChoices);
         };
     }
 }

@@ -4,6 +4,7 @@ declare (strict_types=1);
 namespace Rector\PHPStanStaticTypeMapper\TypeMapper;
 
 use PhpParser\Node;
+use PhpParser\Node\Identifier;
 use PhpParser\Node\Name\FullyQualified;
 use PHPStan\PhpDocParser\Ast\Node as AstNode;
 use PHPStan\PhpDocParser\Ast\Type\ArrayShapeItemNode;
@@ -49,14 +50,17 @@ final class IntersectionTypeMapper implements TypeMapperInterface
         $this->objectTypeMapper = $objectTypeMapper;
         $this->scalarStringToTypeMapper = $scalarStringToTypeMapper;
     }
-    public function getNodeClass() : string
+    /**
+     * @return array<class-string<Type>>
+     */
+    public function getNodeClasses(): array
     {
-        return IntersectionType::class;
+        return [IntersectionType::class];
     }
     /**
      * @param IntersectionType $type
      */
-    public function mapToPHPStanPhpDocTypeNode(Type $type) : TypeNode
+    public function mapToPHPStanPhpDocTypeNode(Type $type): TypeNode
     {
         $typeNode = $type->toPhpDocNode();
         $phpDocNodeTraverser = new PhpDocNodeTraverser();
@@ -80,7 +84,7 @@ final class IntersectionTypeMapper implements TypeMapperInterface
             if ($type instanceof MixedType && $type->isExplicitMixed()) {
                 return PhpDocNodeTraverser::DONT_TRAVERSE_CURRENT_AND_CHILDREN;
             }
-            $astNode->name = '\\' . \ltrim($astNode->name, '\\');
+            $astNode->name = '\\' . ltrim($astNode->name, '\\');
             return $astNode;
         });
         return $typeNode;
@@ -88,8 +92,12 @@ final class IntersectionTypeMapper implements TypeMapperInterface
     /**
      * @param IntersectionType $type
      */
-    public function mapToPhpParserNode(Type $type, string $typeKind) : ?Node
+    public function mapToPhpParserNode(Type $type, string $typeKind): ?Node
     {
+        // accessory string types, e.g. "numeric-string&non-falsy-string", are just "string"
+        if ($type->isString()->yes()) {
+            return new Identifier('string');
+        }
         if (!$this->phpVersionProvider->isAtLeastPhpVersion(PhpVersionFeature::INTERSECTION_TYPES)) {
             return null;
         }
@@ -110,8 +118,8 @@ final class IntersectionTypeMapper implements TypeMapperInterface
         if ($intersectionedTypeNodes === []) {
             return null;
         }
-        if (\count($intersectionedTypeNodes) === 1) {
-            return \current($intersectionedTypeNodes);
+        if (count($intersectionedTypeNodes) === 1) {
+            return current($intersectionedTypeNodes);
         }
         if ($typeKind === TypeKind::UNION && !$this->phpVersionProvider->isAtLeastPhpVersion(PhpVersionFeature::UNION_INTERSECTION_TYPES)) {
             return null;

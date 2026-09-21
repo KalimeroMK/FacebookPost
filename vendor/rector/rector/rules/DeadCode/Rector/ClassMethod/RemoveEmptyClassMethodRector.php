@@ -3,19 +3,21 @@
 declare (strict_types=1);
 namespace Rector\DeadCode\Rector\ClassMethod;
 
+use PhpParser\Comment\Doc;
 use PhpParser\Node;
-use PhpParser\Node\Expr\MethodCall;
-use PhpParser\Node\Expr\Variable;
-use PhpParser\Node\Name\FullyQualified;
+use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PHPStan\PhpDocParser\Ast\PhpDoc\DeprecatedTagValueNode;
+use PHPStan\Reflection\ClassReflection;
 use Rector\BetterPhpDocParser\PhpDocInfo\PhpDocInfo;
 use Rector\BetterPhpDocParser\PhpDocInfo\PhpDocInfoFactory;
+use Rector\Configuration\Parameter\FeatureFlags;
+use Rector\DeadCode\NodeAnalyzer\IsClassMethodUsedAnalyzer;
 use Rector\DeadCode\NodeManipulator\ControllerClassMethodManipulator;
 use Rector\NodeAnalyzer\ParamAnalyzer;
 use Rector\NodeManipulator\ClassMethodManipulator;
-use Rector\PhpParser\Node\BetterNodeFinder;
+use Rector\PHPStan\ScopeFetcher;
 use Rector\Rector\AbstractRector;
 use Rector\ValueObject\MethodName;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
@@ -44,16 +46,16 @@ final class RemoveEmptyClassMethodRector extends AbstractRector
     /**
      * @readonly
      */
-    private BetterNodeFinder $betterNodeFinder;
-    public function __construct(ClassMethodManipulator $classMethodManipulator, ControllerClassMethodManipulator $controllerClassMethodManipulator, ParamAnalyzer $paramAnalyzer, PhpDocInfoFactory $phpDocInfoFactory, BetterNodeFinder $betterNodeFinder)
+    private IsClassMethodUsedAnalyzer $isClassMethodUsedAnalyzer;
+    public function __construct(ClassMethodManipulator $classMethodManipulator, ControllerClassMethodManipulator $controllerClassMethodManipulator, ParamAnalyzer $paramAnalyzer, PhpDocInfoFactory $phpDocInfoFactory, IsClassMethodUsedAnalyzer $isClassMethodUsedAnalyzer)
     {
         $this->classMethodManipulator = $classMethodManipulator;
         $this->controllerClassMethodManipulator = $controllerClassMethodManipulator;
         $this->paramAnalyzer = $paramAnalyzer;
         $this->phpDocInfoFactory = $phpDocInfoFactory;
-        $this->betterNodeFinder = $betterNodeFinder;
+        $this->isClassMethodUsedAnalyzer = $isClassMethodUsedAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Remove empty class methods not required by parents', [new CodeSample(<<<'CODE_SAMPLE'
 class OrphanClass
@@ -73,14 +75,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Class_
+    public function refactor(Node $node): ?Class_
     {
         $hasChanged = \false;
         foreach ($node->stmts as $key => $stmt) {
@@ -93,7 +95,7 @@ CODE_SAMPLE
             if ($stmt->isAbstract()) {
                 continue;
             }
-            if ($stmt->isFinal() && !$node->isFinal()) {
+            if ($stmt->isFinal() && !$node->isFinal() && FeatureFlags::treatClassesAsFinal($node) === \false) {
                 continue;
             }
             if ($this->shouldSkipNonFinalNonPrivateClassMethod($node, $stmt)) {
@@ -110,9 +112,9 @@ CODE_SAMPLE
         }
         return null;
     }
-    private function shouldSkipNonFinalNonPrivateClassMethod(Class_ $class, ClassMethod $classMethod) : bool
+    private function shouldSkipNonFinalNonPrivateClassMethod(Class_ $class, ClassMethod $classMethod): bool
     {
-        if ($class->isFinal()) {
+        if ($class->isFinal() || FeatureFlags::treatClassesAsFinal($class)) {
             return \false;
         }
         if ($classMethod->isMagic()) {
@@ -123,19 +125,19 @@ CODE_SAMPLE
         }
         return $classMethod->isPublic();
     }
-    private function shouldSkipClassMethod(Class_ $class, ClassMethod $classMethod) : bool
+    private function shouldSkipClassMethod(Class_ $class, ClassMethod $classMethod): bool
     {
-        $desiredClassMethodName = $this->getName($classMethod);
         // is method called somewhere else in the class?
-        foreach ($class->getMethods() as $anotherClassMethod) {
-            if ($anotherClassMethod === $classMethod) {
-                continue;
-            }
-            if ($this->containsMethodCall($anotherClassMethod, $desiredClassMethodName)) {
-                return \true;
-            }
+        $scope = ScopeFetcher::fetch($class);
+        if ($this->isClassMethodUsedAnalyzer->isClassMethodUsed($class, $classMethod, $scope)) {
+            return \true;
         }
         if ($this->classMethodManipulator->isNamedConstructor($classMethod)) {
+            return \true;
+        }
+        // anonymous class extending a parent uses empty constructor on purpose,
+        // to avoid parent constructor being invoked
+        if ($class->isAnonymous() && $class->extends instanceof Name && $this->isName($classMethod, MethodName::CONSTRUCT)) {
             return \true;
         }
         if ($this->classMethodManipulator->hasParentMethodOrInterfaceMethod($class, $classMethod->name->toString())) {
@@ -150,13 +152,19 @@ CODE_SAMPLE
         if ($this->controllerClassMethodManipulator->isControllerClassMethod($class, $classMethod)) {
             return \true;
         }
-        if ($this->nodeNameResolver->isName($classMethod, MethodName::CONSTRUCT)) {
-            // has parent class?
-            return $class->extends instanceof FullyQualified;
+        if ($this->isName($classMethod, MethodName::CLONE)) {
+            return !$classMethod->isPublic();
         }
-        return $this->nodeNameResolver->isName($classMethod, MethodName::INVOKE);
+        if ($this->isName($classMethod, MethodName::INVOKE)) {
+            return \true;
+        }
+        $classReflection = $scope->getClassReflection();
+        if (!$classReflection instanceof ClassReflection) {
+            return \false;
+        }
+        return $this->isAttributeMarkerConstructor($classMethod, $classReflection);
     }
-    private function hasDeprecatedAnnotation(ClassMethod $classMethod) : bool
+    private function hasDeprecatedAnnotation(ClassMethod $classMethod): bool
     {
         $phpDocInfo = $this->phpDocInfoFactory->createFromNode($classMethod);
         if (!$phpDocInfo instanceof PhpDocInfo) {
@@ -164,19 +172,17 @@ CODE_SAMPLE
         }
         return $phpDocInfo->hasByType(DeprecatedTagValueNode::class);
     }
-    private function containsMethodCall(ClassMethod $anotherClassMethod, string $desiredClassMethodName) : bool
+    /**
+     * Skip constructor in attributes as might be a marker parameter
+     */
+    private function isAttributeMarkerConstructor(ClassMethod $classMethod, ClassReflection $classReflection): bool
     {
-        return (bool) $this->betterNodeFinder->findFirst($anotherClassMethod, function (Node $node) use($desiredClassMethodName) : bool {
-            if (!$node instanceof MethodCall) {
-                return \false;
-            }
-            if (!$node->var instanceof Variable) {
-                return \false;
-            }
-            if (!$this->isName($node->var, 'this')) {
-                return \false;
-            }
-            return $this->isName($node->name, $desiredClassMethodName);
-        });
+        if (!$this->isName($classMethod, MethodName::CONSTRUCT)) {
+            return \false;
+        }
+        if (!$classReflection->isAttributeClass()) {
+            return \false;
+        }
+        return $classMethod->getDocComment() instanceof Doc;
     }
 }

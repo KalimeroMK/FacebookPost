@@ -15,6 +15,7 @@ use Rector\PhpParser\Node\BetterNodeFinder;
 use Rector\PHPStan\ScopeFetcher;
 use Rector\Rector\AbstractRector;
 use Rector\Reflection\ReflectionResolver;
+use Rector\Symfony\Enum\SymfonyClass;
 use Rector\Symfony\TypeAnalyzer\ControllerAnalyzer;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
@@ -51,7 +52,7 @@ final class RemoveUnusedRequestParamRector extends AbstractRector
         $this->betterNodeFinder = $betterNodeFinder;
         $this->isClassMethodUsedAnalyzer = $isClassMethodUsedAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Remove unused $request parameter from controller action', [new CodeSample(<<<'CODE_SAMPLE'
 use Symfony\Component\HttpFoundation\Request;
@@ -82,14 +83,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$this->controllerAnalyzer->isInsideController($node)) {
             return null;
@@ -113,7 +114,7 @@ CODE_SAMPLE
                 if (!$param->type instanceof Node) {
                     continue;
                 }
-                if (!$this->isObjectType($param->type, new ObjectType('Symfony\\Component\\HttpFoundation\\Request'))) {
+                if (!$this->isObjectType($param->type, new ObjectType(SymfonyClass::REQUEST))) {
                     continue;
                 }
                 /** @var string $requestParamName */
@@ -137,7 +138,7 @@ CODE_SAMPLE
         }
         return null;
     }
-    private function hasAbstractParentClassMethod(ClassMethod $classMethod) : bool
+    private function hasAbstractParentClassMethod(ClassMethod $classMethod): bool
     {
         $classReflection = $this->reflectionResolver->resolveClassReflection($classMethod);
         if (!$classReflection instanceof ClassReflection) {

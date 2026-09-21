@@ -4,8 +4,7 @@ declare (strict_types=1);
 namespace PhpParser\Node\Stmt;
 
 use PhpParser\Node;
-use Rector\Contract\PhpParser\Node\StmtsAwareInterface;
-class ElseIf_ extends Node\Stmt implements StmtsAwareInterface
+class ElseIf_ extends Node\Stmt
 {
     /** @var Node\Expr Condition */
     public Node\Expr $cond;
@@ -24,11 +23,11 @@ class ElseIf_ extends Node\Stmt implements StmtsAwareInterface
         $this->cond = $cond;
         $this->stmts = $stmts;
     }
-    public function getSubNodeNames() : array
+    public function getSubNodeNames(): array
     {
         return ['cond', 'stmts'];
     }
-    public function getType() : string
+    public function getType(): string
     {
         return 'Stmt_ElseIf';
     }

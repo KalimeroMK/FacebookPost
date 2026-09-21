@@ -9,6 +9,7 @@ use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
 use PhpParser\Node\Expr\BinaryOp\Identical;
 use PhpParser\Node\Expr\Empty_;
 use PhpParser\Node\Expr\FuncCall;
+use PhpParser\Node\Expr\Variable;
 use Rector\NodeManipulator\BinaryOpManipulator;
 use Rector\Php71\ValueObject\TwoNodeMatch;
 use Rector\Rector\AbstractRector;
@@ -27,23 +28,23 @@ final class SimplifyEmptyArrayCheckRector extends AbstractRector
     {
         $this->binaryOpManipulator = $binaryOpManipulator;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Simplify `is_array` and `empty` functions combination into a simple identical check for an empty array', [new CodeSample('is_array($values) && empty($values)', '$values === []')]);
     }
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [BooleanAnd::class];
     }
     /**
      * @param BooleanAnd $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
-        $twoNodeMatch = $this->resolvetwoNodeMatch($node);
+        $twoNodeMatch = $this->resolveTwoNodeMatch($node);
         if (!$twoNodeMatch instanceof TwoNodeMatch) {
             return null;
         }
@@ -60,12 +61,12 @@ final class SimplifyEmptyArrayCheckRector extends AbstractRector
         }
         return new Identical($emptyOrNotIdenticalNode->expr, new Array_());
     }
-    private function resolvetwoNodeMatch(BooleanAnd $booleanAnd) : ?TwoNodeMatch
+    private function resolveTwoNodeMatch(BooleanAnd $booleanAnd): ?TwoNodeMatch
     {
         return $this->binaryOpManipulator->matchFirstAndSecondConditionNode(
             $booleanAnd,
             // is_array(...)
-            function (Node $node) : bool {
+            function (Node $node): bool {
                 if (!$node instanceof FuncCall) {
                     return \false;
                 }
@@ -75,23 +76,17 @@ final class SimplifyEmptyArrayCheckRector extends AbstractRector
                 if (!$this->isName($node, 'is_array')) {
                     return \false;
                 }
-                return isset($node->getArgs()[0]);
+                if (isset($node->getArgs()[0])) {
+                    return $node->getArgs()[0]->value instanceof Variable;
+                }
+                return \false;
             },
             // empty(...)
-            function (Node $node) : bool {
+            function (Node $node): bool {
                 if (!$node instanceof Empty_) {
                     return \false;
                 }
-                if ($node->expr instanceof FuncCall) {
-                    if ($node->expr->isFirstClassCallable()) {
-                        return \false;
-                    }
-                    if (!$this->isName($node->expr, 'array_filter')) {
-                        return \false;
-                    }
-                    return isset($node->expr->getArgs()[0]);
-                }
-                return \true;
+                return $node->expr instanceof Variable;
             }
         );
     }

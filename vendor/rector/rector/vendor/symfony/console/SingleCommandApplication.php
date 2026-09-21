@@ -8,11 +8,11 @@
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\Symfony\Component\Console;
+namespace RectorPrefix202609\Symfony\Component\Console;
 
-use RectorPrefix202502\Symfony\Component\Console\Command\Command;
-use RectorPrefix202502\Symfony\Component\Console\Input\InputInterface;
-use RectorPrefix202502\Symfony\Component\Console\Output\OutputInterface;
+use RectorPrefix202609\Symfony\Component\Console\Command\Command;
+use RectorPrefix202609\Symfony\Component\Console\Input\InputInterface;
+use RectorPrefix202609\Symfony\Component\Console\Output\OutputInterface;
 /**
  * @author Grégoire Pineau <lyrixx@lyrixx.info>
  */
@@ -39,7 +39,7 @@ class SingleCommandApplication extends Command
         $this->autoExit = $autoExit;
         return $this;
     }
-    public function run(?InputInterface $input = null, ?OutputInterface $output = null) : int
+    public function run(?InputInterface $input = null, ?OutputInterface $output = null): int
     {
         if ($this->running) {
             return parent::run($input, $output);

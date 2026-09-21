@@ -8,11 +8,11 @@
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\Symfony\Component\Console\Descriptor;
+namespace RectorPrefix202609\Symfony\Component\Console\Descriptor;
 
-use RectorPrefix202502\Symfony\Component\Console\Application;
-use RectorPrefix202502\Symfony\Component\Console\Command\Command;
-use RectorPrefix202502\Symfony\Component\Console\Exception\CommandNotFoundException;
+use RectorPrefix202609\Symfony\Component\Console\Application;
+use RectorPrefix202609\Symfony\Component\Console\Command\Command;
+use RectorPrefix202609\Symfony\Component\Console\Exception\CommandNotFoundException;
 /**
  * @author Jean-François Simon <jeanfrancois.simon@sensiolabs.com>
  *
@@ -39,7 +39,7 @@ class ApplicationDescription
         $this->namespace = $namespace;
         $this->showHidden = $showHidden;
     }
-    public function getNamespaces() : array
+    public function getNamespaces(): array
     {
         if (!isset($this->namespaces)) {
             $this->inspectApplication();
@@ -49,7 +49,7 @@ class ApplicationDescription
     /**
      * @return Command[]
      */
-    public function getCommands() : array
+    public function getCommands(): array
     {
         if (!isset($this->commands)) {
             $this->inspectApplication();
@@ -59,14 +59,14 @@ class ApplicationDescription
     /**
      * @throws CommandNotFoundException
      */
-    public function getCommand(string $name) : Command
+    public function getCommand(string $name): Command
     {
         if (!isset($this->commands[$name]) && !isset($this->aliases[$name])) {
             throw new CommandNotFoundException(\sprintf('Command "%s" does not exist.', $name));
         }
         return $this->commands[$name] ?? $this->aliases[$name];
     }
-    private function inspectApplication() : void
+    private function inspectApplication(): void
     {
         $this->commands = [];
         $this->namespaces = [];
@@ -88,7 +88,7 @@ class ApplicationDescription
             $this->namespaces[$namespace] = ['id' => $namespace, 'commands' => $names];
         }
     }
-    private function sortCommands(array $commands) : array
+    private function sortCommands(array $commands): array
     {
         $namespacedCommands = [];
         $globalCommands = [];
@@ -102,13 +102,13 @@ class ApplicationDescription
             }
         }
         if ($globalCommands) {
-            \ksort($globalCommands);
+            ksort($globalCommands);
             $sortedCommands[self::GLOBAL_NAMESPACE] = $globalCommands;
         }
         if ($namespacedCommands) {
-            \ksort($namespacedCommands, \SORT_STRING);
+            ksort($namespacedCommands, \SORT_STRING);
             foreach ($namespacedCommands as $key => $commandsSet) {
-                \ksort($commandsSet);
+                ksort($commandsSet);
                 $sortedCommands[$key] = $commandsSet;
             }
         }

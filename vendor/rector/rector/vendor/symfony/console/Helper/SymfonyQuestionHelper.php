@@ -8,14 +8,14 @@
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\Symfony\Component\Console\Helper;
+namespace RectorPrefix202609\Symfony\Component\Console\Helper;
 
-use RectorPrefix202502\Symfony\Component\Console\Formatter\OutputFormatter;
-use RectorPrefix202502\Symfony\Component\Console\Output\OutputInterface;
-use RectorPrefix202502\Symfony\Component\Console\Question\ChoiceQuestion;
-use RectorPrefix202502\Symfony\Component\Console\Question\ConfirmationQuestion;
-use RectorPrefix202502\Symfony\Component\Console\Question\Question;
-use RectorPrefix202502\Symfony\Component\Console\Style\SymfonyStyle;
+use RectorPrefix202609\Symfony\Component\Console\Formatter\OutputFormatter;
+use RectorPrefix202609\Symfony\Component\Console\Output\OutputInterface;
+use RectorPrefix202609\Symfony\Component\Console\Question\ChoiceQuestion;
+use RectorPrefix202609\Symfony\Component\Console\Question\ConfirmationQuestion;
+use RectorPrefix202609\Symfony\Component\Console\Question\Question;
+use RectorPrefix202609\Symfony\Component\Console\Style\SymfonyStyle;
 /**
  * Symfony Style Guide compliant question helper.
  *
@@ -31,7 +31,7 @@ class SymfonyQuestionHelper extends QuestionHelper
         $text = OutputFormatter::escapeTrailingBackslash($question->getQuestion());
         $default = $question->getDefault();
         if ($question->isMultiline()) {
-            $text .= \sprintf(' (press %s to continue)', $this->getEofShortcut());
+            $text .= \sprintf(' (press %s to continue)', $this->getEofShortcut($output));
         }
         switch (\true) {
             case null === $default:
@@ -42,15 +42,15 @@ class SymfonyQuestionHelper extends QuestionHelper
                 break;
             case $question instanceof ChoiceQuestion && $question->isMultiselect():
                 $choices = $question->getChoices();
-                $default = \explode(',', $default);
+                $default = explode(',', $default);
                 foreach ($default as $key => $value) {
-                    $default[$key] = $choices[\trim($value)];
+                    $default[$key] = $choices[trim($value)];
                 }
-                $text = \sprintf(' <info>%s</info> [<comment>%s</comment>]:', $text, OutputFormatter::escape(\implode(', ', $default)));
+                $text = \sprintf(' <info>%s</info> [<comment>%s</comment>]:', $text, implode(', ', $default));
                 break;
             case $question instanceof ChoiceQuestion:
                 $choices = $question->getChoices();
-                $text = \sprintf(' <info>%s</info> [<comment>%s</comment>]:', $text, OutputFormatter::escape($choices[$default] ?? $default));
+                $text = \sprintf(' <info>%s</info> [<comment>%s</comment>]:', $text, $choices[$default] ?? $default);
                 break;
             default:
                 $text = \sprintf(' <info>%s</info> [<comment>%s</comment>]:', $text, OutputFormatter::escape($default));
@@ -75,9 +75,9 @@ class SymfonyQuestionHelper extends QuestionHelper
         }
         parent::writeError($output, $error);
     }
-    private function getEofShortcut() : string
+    private function getEofShortcut(OutputInterface $output): string
     {
-        if ('Windows' === \PHP_OS_FAMILY) {
+        if ('\\' === \DIRECTORY_SEPARATOR && !$output->isDecorated()) {
             return '<comment>Ctrl+Z</comment> then <comment>Enter</comment>';
         }
         return '<comment>Ctrl+D</comment>';

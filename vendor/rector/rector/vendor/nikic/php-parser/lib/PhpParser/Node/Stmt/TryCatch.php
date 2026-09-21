@@ -4,8 +4,7 @@ declare (strict_types=1);
 namespace PhpParser\Node\Stmt;
 
 use PhpParser\Node;
-use Rector\Contract\PhpParser\Node\StmtsAwareInterface;
-class TryCatch extends Node\Stmt implements StmtsAwareInterface
+class TryCatch extends Node\Stmt
 {
     /** @var Node\Stmt[] Statements */
     public array $stmts;
@@ -28,11 +27,11 @@ class TryCatch extends Node\Stmt implements StmtsAwareInterface
         $this->catches = $catches;
         $this->finally = $finally;
     }
-    public function getSubNodeNames() : array
+    public function getSubNodeNames(): array
     {
         return ['stmts', 'catches', 'finally'];
     }
-    public function getType() : string
+    public function getType(): string
     {
         return 'Stmt_TryCatch';
     }

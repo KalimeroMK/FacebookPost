@@ -9,15 +9,17 @@ declare (strict_types=1);
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\SebastianBergmann\Diff\Output;
+namespace RectorPrefix202609\SebastianBergmann\Diff\Output;
 
+use function assert;
 use function fclose;
 use function fopen;
 use function fwrite;
+use function is_resource;
 use function str_ends_with;
 use function stream_get_contents;
 use function substr;
-use RectorPrefix202502\SebastianBergmann\Diff\Differ;
+use RectorPrefix202609\SebastianBergmann\Diff\Differ;
 /**
  * Builds a diff string representation in a loose unified diff format
  * listing only changes lines. Does not include line numbers.
@@ -29,21 +31,28 @@ final class DiffOnlyOutputBuilder implements DiffOutputBuilderInterface
     {
         $this->header = $header;
     }
-    public function getDiff(array $diff) : string
+    /**
+     * @param list<array{0: mixed, 1: int}> $diff
+     */
+    public function getDiff(array $diff): string
     {
         $buffer = fopen('php://memory', 'r+b');
+        assert(is_resource($buffer));
         if ('' !== $this->header) {
             fwrite($buffer, $this->header);
-            if (\substr_compare($this->header, "\n", -\strlen("\n")) !== 0) {
+            if (substr_compare($this->header, "\n", -strlen("\n")) !== 0) {
                 fwrite($buffer, "\n");
             }
         }
         foreach ($diff as $diffEntry) {
             if ($diffEntry[1] === Differ::ADDED) {
+                /** @phpstan-ignore binaryOp.invalid */
                 fwrite($buffer, '+' . $diffEntry[0]);
             } elseif ($diffEntry[1] === Differ::REMOVED) {
+                /** @phpstan-ignore binaryOp.invalid */
                 fwrite($buffer, '-' . $diffEntry[0]);
             } elseif ($diffEntry[1] === Differ::DIFF_LINE_END_WARNING) {
+                /** @phpstan-ignore binaryOp.invalid */
                 fwrite($buffer, ' ' . $diffEntry[0]);
                 continue;
                 // Warnings should not be tested for line break, it will always be there
@@ -52,6 +61,7 @@ final class DiffOnlyOutputBuilder implements DiffOutputBuilderInterface
                 continue;
                 // we didn't write the not-changed line, so do not add a line break either
             }
+            /** @phpstan-ignore argument.type */
             $lc = substr($diffEntry[0], -1);
             if ($lc !== "\n" && $lc !== "\r") {
                 fwrite($buffer, "\n");

@@ -16,9 +16,9 @@ abstract class ClassLike extends Node\Stmt
     /** @var Node\Name|null Namespaced name (if using NameResolver) */
     public ?Node\Name $namespacedName;
     /**
-     * @return TraitUse[]
+     * @return list<TraitUse>
      */
-    public function getTraitUses() : array
+    public function getTraitUses(): array
     {
         $traitUses = [];
         foreach ($this->stmts as $stmt) {
@@ -29,9 +29,9 @@ abstract class ClassLike extends Node\Stmt
         return $traitUses;
     }
     /**
-     * @return ClassConst[]
+     * @return list<ClassConst>
      */
-    public function getConstants() : array
+    public function getConstants(): array
     {
         $constants = [];
         foreach ($this->stmts as $stmt) {
@@ -42,9 +42,9 @@ abstract class ClassLike extends Node\Stmt
         return $constants;
     }
     /**
-     * @return Property[]
+     * @return list<Property>
      */
-    public function getProperties() : array
+    public function getProperties(): array
     {
         $properties = [];
         foreach ($this->stmts as $stmt) {
@@ -61,7 +61,7 @@ abstract class ClassLike extends Node\Stmt
      *
      * @return Property|null Property node or null if the property does not exist
      */
-    public function getProperty(string $name) : ?\PhpParser\Node\Stmt\Property
+    public function getProperty(string $name): ?\PhpParser\Node\Stmt\Property
     {
         foreach ($this->stmts as $stmt) {
             if ($stmt instanceof \PhpParser\Node\Stmt\Property) {
@@ -77,9 +77,9 @@ abstract class ClassLike extends Node\Stmt
     /**
      * Gets all methods defined directly in this class/interface/trait
      *
-     * @return ClassMethod[]
+     * @return list<ClassMethod>
      */
-    public function getMethods() : array
+    public function getMethods(): array
     {
         $methods = [];
         foreach ($this->stmts as $stmt) {
@@ -96,9 +96,9 @@ abstract class ClassLike extends Node\Stmt
      *
      * @return ClassMethod|null Method node or null if the method does not exist
      */
-    public function getMethod(string $name) : ?\PhpParser\Node\Stmt\ClassMethod
+    public function getMethod(string $name): ?\PhpParser\Node\Stmt\ClassMethod
     {
-        $lowerName = \strtolower($name);
+        $lowerName = strtolower($name);
         foreach ($this->stmts as $stmt) {
             if ($stmt instanceof \PhpParser\Node\Stmt\ClassMethod && $lowerName === $stmt->name->toLowerString()) {
                 return $stmt;

@@ -1,11 +1,9 @@
-<?php
+<?php declare(strict_types=1);
 
 /**
  * This file is part of the Nette Framework (https://nette.org)
  * Copyright (c) 2004 David Grudl (https://davidgrudl.com)
  */
-
-declare(strict_types=1);
 
 namespace Nette\Schema;
 
@@ -13,6 +11,7 @@ use Nette;
 use Nette\Schema\Elements\AnyOf;
 use Nette\Schema\Elements\Structure;
 use Nette\Schema\Elements\Type;
+use function is_object;
 
 
 /**
@@ -31,6 +30,7 @@ use Nette\Schema\Elements\Type;
  */
 final class Expect
 {
+	/** @param  list<mixed>  $args */
 	public static function __callStatic(string $name, array $args): Type
 	{
 		$type = new Type($name);
@@ -42,12 +42,18 @@ final class Expect
 	}
 
 
+	/**
+	 * Creates a schema for a custom type expression (e.g., 'int|string', 'null|float').
+	 */
 	public static function type(string $type): Type
 	{
 		return new Type($type);
 	}
 
 
+	/**
+	 * Creates a union schema that accepts any of the given values or sub-schemas.
+	 */
 	public static function anyOf(mixed ...$set): AnyOf
 	{
 		return new AnyOf(...$set);
@@ -55,6 +61,7 @@ final class Expect
 
 
 	/**
+	 * Creates a structure schema with defined properties; output is stdClass.
 	 * @param  Schema[]  $shape
 	 */
 	public static function structure(array $shape): Structure
@@ -63,6 +70,10 @@ final class Expect
 	}
 
 
+	/**
+	 * Generates a structure schema from a class instance by reflecting its properties or constructor parameters.
+	 * @param  array<string, Schema>  $items  Optional overrides for specific properties.
+	 */
 	public static function from(object $object, array $items = []): Structure
 	{
 		$ro = new \ReflectionObject($object);
@@ -71,8 +82,8 @@ final class Expect
 			: $ro->getProperties();
 
 		foreach ($props as $prop) {
-			$item = &$items[$prop->getName()];
-			if (!$item) {
+			$name = $prop->getName();
+			if (!isset($items[$name])) {
 				$type = Helpers::getPropertyType($prop) ?? 'mixed';
 				$item = new Type($type);
 				if ($prop instanceof \ReflectionProperty ? $prop->isInitialized($object) : $prop->isOptional()) {
@@ -87,6 +98,7 @@ final class Expect
 				} else {
 					$item->required();
 				}
+				$items[$name] = $item;
 			}
 		}
 
@@ -95,22 +107,31 @@ final class Expect
 
 
 	/**
+	 * Creates an array schema. When passed Schema elements, behaves like structure() but outputs an array.
+	 * Without Schema elements, creates a plain array type with the given default value.
 	 * @param  mixed[]  $shape
 	 */
 	public static function array(?array $shape = []): Structure|Type
 	{
-		return Nette\Utils\Arrays::first($shape ?? []) instanceof Schema
+		$shape ??= [];
+		return Nette\Utils\Arrays::first($shape) instanceof Schema
 			? (new Structure($shape))->castTo('array')
 			: (new Type('array'))->default($shape);
 	}
 
 
+	/**
+	 * Creates an associative or indexed array schema where every value matches the given type.
+	 */
 	public static function arrayOf(string|Schema $valueType, string|Schema|null $keyType = null): Type
 	{
 		return (new Type('array'))->items($valueType, $keyType);
 	}
 
 
+	/**
+	 * Creates a list schema (sequentially indexed from 0) where every element matches the given type.
+	 */
 	public static function listOf(string|Schema $type): Type
 	{
 		return (new Type('list'))->items($type);

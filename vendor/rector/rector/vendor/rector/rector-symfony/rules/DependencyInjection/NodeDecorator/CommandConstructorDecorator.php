@@ -21,20 +21,20 @@ final class CommandConstructorDecorator
     {
         $this->nodeTypeResolver = $nodeTypeResolver;
     }
-    public function decorate(Class_ $class) : void
+    public function decorate(Class_ $class): void
     {
         // special case for command to keep parent constructor call
-        if (!$this->nodeTypeResolver->isObjectType($class, new ObjectType('Symfony\\Component\\Console\\Command\\Command'))) {
+        if (!$this->nodeTypeResolver->isObjectType($class, new ObjectType('Symfony\Component\Console\Command\Command'))) {
             return;
         }
-        $constuctClassMethod = $class->getMethod(MethodName::CONSTRUCT);
-        if (!$constuctClassMethod instanceof ClassMethod) {
+        $constructClassMethod = $class->getMethod(MethodName::CONSTRUCT);
+        if (!$constructClassMethod instanceof ClassMethod) {
             return;
         }
         // empty stmts? add parent::__construct() to setup command
-        if ((array) $constuctClassMethod->stmts === []) {
+        if ((array) $constructClassMethod->stmts === []) {
             $parentConstructStaticCall = new StaticCall(new Name('parent'), '__construct');
-            $constuctClassMethod->stmts[] = new Expression($parentConstructStaticCall);
+            $constructClassMethod->stmts[] = new Expression($parentConstructStaticCall);
         }
     }
 }

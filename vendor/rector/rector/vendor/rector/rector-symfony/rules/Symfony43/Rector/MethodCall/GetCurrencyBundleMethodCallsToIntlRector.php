@@ -10,6 +10,8 @@ use PhpParser\Node\Name\FullyQualified;
 use PHPStan\Type\ObjectType;
 use Rector\Rector\AbstractRector;
 use Rector\Symfony\ValueObject\IntlBundleClassToNewClass;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -18,7 +20,7 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  *
  * @see \Rector\Symfony\Tests\Symfony43\Rector\MethodCall\GetCurrencyBundleMethodCallsToIntlRector\GetCurrencyBundleMethodCallsToIntlRectorTest
  */
-final class GetCurrencyBundleMethodCallsToIntlRector extends AbstractRector
+final class GetCurrencyBundleMethodCallsToIntlRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @var IntlBundleClassToNewClass[]
@@ -26,11 +28,15 @@ final class GetCurrencyBundleMethodCallsToIntlRector extends AbstractRector
     private array $intlBundleClassesToNewClasses = [];
     public function __construct()
     {
-        $this->intlBundleClassesToNewClasses[] = new IntlBundleClassToNewClass('Symfony\\Component\\Intl\\ResourceBundle\\LanguageBundleInterface', 'Symfony\\Component\\Intl\\Languages', ['getLanguageNames' => 'getNames', 'getLanguageName' => 'getName']);
-        $this->intlBundleClassesToNewClasses[] = new IntlBundleClassToNewClass('Symfony\\Component\\Intl\\ResourceBundle\\RegionBundleInterface', 'Symfony\\Component\\Intl\\Currencies', ['getCountryNames' => 'getNames', 'getCountryName' => 'getName']);
-        $this->intlBundleClassesToNewClasses[] = new IntlBundleClassToNewClass('Symfony\\Component\\Intl\\ResourceBundle\\CurrencyBundleInterface', 'Symfony\\Component\\Intl\\Currencies', ['getCurrencyNames' => 'getNames', 'getCurrencyName' => 'getName', 'getCurrencySymbol' => 'getSymbol', 'getFractionDigits' => 'getFractionDigits']);
+        $this->intlBundleClassesToNewClasses[] = new IntlBundleClassToNewClass('Symfony\Component\Intl\ResourceBundle\LanguageBundleInterface', 'Symfony\Component\Intl\Languages', ['getLanguageNames' => 'getNames', 'getLanguageName' => 'getName']);
+        $this->intlBundleClassesToNewClasses[] = new IntlBundleClassToNewClass('Symfony\Component\Intl\ResourceBundle\RegionBundleInterface', 'Symfony\Component\Intl\Currencies', ['getCountryNames' => 'getNames', 'getCountryName' => 'getName']);
+        $this->intlBundleClassesToNewClasses[] = new IntlBundleClassToNewClass('Symfony\Component\Intl\ResourceBundle\CurrencyBundleInterface', 'Symfony\Component\Intl\Currencies', ['getCurrencyNames' => 'getNames', 'getCurrencyName' => 'getName', 'getCurrencySymbol' => 'getSymbol', 'getFractionDigits' => 'getFractionDigits']);
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('symfony/intl', '>=4.3');
+    }
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Intl static bundle method were changed to direct static calls', [new CodeSample(<<<'CODE_SAMPLE'
 $currencyBundle = \Symfony\Component\Intl\Intl::getCurrencyBundle();
@@ -45,14 +51,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [MethodCall::class];
     }
     /**
      * @param MethodCall $node
      */
-    public function refactor(Node $node) : ?StaticCall
+    public function refactor(Node $node): ?StaticCall
     {
         foreach ($this->intlBundleClassesToNewClasses as $intlBundleClassToNewClass) {
             if (!$this->isObjectType($node->var, new ObjectType($intlBundleClassToNewClass->getOldClass()))) {

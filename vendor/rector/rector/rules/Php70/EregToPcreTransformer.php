@@ -3,7 +3,7 @@
 declare (strict_types=1);
 namespace Rector\Php70;
 
-use RectorPrefix202502\Nette\Utils\Strings;
+use RectorPrefix202609\Nette\Utils\Strings;
 use Rector\Php70\Exception\InvalidEregException;
 /**
  * @changelog https://gist.github.com/lifthrasiir/704754/7e486f43e62fd1c9d3669330c251f8ca4a59a3f8
@@ -24,24 +24,24 @@ final class EregToPcreTransformer
         ':alpha:' => '[:alpha:]',
         ':blank:' => '[:blank:]',
         ':cntrl:' => '[:cntrl:]',
-        ':digit:' => '\\d',
+        ':digit:' => 'd',
         ':graph:' => '[:graph:]',
         ':lower:' => '[:lower:]',
         ':print:' => '[:print:]',
         ':punct:' => '[:punct:]',
         // should include VT
-        ':space:' => '013\\s',
+        ':space:' => '013\s',
         ':upper:' => '[:upper:]',
         ':xdigit:' => '[:xdigit:]',
     ];
     /**
-     * @var string
      * @see https://regex101.com/r/htpXFg/1
+     * @var string
      */
-    private const BOUND_REGEX = '/^(?<' . self::MINIMAL_NUMBER_PART . '>\\d|[1-9]\\d|1\\d\\d|
-                                2[0-4]\\d|25[0-5])
-                               (?<comma>,(?<' . self::MAXIMAL_NUMBER_PART . '>\\d|[1-9]\\d|1\\d\\d|
-                                  2[0-4]\\d|25[0-5])?)?$/x';
+    private const BOUND_REGEX = '/^(?<' . self::MINIMAL_NUMBER_PART . '>\d|[1-9]\d|1\d\d|
+                                2[0-4]\d|25[0-5])
+                               (?<comma>,(?<' . self::MAXIMAL_NUMBER_PART . '>\d|[1-9]\d|1\d\d|
+                                  2[0-4]\d|25[0-5])?)?$/x';
     /**
      * @var string
      */
@@ -59,7 +59,7 @@ final class EregToPcreTransformer
      */
     private array $cache = [];
     /**
-     * Change this via services configuratoin in rector.php if you need it
+     * Change this via services configuration in rector.php if you need it
      * Single type is chosen to prevent every regular with different delimiter.
      */
     public function __construct(string $pcreDelimiter = '#')
@@ -67,7 +67,7 @@ final class EregToPcreTransformer
         $this->pcreDelimiter = $pcreDelimiter;
     }
     // converts the ERE $s into the PCRE $r. triggers error on any invalid input.
-    public function transform(string $content, bool $ignorecase) : string
+    public function transform(string $content, bool $ignorecase): string
     {
         if ($ignorecase) {
             if (isset($this->icache[$content])) {
@@ -77,7 +77,7 @@ final class EregToPcreTransformer
             return $this->cache[$content];
         }
         [$r, $i] = $this->_ere2pcre($content, 0);
-        if ($i !== \strlen($content)) {
+        if ($i !== strlen($content)) {
             throw new InvalidEregException('unescaped metacharacter ")"');
         }
         if ($ignorecase) {
@@ -90,11 +90,11 @@ final class EregToPcreTransformer
      *
      * @return float[]|int[]|string[]
      */
-    private function _ere2pcre(string $content, int $i) : array
+    private function _ere2pcre(string $content, int $i): array
     {
         $r = [''];
         $rr = 0;
-        $l = \strlen($content);
+        $l = strlen($content);
         $normalizeUnprintableChar = \false;
         while ($i < $l) {
             // atom
@@ -121,11 +121,11 @@ final class EregToPcreTransformer
                 $r[$rr] .= '[' . $cls . ']';
             } elseif ($char === ')') {
                 break;
-            } elseif ($char === '*' || $char === '+' || $char === '?') {
+            } elseif (in_array($char, ['*', '+', '?'], \true)) {
                 throw new InvalidEregException('unescaped metacharacter "' . $char . '"');
             } elseif ($char === '{') {
-                if ($i + 1 < $l && \strpos('0123456789', $content[$i + 1]) !== \false) {
-                    $r[$rr] .= '\\{';
+                if ($i + 1 < $l && strpos('0123456789', $content[$i + 1]) !== \false) {
+                    $r[$rr] .= '\{';
                 } else {
                     throw new InvalidEregException('unescaped metacharacter "' . $char . '"');
                 }
@@ -158,7 +158,7 @@ final class EregToPcreTransformer
             }
             // piece after the atom (only ONE of them is possible)
             $char = $content[$i];
-            if ($char === '*' || $char === '+' || $char === '?') {
+            if (in_array($char, ['*', '+', '?'], \true)) {
                 $r[$rr] .= $char;
                 ++$i;
             } elseif ($char === '{') {
@@ -169,19 +169,19 @@ final class EregToPcreTransformer
         if ($r[$rr] === '') {
             throw new InvalidEregException('empty regular expression or branch');
         }
-        return [$this->normalize(\implode('|', $r), $normalizeUnprintableChar), $i];
+        return [$this->normalize(implode('|', $r), $normalizeUnprintableChar), $i];
     }
-    private function normalize(string $content, bool $normalizeUnprintableChar) : string
+    private function normalize(string $content, bool $normalizeUnprintableChar): string
     {
         if ($normalizeUnprintableChar) {
-            $content = \str_replace("\f", '\\\\f', $content);
+            $content = str_replace("\f", '\\\\f', $content);
         }
-        return \str_replace($this->pcreDelimiter, '\\' . $this->pcreDelimiter, $content);
+        return str_replace($this->pcreDelimiter, '\\' . $this->pcreDelimiter, $content);
     }
     /**
-     * @param mixed[] $r
+     * @param array<int, mixed> $r
      */
-    private function processBracket(string $content, int $i, int $l, array &$r, int $rr) : int
+    private function processBracket(string $content, int $i, int $l, array &$r, int $rr): int
     {
         // special case
         if ($i + 1 < $l && $content[$i + 1] === ')') {
@@ -203,25 +203,26 @@ final class EregToPcreTransformer
     /**
      * @return float[]|int[]|string[]
      */
-    private function processSquareBracket(string $s, int $i, int $l, string $cls, bool $start) : array
+    private function processSquareBracket(string $s, int $i, int $l, string $cls, bool $start): array
     {
         do {
-            if ($s[$i] === '[' && $i + 1 < $l && \strpos('.=:', $s[$i + 1]) !== \false) {
+            if ($s[$i] === '[' && $i + 1 < $l && strpos('.=:', $s[$i + 1]) !== \false) {
                 /** @var string $cls */
                 [$cls, $i] = $this->processCharacterClass($s, $i, $cls);
             } else {
                 $a = $s[$i];
                 ++$i;
-                if ($a === '-' && !$start && !($i < $l && $s[$i] === ']')) {
+                if ($a === '-' && !$start && ($i >= $l || $s[$i] !== ']')) {
                     throw new InvalidEregException('"-" is invalid for the start character in the brackets');
                 }
                 if ($i < $l && $s[$i] === '-') {
                     $b = $s[++$i];
                     if ($b === ']') {
-                        $cls .= $this->_ere2pcre_escape($a) . '\\-';
+                        $cls .= $this->_ere2pcre_escape($a) . '\-';
                         break;
-                    } elseif (\ord($a) > \ord($b)) {
-                        $errorMessage = \sprintf('an invalid character range %d-%d"', (int) $a, (int) $b);
+                    }
+                    if (ord($a) > ord($b)) {
+                        $errorMessage = sprintf('an invalid character range %d-%d"', (int) $a, (int) $b);
                         throw new InvalidEregException($errorMessage);
                     }
                     $cls .= $this->_ere2pcre_escape($a) . '-' . $this->_ere2pcre_escape($b);
@@ -234,22 +235,22 @@ final class EregToPcreTransformer
         } while ($i < $l && $s[$i] !== ']');
         return [$cls, $i];
     }
-    private function _ere2pcre_escape(string $content) : string
+    private function _ere2pcre_escape(string $content): string
     {
         if ($content === "\x00") {
             throw new InvalidEregException('a literal null byte in the regex');
         }
-        if (\strpos('\\^$.[]|()?*+{}-/', $content) !== \false) {
+        if (strpos('\^$.[]|()?*+{}-/', $content) !== \false) {
             return '\\' . $content;
         }
         return $content;
     }
     /**
-     * @param mixed[] $r
+     * @param array<int, mixed> $r
      */
-    private function processCurlyBracket(string $s, int $i, array &$r, int $rr) : int
+    private function processCurlyBracket(string $s, int $i, array &$r, int $rr): int
     {
-        $ii = \strpos($s, '}', $i);
+        $ii = strpos($s, '}', $i);
         if ($ii === \false) {
             throw new InvalidEregException('"{" does not have a matching "}"');
         }
@@ -275,10 +276,10 @@ final class EregToPcreTransformer
     /**
      * @return int[]|string[]
      */
-    private function processCharacterClass(string $content, int $i, string $cls) : array
+    private function processCharacterClass(string $content, int $i, string $cls): array
     {
         $offset = $i;
-        $ii = \strpos($content, ']', $offset);
+        $ii = strpos($content, ']', $offset);
         if ($ii === \false) {
             throw new InvalidEregException('"[" does not have a matching "]"');
         }

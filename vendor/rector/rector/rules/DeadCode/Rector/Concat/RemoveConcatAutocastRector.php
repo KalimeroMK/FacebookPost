@@ -5,8 +5,10 @@ namespace Rector\DeadCode\Rector\Concat;
 
 use PhpParser\Node;
 use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\BinaryOp;
 use PhpParser\Node\Expr\BinaryOp\Concat;
 use PhpParser\Node\Expr\Cast\String_;
+use Rector\NodeTypeResolver\Node\AttributeKey;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
@@ -15,10 +17,10 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  */
 final class RemoveConcatAutocastRector extends AbstractRector
 {
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Remove (string) casting when it comes to concat, that does this by default', [new CodeSample(<<<'CODE_SAMPLE'
-class SomeConcatingClass
+class SomeConcatenatingClass
 {
     public function run($value)
     {
@@ -27,7 +29,7 @@ class SomeConcatingClass
 }
 CODE_SAMPLE
 , <<<'CODE_SAMPLE'
-class SomeConcatingClass
+class SomeConcatenatingClass
 {
     public function run($value)
     {
@@ -40,14 +42,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Concat::class];
     }
     /**
      * @param Concat $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$node->left instanceof String_ && !$node->right instanceof String_) {
             return null;
@@ -56,8 +58,23 @@ CODE_SAMPLE
         $node->right = $this->removeStringCast($node->right);
         return $node;
     }
-    private function removeStringCast(Expr $expr) : Expr
+    private function removeStringCast(Expr $expr): Expr
     {
-        return $expr instanceof String_ ? $expr->expr : $expr;
+        if (!$expr instanceof String_) {
+            return $expr;
+        }
+        $targetExpr = $expr->expr;
+        $tokens = $this->getFile()->getOldTokens();
+        if ($expr->expr instanceof BinaryOp) {
+            $castStartTokenPos = $expr->getStartTokenPos();
+            $targetExprStartTokenPos = $targetExpr->getStartTokenPos();
+            while (++$castStartTokenPos < $targetExprStartTokenPos) {
+                if (isset($tokens[$castStartTokenPos]) && (string) $tokens[$castStartTokenPos] === '(') {
+                    $targetExpr->setAttribute(AttributeKey::WRAPPED_IN_PARENTHESES, \true);
+                    break;
+                }
+            }
+        }
+        return $targetExpr;
     }
 }

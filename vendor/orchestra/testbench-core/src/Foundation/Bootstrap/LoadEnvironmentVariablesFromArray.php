@@ -7,7 +7,7 @@ use Dotenv\Parser\Parser;
 use Dotenv\Store\StringStore;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Collection;
-use Orchestra\Testbench\Foundation\Env;
+use Orchestra\Sidekick\Env;
 
 /**
  * @internal
@@ -36,7 +36,7 @@ final class LoadEnvironmentVariablesFromArray
         $store = new StringStore(implode(PHP_EOL, $this->environmentVariables));
         $parser = new Parser;
 
-        Collection::make($parser->parse($store->read()))
+        (new Collection($parser->parse($store->read())))
             ->filter(static fn (Entry $entry) => $entry->getValue()->isDefined())
             ->each(static function (Entry $entry) {
                 /** @var \Dotenv\Parser\Entry $entry */

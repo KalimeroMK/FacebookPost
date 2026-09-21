@@ -20,7 +20,6 @@ use PhpParser\Node\Stmt\Switch_;
 use PhpParser\Node\Stmt\While_;
 use PhpParser\NodeVisitor;
 use PHPStan\Type\Constant\ConstantIntegerType;
-use Rector\Contract\PhpParser\Node\StmtsAwareInterface;
 use Rector\PhpParser\Node\Value\ValueResolver;
 use Rector\Rector\AbstractRector;
 use Rector\ValueObject\PhpVersionFeature;
@@ -41,13 +40,13 @@ final class ContinueToBreakInSwitchRector extends AbstractRector implements MinP
     {
         $this->valueResolver = $valueResolver;
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::CONTINUE_TO_BREAK;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
-        return new RuleDefinition('Use break instead of continue in switch statements', [new CodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Use `break` instead of `continue` in switch statements', [new CodeSample(<<<'CODE_SAMPLE'
 function some_run($value)
 {
     switch ($value) {
@@ -78,14 +77,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Switch_::class];
     }
     /**
      * @param Switch_ $node
      */
-    public function refactor(Node $node) : ?Switch_
+    public function refactor(Node $node): ?Switch_
     {
         $this->hasChanged = \false;
         foreach ($node->cases as $case) {
@@ -97,9 +96,9 @@ CODE_SAMPLE
         return $node;
     }
     /**
-     * @param \PhpParser\Node\Stmt|\Rector\Contract\PhpParser\Node\StmtsAwareInterface $stmt
+     * @param Stmt|StmtsAware $stmt
      */
-    private function processContinueStatement($stmt) : void
+    private function processContinueStatement($stmt): void
     {
         $this->traverseNodesWithCallable($stmt, function (Node $subNode) {
             if ($subNode instanceof Class_ || $subNode instanceof Function_ || $subNode instanceof Closure) {

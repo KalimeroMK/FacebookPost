@@ -23,16 +23,18 @@ final class NeverFuncCallAnalyzer
     /**
      * @param \PhpParser\Node\Stmt\ClassMethod|\PhpParser\Node\Expr\Closure|\PhpParser\Node\Stmt\Function_ $functionLike
      */
-    public function hasNeverFuncCall($functionLike) : bool
+    public function hasNeverFuncCall($functionLike): bool
     {
+        $found = \false;
         foreach ((array) $functionLike->stmts as $stmt) {
             if ($this->isWithNeverTypeExpr($stmt)) {
-                return \true;
+                $found = \true;
+                break;
             }
         }
-        return \false;
+        return $found;
     }
-    public function isWithNeverTypeExpr(Stmt $stmt) : bool
+    public function isWithNeverTypeExpr(Stmt $stmt, bool $withNativeNeverType = \true): bool
     {
         if ($stmt instanceof Expression) {
             $stmt = $stmt->expr;
@@ -40,7 +42,7 @@ final class NeverFuncCallAnalyzer
         if ($stmt instanceof Stmt) {
             return \false;
         }
-        $stmtType = $this->nodeTypeResolver->getNativeType($stmt);
+        $stmtType = $withNativeNeverType ? $this->nodeTypeResolver->getNativeType($stmt) : $this->nodeTypeResolver->getType($stmt);
         return $stmtType instanceof NeverType;
     }
 }

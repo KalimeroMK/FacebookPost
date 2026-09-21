@@ -8,16 +8,16 @@
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\Symfony\Component\Console\Completion\Output;
+namespace RectorPrefix202609\Symfony\Component\Console\Completion\Output;
 
-use RectorPrefix202502\Symfony\Component\Console\Completion\CompletionSuggestions;
-use RectorPrefix202502\Symfony\Component\Console\Output\OutputInterface;
+use RectorPrefix202609\Symfony\Component\Console\Completion\CompletionSuggestions;
+use RectorPrefix202609\Symfony\Component\Console\Output\OutputInterface;
 /**
  * @author Wouter de Jong <wouter@wouterj.nl>
  */
 class BashCompletionOutput implements CompletionOutputInterface
 {
-    public function write(CompletionSuggestions $suggestions, OutputInterface $output) : void
+    public function write(CompletionSuggestions $suggestions, OutputInterface $output): void
     {
         $values = $suggestions->getValueSuggestions();
         foreach ($suggestions->getOptionSuggestions() as $option) {
@@ -26,6 +26,6 @@ class BashCompletionOutput implements CompletionOutputInterface
                 $values[] = '--no-' . $option->getName();
             }
         }
-        $output->writeln(\implode("\n", $values));
+        $output->writeln(implode("\n", $values));
     }
 }

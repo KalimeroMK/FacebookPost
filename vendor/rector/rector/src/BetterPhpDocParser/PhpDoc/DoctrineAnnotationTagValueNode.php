@@ -6,7 +6,6 @@ namespace Rector\BetterPhpDocParser\PhpDoc;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use Rector\BetterPhpDocParser\ValueObject\PhpDoc\DoctrineAnnotation\AbstractValuesAwareNode;
 use Rector\BetterPhpDocParser\ValueObject\PhpDocAttributeKey;
-use Rector\NodeTypeResolver\Node\AttributeKey;
 use Stringable;
 final class DoctrineAnnotationTagValueNode extends AbstractValuesAwareNode
 {
@@ -14,16 +13,13 @@ final class DoctrineAnnotationTagValueNode extends AbstractValuesAwareNode
     /**
      * @param ArrayItemNode[] $values
      */
-    public function __construct(IdentifierTypeNode $identifierTypeNode, ?string $originalContent = null, array $values = [], ?string $silentKey = null, ?string $comment = null)
+    public function __construct(IdentifierTypeNode $identifierTypeNode, ?string $originalContent = null, array $values = [], ?string $silentKey = null)
     {
         $this->identifierTypeNode = $identifierTypeNode;
         $this->hasChanged = \true;
         parent::__construct($values, $originalContent, $silentKey);
-        if (!\in_array($comment, ['', null], \true)) {
-            $this->setAttribute(AttributeKey::ATTRIBUTE_COMMENT, $comment);
-        }
     }
-    public function __toString() : string
+    public function __toString(): string
     {
         if (!$this->hasChanged) {
             if ($this->originalContent === null) {
@@ -41,9 +37,9 @@ final class DoctrineAnnotationTagValueNode extends AbstractValuesAwareNode
         $itemContents = $this->printValuesContent($this->values);
         return \sprintf('(%s)', $itemContents);
     }
-    public function hasClassName(string $className) : bool
+    public function hasClassName(string $className): bool
     {
-        $annotationName = \trim($this->identifierTypeNode->name, '@');
+        $annotationName = trim($this->identifierTypeNode->name, '@');
         if ($annotationName === $className) {
             return \true;
         }

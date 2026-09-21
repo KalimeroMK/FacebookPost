@@ -3,28 +3,21 @@
 declare (strict_types=1);
 namespace Rector\Symfony\CodeQuality\Rector\ClassMethod;
 
-use RectorPrefix202502\Nette\Utils\Strings;
 use PhpParser\Node;
-use PhpParser\Node\Identifier;
 use PhpParser\Node\Stmt\ClassMethod;
+use Rector\Configuration\Deprecation\Contract\DeprecatedInterface;
+use Rector\Exception\ShouldNotHappenException;
 use Rector\Rector\AbstractRector;
-use Rector\Symfony\Bridge\NodeAnalyzer\ControllerMethodAnalyzer;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
- * @see \Rector\Symfony\Tests\CodeQuality\Rector\ClassMethod\ActionSuffixRemoverRector\ActionSuffixRemoverRectorTest
+ * @deprecated The "Action" suffix is a naming preference with no functional value. Worse, controller actions are
+ *             referenced from outside PHP - routing configs, templates, tests - and renaming the method silently
+ *             breaks those references.
  */
-final class ActionSuffixRemoverRector extends AbstractRector
+final class ActionSuffixRemoverRector extends AbstractRector implements DeprecatedInterface
 {
-    /**
-     * @readonly
-     */
-    private ControllerMethodAnalyzer $controllerMethodAnalyzer;
-    public function __construct(ControllerMethodAnalyzer $controllerMethodAnalyzer)
-    {
-        $this->controllerMethodAnalyzer = $controllerMethodAnalyzer;
-    }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Removes Action suffixes from methods in Symfony Controllers', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeController
@@ -47,28 +40,15 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [ClassMethod::class];
     }
     /**
      * @param ClassMethod $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
-        if (!$this->controllerMethodAnalyzer->isAction($node)) {
-            return null;
-        }
-        if ($node->name->toString() === 'getAction') {
-            return null;
-        }
-        $this->removeSuffix($node, 'Action');
-        return $node;
-    }
-    private function removeSuffix(ClassMethod $classMethod, string $suffixToRemove) : void
-    {
-        $name = $this->nodeNameResolver->getName($classMethod);
-        $newName = Strings::replace($name, \sprintf('#%s$#', $suffixToRemove), '');
-        $classMethod->name = new Identifier($newName);
+        throw new ShouldNotHappenException(sprintf('"%s" is deprecated, as the "Action" suffix has no functional value and the rename breaks references from routing configs, templates and tests.', self::class));
     }
 }

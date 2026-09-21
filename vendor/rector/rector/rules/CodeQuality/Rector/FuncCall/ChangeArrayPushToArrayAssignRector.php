@@ -4,6 +4,7 @@ declare (strict_types=1);
 namespace Rector\CodeQuality\Rector\FuncCall;
 
 use PhpParser\Node;
+use PhpParser\Node\Arg;
 use PhpParser\Node\Expr\ArrayDimFetch;
 use PhpParser\Node\Expr\Assign;
 use PhpParser\Node\Expr\FuncCall;
@@ -17,7 +18,7 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  */
 final class ChangeArrayPushToArrayAssignRector extends AbstractRector
 {
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Change array_push() to direct variable assign', [new CodeSample(<<<'CODE_SAMPLE'
 $items = [];
@@ -32,7 +33,7 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Expression::class];
     }
@@ -40,7 +41,7 @@ CODE_SAMPLE
      * @param Expression $node
      * @return Stmt[]|null
      */
-    public function refactor(Node $node) : ?array
+    public function refactor(Node $node): ?array
     {
         if (!$node->expr instanceof FuncCall) {
             return null;
@@ -59,7 +60,7 @@ CODE_SAMPLE
         if ($args === []) {
             return null;
         }
-        $firstArg = \array_shift($args);
+        $firstArg = array_shift($args);
         if ($args === []) {
             return null;
         }
@@ -76,13 +77,15 @@ CODE_SAMPLE
         }
         return $newStmts;
     }
-    private function hasArraySpread(FuncCall $funcCall) : bool
+    private function hasArraySpread(FuncCall $funcCall): bool
     {
+        $found = \false;
         foreach ($funcCall->getArgs() as $arg) {
             if ($arg->unpack) {
-                return \true;
+                $found = \true;
+                break;
             }
         }
-        return \false;
+        return $found;
     }
 }

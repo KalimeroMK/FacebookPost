@@ -1,9 +1,9 @@
 <?php
 
 declare (strict_types=1);
-namespace RectorPrefix202502\Composer\Pcre\PHPStan;
+namespace RectorPrefix202609\Composer\Pcre\PHPStan;
 
-use RectorPrefix202502\Composer\Pcre\Preg;
+use RectorPrefix202609\Composer\Pcre\Preg;
 use PhpParser\Node\Expr\StaticCall;
 use PHPStan\Analyser\Scope;
 use PHPStan\Analyser\SpecifiedTypes;
@@ -31,40 +31,51 @@ final class PregMatchTypeSpecifyingExtension implements StaticMethodTypeSpecifyi
     {
         $this->regexShapeMatcher = $regexShapeMatcher;
     }
-    public function setTypeSpecifier(TypeSpecifier $typeSpecifier) : void
+    public function setTypeSpecifier(TypeSpecifier $typeSpecifier): void
     {
         $this->typeSpecifier = $typeSpecifier;
     }
-    public function getClass() : string
+    public function getClass(): string
     {
         return Preg::class;
     }
-    public function isStaticMethodSupported(MethodReflection $methodReflection, StaticCall $node, TypeSpecifierContext $context) : bool
+    public function isStaticMethodSupported(MethodReflection $methodReflection, StaticCall $node, TypeSpecifierContext $context): bool
     {
-        return \in_array($methodReflection->getName(), ['match', 'isMatch', 'matchStrictGroups', 'isMatchStrictGroups', 'matchAll', 'isMatchAll', 'matchAllStrictGroups', 'isMatchAllStrictGroups'], \true) && !$context->null();
+        return in_array($methodReflection->getName(), ['match', 'isMatch', 'matchStrictGroups', 'isMatchStrictGroups', 'matchAll', 'isMatchAll', 'matchAllStrictGroups', 'isMatchAllStrictGroups'], \true) && !$context->null();
     }
-    public function specifyTypes(MethodReflection $methodReflection, StaticCall $node, Scope $scope, TypeSpecifierContext $context) : SpecifiedTypes
+    public function specifyTypes(MethodReflection $methodReflection, StaticCall $node, Scope $scope, TypeSpecifierContext $context): SpecifiedTypes
     {
         $args = $node->getArgs();
         $patternArg = $args[0] ?? null;
+        $subjectArg = $args[1] ?? null;
         $matchesArg = $args[2] ?? null;
         $flagsArg = $args[3] ?? null;
-        if ($patternArg === null || $matchesArg === null) {
-            return new SpecifiedTypes();
+        $subjectTypes = new SpecifiedTypes();
+        if ($patternArg === null) {
+            return $subjectTypes;
+        }
+        if ($subjectArg !== null && $context->true() && $scope->getType($subjectArg->value)->isString()->yes()) {
+            $subjectType = $this->regexShapeMatcher->matchSubjectExpr($patternArg->value, $scope);
+            if ($subjectType !== null) {
+                $subjectTypes = $this->typeSpecifier->create($subjectArg->value, $subjectType, $context, $scope)->setRootExpr($node);
+            }
+        }
+        if ($matchesArg === null) {
+            return $subjectTypes;
         }
         $flagsType = PregMatchFlags::getType($flagsArg, $scope);
         if ($flagsType === null) {
-            return new SpecifiedTypes();
+            return $subjectTypes;
         }
-        if (\stripos($methodReflection->getName(), 'matchAll') !== \false) {
+        if (stripos($methodReflection->getName(), 'matchAll') !== \false) {
             $matchedType = $this->regexShapeMatcher->matchAllExpr($patternArg->value, $flagsType, TrinaryLogic::createFromBoolean($context->true()), $scope);
         } else {
             $matchedType = $this->regexShapeMatcher->matchExpr($patternArg->value, $flagsType, TrinaryLogic::createFromBoolean($context->true()), $scope);
         }
         if ($matchedType === null) {
-            return new SpecifiedTypes();
+            return $subjectTypes;
         }
-        if (\in_array($methodReflection->getName(), ['matchStrictGroups', 'isMatchStrictGroups', 'matchAllStrictGroups', 'isMatchAllStrictGroups'], \true)) {
+        if (in_array($methodReflection->getName(), ['matchStrictGroups', 'isMatchStrictGroups', 'matchAllStrictGroups', 'isMatchAllStrictGroups'], \true)) {
             $matchedType = PregMatchFlags::removeNullFromMatches($matchedType);
         }
         $overwrite = \false;
@@ -72,20 +83,7 @@ final class PregMatchTypeSpecifyingExtension implements StaticMethodTypeSpecifyi
             $overwrite = \true;
             $context = $context->negate();
         }
-        // @phpstan-ignore function.alreadyNarrowedType
-        if (\method_exists('PHPStan\\Analyser\\SpecifiedTypes', 'setRootExpr')) {
-            $typeSpecifier = $this->typeSpecifier->create($matchesArg->value, $matchedType, $context, $scope)->setRootExpr($node);
-            return $overwrite ? $typeSpecifier->setAlwaysOverwriteTypes() : $typeSpecifier;
-        }
-        // @phpstan-ignore arguments.count
-        return $this->typeSpecifier->create(
-            $matchesArg->value,
-            $matchedType,
-            $context,
-            // @phpstan-ignore argument.type
-            $overwrite,
-            $scope,
-            $node
-        );
+        $specifiedTypes = $this->typeSpecifier->create($matchesArg->value, $matchedType, $context, $scope)->setRootExpr($node);
+        return $subjectTypes->unionWith($overwrite ? $specifiedTypes->setAlwaysOverwriteTypes() : $specifiedTypes);
     }
 }

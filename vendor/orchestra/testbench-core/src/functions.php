@@ -15,9 +15,8 @@ use Illuminate\Support\Str;
 use Illuminate\Testing\PendingCommand;
 use InvalidArgumentException;
 use Orchestra\Sidekick;
-use Orchestra\Testbench\Foundation\Config;
-use Orchestra\Testbench\Foundation\Env;
-use Symfony\Component\Process\Process;
+use PHPUnit\Framework\TestCase as PHPUnitTestCase;
+use PHPUnit\Runner\ShutdownHandler;
 
 /**
  * Create Laravel application instance.
@@ -34,9 +33,9 @@ function container(
     ?string $basePath = null,
     ?callable $resolvingCallback = null,
     array $options = [],
-    ?Config $config = null
+    ?Foundation\Config $config = null
 ): Foundation\Application {
-    if ($config instanceof Config) {
+    if ($config instanceof Foundation\Config) {
         return Foundation\Application::makeFromConfig($config, $resolvingCallback, $options);
     }
 
@@ -65,40 +64,56 @@ function artisan(Contracts\TestCase|ApplicationContract $context, string $comman
 }
 
 /**
+ * Emit an exit event within a test.
+ *
+ * @param  \PHPUnit\Framework\TestCase|object|null  $testCase
+ * @param  string|int  $status
+ * @return never
+ */
+function bail(?object $testCase, string|int $status = 0): never
+{
+    if ($testCase instanceof PHPUnitTestCase && Sidekick\phpunit_version_compare('12.3.5', '>=')) {
+        ShutdownHandler::resetMessage();
+    }
+
+    exit($status);
+}
+
+/**
+ * Emit an exit event within a test.
+ *
+ * @param  \PHPUnit\Framework\TestCase|object|null  $testCase
+ * @param  string|int  $status
+ * @return never
+ */
+function terminate(?object $testCase, string|int $status = 0): never
+{
+    bail($testCase, $status);
+}
+
+/**
  * Run remote action using Testbench CLI.
  *
  * @api
  *
- * @param  array<int, string>|string  $command
+ * @param  (\Closure():(mixed))|array<int, string>|string  $command
  * @param  array<string, mixed>|string  $env
  * @param  bool|null  $tty
- * @return \Symfony\Component\Process\Process
+ * @return \Orchestra\Testbench\Foundation\Process\ProcessDecorator
  */
-function remote(array|string $command, array|string $env = [], ?bool $tty = null): Process
+function remote(Closure|array|string $command, array|string $env = [], ?bool $tty = null): Foundation\Process\ProcessDecorator
 {
-    $binary = \defined('TESTBENCH_DUSK') ? 'testbench-dusk' : 'testbench';
-
-    $commander = is_file($vendorBin = package_path('vendor', 'bin', $binary))
-        ? ProcessUtils::escapeArgument((string) $vendorBin)
-        : $binary;
-
-    if (\is_string($env)) {
-        $env = ['APP_ENV' => $env];
-    }
-
-    Arr::add($env, 'TESTBENCH_PACKAGE_REMOTE', '(true)');
-
-    $process = Process::fromShellCommandline(
-        command: Arr::join([php_binary(true), $commander, ...Arr::wrap($command)], ' '),
-        cwd: package_path(),
-        env: array_merge(defined_environment_variables(), $env)
+    $remote = new Foundation\Process\RemoteCommand(
+        package_path(), $env, $tty
     );
 
-    if (\is_bool($tty)) {
-        $process->setTty($tty);
-    }
+    $binary = Sidekick\is_testbench_cli(dusk: true) ? 'testbench-dusk' : 'testbench';
 
-    return $process;
+    $commander = is_file($vendorBinary = package_path('vendor', 'bin', $binary))
+        ? $vendorBinary
+        : $binary;
+
+    return $remote->handle($commander, $command);
 }
 
 /**
@@ -106,18 +121,16 @@ function remote(array|string $command, array|string $env = [], ?bool $tty = null
  *
  * @api
  *
- * @param  \Illuminate\Contracts\Foundation\Application  $app
- * @param  string  $name
- * @param  (\Closure(object, \Illuminate\Contracts\Foundation\Application):(mixed))|null  $callback
+ * @template TLaravel of \Illuminate\Contracts\Foundation\Application
+ *
+ * @param  TLaravel  $app
+ * @param  class-string|string  $name
+ * @param  (\Closure(object, TLaravel):(mixed))|null  $callback
  * @return void
  */
 function after_resolving(ApplicationContract $app, string $name, ?Closure $callback = null): void
 {
-    $app->afterResolving($name, $callback);
-
-    if ($app->resolved($name)) {
-        value($callback, $app->make($name), $app);
-    }
+    Sidekick\after_resolving($app, $name, $callback);
 }
 
 /**
@@ -148,11 +161,11 @@ function load_migration_paths(ApplicationContract $app, array|string $paths): vo
  */
 function defined_environment_variables(): array
 {
-    return Collection::make(array_merge($_SERVER, $_ENV))
+    return (new Collection(array_merge($_SERVER, $_ENV)))
         ->keys()
-        ->mapWithKeys(static fn (string $key) => [$key => Env::forward($key)])
+        ->mapWithKeys(static fn (string $key) => [$key => Sidekick\Env::forward($key)])
         ->unless(
-            Env::has('TESTBENCH_WORKING_PATH'), static fn ($env) => $env->put('TESTBENCH_WORKING_PATH', package_path())
+            Sidekick\Env::has('TESTBENCH_WORKING_PATH'), static fn ($env) => $env->put('TESTBENCH_WORKING_PATH', package_path())
         )->all();
 }
 
@@ -166,7 +179,7 @@ function defined_environment_variables(): array
  */
 function parse_environment_variables($variables): array
 {
-    return Collection::make($variables)
+    return (new Collection($variables))
         ->transform(static function ($value, $key) {
             if (\is_bool($value) || \in_array($value, ['true', 'false'])) {
                 $value = \in_array($value, [true, 'true']) ? '(true)' : '(false)';
@@ -231,11 +244,26 @@ function transform_realpath_to_relative(string $path, ?string $workingPath = nul
  * @no-named-arguments
  *
  * @param  array<int, string|null>|string  ...$path
- * @return string
+ * @return ($path is '' ? string : string|false)
  */
-function default_skeleton_path(array|string $path = ''): string
+function default_skeleton_path(array|string $path = ''): string|false
 {
-    return (string) realpath(Sidekick\join_paths(__DIR__, '..', 'laravel', ...Arr::wrap(\func_num_args() > 1 ? \func_get_args() : $path)));
+    return realpath(
+        Sidekick\Filesystem\join_paths(__DIR__, '..', 'laravel', ...Arr::wrap(\func_num_args() > 1 ? \func_get_args() : $path))
+    );
+}
+
+/**
+ * Determine if application is bootstrapped using Testbench's default skeleton.
+ *
+ * @param  string|null  $basePath
+ * @return bool
+ */
+function uses_default_skeleton(?string $basePath = null): bool
+{
+    $basePath ??= base_path();
+
+    return realpath(Sidekick\Filesystem\join_paths($basePath, 'bootstrap', '.testbench-default-skeleton')) !== false;
 }
 
 /**
@@ -251,7 +279,7 @@ function default_skeleton_path(array|string $path = ''): string
 function default_migration_path(?string $type = null): string
 {
     $path = realpath(
-        \is_null($type) ? base_path('migrations') : base_path(Sidekick\join_paths('migrations', $type))
+        \is_null($type) ? base_path('migrations') : base_path(Sidekick\Filesystem\join_paths('migrations', $type))
     );
 
     if ($path === false) {
@@ -275,19 +303,17 @@ function package_path(array|string $path = ''): string
 {
     $argumentCount = \func_num_args();
 
-    $workingPath = \defined('TESTBENCH_WORKING_PATH')
-        ? TESTBENCH_WORKING_PATH
-        : Env::get('TESTBENCH_WORKING_PATH', getcwd());
+    $workingPath = Sidekick\package_path();
 
     if ($argumentCount === 1 && \is_string($path) && str_starts_with($path, './')) {
         return Sidekick\transform_relative_path($path, $workingPath);
     }
 
-    $path = Sidekick\join_paths(...Arr::wrap($argumentCount > 1 ? \func_get_args() : $path));
+    $path = Sidekick\Filesystem\join_paths(...Arr::wrap($argumentCount > 1 ? \func_get_args() : $path));
 
     return str_starts_with($path, './')
         ? Sidekick\transform_relative_path($path, $workingPath)
-        : Sidekick\join_paths(rtrim($workingPath, DIRECTORY_SEPARATOR), $path);
+        : Sidekick\Filesystem\join_paths(rtrim($workingPath, DIRECTORY_SEPARATOR), $path);
 }
 
 /**
@@ -323,26 +349,6 @@ function workbench_path(array|string $path = ''): string
 }
 
 /**
- * Get the migration path by type.
- *
- * @api
- *
- * @param  string|null  $type
- * @return string
- *
- * @throws \InvalidArgumentException
- *
- * @deprecated
- *
- * @codeCoverageIgnore
- */
-#[\Deprecated(message: 'Use `Orchestra\Testbench\default_migration_path()` instead', since: '9.5.1')]
-function laravel_migration_path(?string $type = null): string
-{
-    return default_migration_path($type);
-}
-
-/**
  * Determine if vendor symlink exists on the laravel application.
  *
  * @api
@@ -371,9 +377,10 @@ function laravel_vendor_exists(ApplicationContract $app, ?string $workingPath = 
  *
  * @param  string  $version
  * @param  string|null  $operator
- * @return int|bool
  *
  * @phpstan-param  TOperator  $operator
+ *
+ * @return int|bool
  *
  * @phpstan-return (TOperator is null ? int : bool)
  *
@@ -385,6 +392,33 @@ function laravel_version_compare(string $version, ?string $operator = null): int
 }
 
 /**
+ * Package version compare.
+ *
+ * @api
+ *
+ * @template TOperator of string|null
+ *
+ * @param  string  $package
+ * @param  string  $version
+ * @param  string|null  $operator
+ *
+ * @phpstan-param  TOperator  $operator
+ *
+ * @return int|bool
+ *
+ * @phpstan-return (TOperator is null ? int : bool)
+ *
+ * @throws \OutOfBoundsException
+ * @throws \RuntimeException
+ *
+ * @codeCoverageIgnore
+ */
+function package_version_compare(string $package, string $version, ?string $operator = null)
+{
+    return Sidekick\package_version_compare($package, $version, $operator);
+}
+
+/**
  * PHPUnit version compare.
  *
  * @api
@@ -393,13 +427,15 @@ function laravel_version_compare(string $version, ?string $operator = null): int
  *
  * @param  string  $version
  * @param  string|null  $operator
- * @return int|bool
- *
- * @throws \RuntimeException
  *
  * @phpstan-param  TOperator  $operator
  *
+ * @return int|bool
+ *
  * @phpstan-return (TOperator is null ? int : bool)
+ *
+ * @throws \OutOfBoundsException
+ * @throws \RuntimeException
  *
  * @codeCoverageIgnore
  */
@@ -430,14 +466,11 @@ function php_binary(bool $escape = false): string
  * @param  string  ...$paths
  * @return string
  *
- * @deprecated 10.0.0 Use `Orchestra\Sidekick\join_paths()` instead.
- *
  * @codeCoverageIgnore
  */
-#[\Deprecated('Use `Orchestra\Sidekick\join_paths()` instead', since: '10.0.0')]
 function join_paths(?string $basePath, string ...$paths): string
 {
-    return Sidekick\join_paths($basePath, ...$paths);
+    return Sidekick\Filesystem\join_paths($basePath, ...$paths);
 }
 
 /**
@@ -458,14 +491,10 @@ function laravel_or_fail($app, ?string $caller = null): Application
     }
 
     if (\is_null($caller)) {
-        $caller = transform(debug_backtrace()[1] ?? null, function ($debug) {
-            /** @phpstan-ignore isset.offset */
-            if (isset($debug['class']) && isset($debug['function'])) {
-                return \sprintf('%s::%s', $debug['class'], $debug['function']);
-            }
-
-            /** @phpstan-ignore offsetAccess.notFound */
-            return $debug['function'];
+        $caller = transform(debug_backtrace()[1] ?? null, static fn ($debug) => match (true) {
+            ! \is_array($debug) => null,
+            isset($debug['class']) => \sprintf('%s::%s', $debug['class'], $debug['function']),
+            default => $debug['function'],
         });
     }
 

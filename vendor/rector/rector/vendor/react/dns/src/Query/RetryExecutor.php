@@ -1,9 +1,9 @@
 <?php
 
-namespace RectorPrefix202502\React\Dns\Query;
+namespace RectorPrefix202609\React\Dns\Query;
 
-use RectorPrefix202502\React\Promise\Deferred;
-use RectorPrefix202502\React\Promise\PromiseInterface;
+use RectorPrefix202609\React\Promise\Deferred;
+use RectorPrefix202609\React\Promise\PromiseInterface;
 final class RetryExecutor implements ExecutorInterface
 {
     private $executor;
@@ -19,17 +19,17 @@ final class RetryExecutor implements ExecutorInterface
     }
     public function tryQuery(Query $query, $retries)
     {
-        $deferred = new Deferred(function () use(&$promise) {
+        $deferred = new Deferred(function () use (&$promise) {
             if ($promise instanceof PromiseInterface && \method_exists($promise, 'cancel')) {
                 $promise->cancel();
             }
         });
-        $success = function ($value) use($deferred, &$errorback) {
+        $success = function ($value) use ($deferred, &$errorback) {
             $errorback = null;
             $deferred->resolve($value);
         };
         $executor = $this->executor;
-        $errorback = function ($e) use($deferred, &$promise, $query, $success, &$errorback, &$retries, $executor) {
+        $errorback = function ($e) use ($deferred, &$promise, $query, $success, &$errorback, &$retries, $executor) {
             if (!$e instanceof TimeoutException) {
                 $errorback = null;
                 $deferred->reject($e);
@@ -39,7 +39,9 @@ final class RetryExecutor implements ExecutorInterface
                 // avoid garbage references by replacing all closures in call stack.
                 // what a lovely piece of code!
                 $r = new \ReflectionProperty('Exception', 'trace');
-                $r->setAccessible(\true);
+                if (\PHP_VERSION_ID < 80100) {
+                    $r->setAccessible(\true);
+                }
                 $trace = $r->getValue($e);
                 // Exception trace arguments are not available on some PHP 7.4 installs
                 // @codeCoverageIgnoreStart

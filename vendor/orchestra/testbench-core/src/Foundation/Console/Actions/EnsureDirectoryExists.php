@@ -7,7 +7,7 @@ use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\LazyCollection;
 
 use function Laravel\Prompts\confirm;
-use function Orchestra\Sidekick\join_paths;
+use function Orchestra\Sidekick\Filesystem\join_paths;
 use function Orchestra\Testbench\transform_realpath_to_relative;
 
 /**
@@ -38,7 +38,7 @@ class EnsureDirectoryExists extends Action
      */
     public function handle(iterable $directories): void
     {
-        LazyCollection::make($directories)
+        (new LazyCollection($directories))
             ->each(function ($directory) {
                 $location = transform_realpath_to_relative($directory, $this->workingPath);
 

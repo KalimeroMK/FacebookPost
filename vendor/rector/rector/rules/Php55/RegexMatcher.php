@@ -3,22 +3,22 @@
 declare (strict_types=1);
 namespace Rector\Php55;
 
-use RectorPrefix202502\Nette\Utils\Strings;
+use RectorPrefix202609\Nette\Utils\Strings;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\BinaryOp\Concat;
 use PhpParser\Node\Scalar\String_;
 final class RegexMatcher
 {
     /**
-     * @var string
      * @see https://regex101.com/r/Ok4wuE/1
-     */
-    private const LAST_E_REGEX = '#(\\w+)?e(\\w+)?$#';
-    /**
      * @var string
-     * @see https://regex101.com/r/2NWVwT/1
      */
-    private const LETTER_SUFFIX_REGEX = '#(?<modifiers>\\w+)$#';
+    private const LAST_E_REGEX = '#(\w+)?e(\w+)?$#';
+    /**
+     * @see https://regex101.com/r/2NWVwT/1
+     * @var string
+     */
+    private const LETTER_SUFFIX_REGEX = '#(?<modifiers>\w+)$#';
     /**
      * @var string[]
      * @see https://www.php.net/manual/en/reference.pcre.pattern.modifiers.php
@@ -49,9 +49,8 @@ final class RegexMatcher
                     $delimiter = $delimiter;
                     break;
             }
-            /** @var string $modifiers */
             $modifiers = $this->resolveModifiers((string) Strings::after($pattern, $delimiter, -1));
-            if (\strpos($modifiers, 'e') === \false) {
+            if (strpos($modifiers, 'e') === \false) {
                 return null;
             }
             $expr->value = $this->createPatternWithoutE($pattern, $delimiter, $modifiers);
@@ -62,11 +61,11 @@ final class RegexMatcher
         }
         return null;
     }
-    private function resolveModifiers(string $modifiersCandidate) : string
+    private function resolveModifiers(string $modifiersCandidate): string
     {
         $modifiers = '';
-        for ($modifierIndex = 0; $modifierIndex < \strlen($modifiersCandidate); ++$modifierIndex) {
-            if (!\in_array($modifiersCandidate[$modifierIndex], self::ALL_MODIFIERS_VALUES, \true)) {
+        for ($modifierIndex = 0; $modifierIndex < strlen($modifiersCandidate); ++$modifierIndex) {
+            if (!in_array($modifiersCandidate[$modifierIndex], self::ALL_MODIFIERS_VALUES, \true)) {
                 $modifiers = '';
                 continue;
             }
@@ -74,12 +73,12 @@ final class RegexMatcher
         }
         return $modifiers;
     }
-    private function createPatternWithoutE(string $pattern, string $delimiter, string $modifiers) : string
+    private function createPatternWithoutE(string $pattern, string $delimiter, string $modifiers): string
     {
-        $modifiersWithoutE = \str_replace('e', '', $modifiers);
+        $modifiersWithoutE = str_replace('e', '', $modifiers);
         return Strings::before($pattern, $delimiter, -1) . $delimiter . $modifiersWithoutE;
     }
-    private function matchConcat(Concat $concat) : ?Concat
+    private function matchConcat(Concat $concat): ?Concat
     {
         // cause parse error
         if (!$concat->left instanceof Concat) {
@@ -93,7 +92,7 @@ final class RegexMatcher
         if (!isset($matches['modifiers'])) {
             return null;
         }
-        if (\strpos((string) $matches['modifiers'], 'e') === \false) {
+        if (strpos($matches['modifiers'], 'e') === \false) {
             return null;
         }
         // replace last "e" in the code

@@ -17,7 +17,9 @@ use PHPStan\Type\StringType;
 use Rector\PhpParser\NodeTransformer;
 use Rector\Rector\AbstractRector;
 use Rector\Util\Reflection\PrivatesAccessor;
-use RectorPrefix202502\Symfony\Component\Console\Input\StringInput;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
+use RectorPrefix202609\Symfony\Component\Console\Input\StringInput;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -25,7 +27,7 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  *
  * @see \Rector\Symfony\Tests\Symfony42\Rector\New_\StringToArrayArgumentProcessRector\StringToArrayArgumentProcessRectorTest
  */
-final class StringToArrayArgumentProcessRector extends AbstractRector
+final class StringToArrayArgumentProcessRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @readonly
@@ -39,7 +41,11 @@ final class StringToArrayArgumentProcessRector extends AbstractRector
     {
         $this->nodeTransformer = $nodeTransformer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('symfony/process', '>=4.2');
+    }
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Changes Process string argument to an array', [new CodeSample(<<<'CODE_SAMPLE'
 use Symfony\Component\Process\Process;
@@ -54,20 +60,20 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [New_::class, MethodCall::class];
     }
     /**
      * @param New_|MethodCall $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         $expr = $node instanceof New_ ? $node->class : $node->var;
-        if ($this->isObjectType($expr, new ObjectType('Symfony\\Component\\Process\\Process'))) {
+        if ($this->isObjectType($expr, new ObjectType('Symfony\Component\Process\Process'))) {
             return $this->processArgumentPosition($node, 0);
         }
-        if ($this->isObjectType($expr, new ObjectType('Symfony\\Component\\Console\\Helper\\ProcessHelper'))) {
+        if ($this->isObjectType($expr, new ObjectType('Symfony\Component\Console\Helper\ProcessHelper'))) {
             return $this->processArgumentPosition($node, 1);
         }
         return null;
@@ -75,7 +81,7 @@ CODE_SAMPLE
     /**
      * @param \PhpParser\Node\Expr\New_|\PhpParser\Node\Expr\MethodCall $node
      */
-    private function processArgumentPosition($node, int $argumentPosition) : ?Node
+    private function processArgumentPosition($node, int $argumentPosition): ?Node
     {
         if (!isset($node->args[$argumentPosition])) {
             return null;
@@ -96,39 +102,46 @@ CODE_SAMPLE
         if (!$activeValueType instanceof StringType) {
             return null;
         }
-        $this->processStringType($node, $argumentPosition, $activeArgValue);
+        $hasChanged = $this->processStringType($node, $argumentPosition, $activeArgValue);
+        if (!$hasChanged) {
+            return null;
+        }
         return $node;
     }
-    private function shouldSkipProcessMethodCall(MethodCall $methodCall) : bool
+    private function shouldSkipProcessMethodCall(MethodCall $methodCall): bool
     {
-        $methodName = (string) $this->nodeNameResolver->getName($methodCall->name);
-        return \in_array($methodName, self::EXCLUDED_PROCESS_METHOD_CALLS, \true);
+        $methodName = (string) $this->getName($methodCall->name);
+        return in_array($methodName, self::EXCLUDED_PROCESS_METHOD_CALLS, \true);
     }
     /**
      * @param \PhpParser\Node\Expr\New_|\PhpParser\Node\Expr\MethodCall $expr
      */
-    private function processStringType($expr, int $argumentPosition, Expr $firstArgumentExpr) : void
+    private function processStringType($expr, int $argumentPosition, Expr $firstArgumentExpr): bool
     {
         if ($firstArgumentExpr instanceof Concat) {
             $arrayNode = $this->nodeTransformer->transformConcatToStringArray($firstArgumentExpr);
             $expr->args[$argumentPosition] = new Arg($arrayNode);
-            return;
+            return \true;
         }
         $args = $expr->getArgs();
+        $hasChanged = \false;
         if ($firstArgumentExpr instanceof FuncCall && $this->isName($firstArgumentExpr, 'sprintf')) {
             $arrayNode = $this->nodeTransformer->transformSprintfToArray($firstArgumentExpr);
             if ($arrayNode instanceof Array_) {
                 $args[$argumentPosition]->value = $arrayNode;
+                $hasChanged = \true;
             }
         } elseif ($firstArgumentExpr instanceof String_) {
             $parts = $this->splitProcessCommandToItems($firstArgumentExpr->value);
             $args[$argumentPosition]->value = $this->nodeFactory->createArray($parts);
+            $hasChanged = \true;
         }
+        return $hasChanged;
     }
     /**
      * @return string[]
      */
-    private function splitProcessCommandToItems(string $process) : array
+    private function splitProcessCommandToItems(string $process): array
     {
         $privatesAccessor = new PrivatesAccessor();
         return $privatesAccessor->callPrivateMethod(new StringInput(''), 'tokenize', [$process]);

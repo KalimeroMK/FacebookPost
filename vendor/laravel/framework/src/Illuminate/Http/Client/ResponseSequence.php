@@ -35,7 +35,6 @@ class ResponseSequence
      * Create a new response sequence.
      *
      * @param  array  $responses
-     * @return void
      */
     public function __construct(array $responses)
     {
@@ -45,7 +44,7 @@ class ResponseSequence
     /**
      * Push a response to the sequence.
      *
-     * @param  string|array|null  $body
+     * @param  \Psr\Http\Message\StreamInterface|array|string|resource|null  $body
      * @param  int  $status
      * @param  array  $headers
      * @return $this

@@ -35,9 +35,9 @@ final class CallUserFuncArrayToVariadicRector extends AbstractRector implements 
         $this->arrayCallableToMethodCallFactory = $arrayCallableToMethodCallFactory;
         $this->valueResolver = $valueResolver;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
-        return new RuleDefinition('Replace call_user_func_array() with variadic', [new CodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Replace `call_user_func_array()` with variadic', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
 {
     public function run()
@@ -60,14 +60,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [FuncCall::class];
     }
     /**
      * @param FuncCall $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$this->isName($node, 'call_user_func_array')) {
             return null;
@@ -85,18 +85,22 @@ CODE_SAMPLE
         if ($firstArgValue instanceof Array_) {
             return $this->createMethodCall($firstArgValue, $secondArgValue);
         }
+        if ($firstArgValue instanceof MethodCall && $firstArgValue->isFirstClassCallable()) {
+            $firstArgValue->args = [$this->createUnpackedArg($secondArgValue)];
+            return $firstArgValue;
+        }
         return null;
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::ARRAY_SPREAD;
     }
-    private function createFuncCall(Expr $expr, string $functionName) : FuncCall
+    private function createFuncCall(Expr $expr, string $functionName): FuncCall
     {
         $args = [$this->createUnpackedArg($expr)];
         return $this->nodeFactory->createFuncCall($functionName, $args);
     }
-    private function createMethodCall(Array_ $array, Expr $secondExpr) : ?MethodCall
+    private function createMethodCall(Array_ $array, Expr $secondExpr): ?MethodCall
     {
         $methodCall = $this->arrayCallableToMethodCallFactory->create($array);
         if (!$methodCall instanceof MethodCall) {
@@ -105,7 +109,7 @@ CODE_SAMPLE
         $methodCall->args[] = $this->createUnpackedArg($secondExpr);
         return $methodCall;
     }
-    private function createUnpackedArg(Expr $expr) : Arg
+    private function createUnpackedArg(Expr $expr): Arg
     {
         return new Arg($expr, \false, \true);
     }

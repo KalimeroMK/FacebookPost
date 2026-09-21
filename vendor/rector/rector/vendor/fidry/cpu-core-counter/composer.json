@@ -20,21 +20,21 @@
         "fidry\/makefile": "^0.2.0",
         "fidry\/php-cs-fixer-config": "^1.1.2",
         "phpstan\/extension-installer": "^1.2.0",
-        "phpstan\/phpstan": "^1.9.2",
-        "phpstan\/phpstan-deprecation-rules": "^1.0.0",
-        "phpstan\/phpstan-phpunit": "^1.2.2",
-        "phpstan\/phpstan-strict-rules": "^1.4.4",
+        "phpstan\/phpstan": "^2.0",
+        "phpstan\/phpstan-deprecation-rules": "^2.0.0",
+        "phpstan\/phpstan-phpunit": "^2.0",
+        "phpstan\/phpstan-strict-rules": "^2.0",
         "phpunit\/phpunit": "^8.5.31 || ^9.5.26",
         "webmozarts\/strict-phpunit": "^7.5"
     },
     "autoload": {
         "psr-4": {
-            "RectorPrefix202502\\Fidry\\CpuCoreCounter\\": "src\/"
+            "RectorPrefix202609\\Fidry\\CpuCoreCounter\\": "src\/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "RectorPrefix202502\\Fidry\\CpuCoreCounter\\Test\\": "tests\/"
+            "RectorPrefix202609\\Fidry\\CpuCoreCounter\\Test\\": "tests\/"
         }
     },
     "config": {

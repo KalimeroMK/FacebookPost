@@ -9,7 +9,7 @@
  * file that was distributed with this source code.
  */
 declare (strict_types=1);
-namespace RectorPrefix202502\Fidry\CpuCoreCounter\Finder;
+namespace RectorPrefix202609\Fidry\CpuCoreCounter\Finder;
 
 use function file_get_contents;
 use function is_file;
@@ -26,7 +26,7 @@ use const PHP_EOL;
 final class CpuInfoFinder implements CpuCoreFinder
 {
     private const CPU_INFO_PATH = '/proc/cpuinfo';
-    public function diagnose() : string
+    public function diagnose(): string
     {
         if (!is_file(self::CPU_INFO_PATH)) {
             return sprintf('The file "%s" could not be found.', self::CPU_INFO_PATH);
@@ -40,16 +40,16 @@ final class CpuInfoFinder implements CpuCoreFinder
     /**
      * @return positive-int|null
      */
-    public function find() : ?int
+    public function find(): ?int
     {
         $cpuInfo = self::getCpuInfo();
         return null === $cpuInfo ? null : self::countCpuCores($cpuInfo);
     }
-    public function toString() : string
+    public function toString(): string
     {
         return 'CpuInfoFinder';
     }
-    private static function getCpuInfo() : ?string
+    private static function getCpuInfo(): ?string
     {
         if (!@is_file(self::CPU_INFO_PATH)) {
             return null;
@@ -62,7 +62,7 @@ final class CpuInfoFinder implements CpuCoreFinder
      *
      * @return positive-int|null
      */
-    public static function countCpuCores(string $cpuInfo) : ?int
+    public static function countCpuCores(string $cpuInfo): ?int
     {
         $processorCount = substr_count($cpuInfo, 'processor');
         return $processorCount > 0 ? $processorCount : null;

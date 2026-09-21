@@ -7,11 +7,12 @@ use PhpParser\Node;
 use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
+use Rector\Configuration\Parameter\FeatureFlags;
 use Rector\DeadCode\NodeManipulator\ClassMethodParamRemover;
-use Rector\DeadCode\NodeManipulator\VariadicFunctionLikeDetector;
 use Rector\NodeAnalyzer\MagicClassMethodAnalyzer;
 use Rector\Php80\NodeAnalyzer\PhpAttributeAnalyzer;
 use Rector\Rector\AbstractRector;
+use Rector\ValueObject\MethodName;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -19,10 +20,6 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  */
 final class RemoveUnusedPublicMethodParameterRector extends AbstractRector
 {
-    /**
-     * @readonly
-     */
-    private VariadicFunctionLikeDetector $variadicFunctionLikeDetector;
     /**
      * @readonly
      */
@@ -35,14 +32,13 @@ final class RemoveUnusedPublicMethodParameterRector extends AbstractRector
      * @readonly
      */
     private PhpAttributeAnalyzer $phpAttributeAnalyzer;
-    public function __construct(VariadicFunctionLikeDetector $variadicFunctionLikeDetector, ClassMethodParamRemover $classMethodParamRemover, MagicClassMethodAnalyzer $magicClassMethodAnalyzer, PhpAttributeAnalyzer $phpAttributeAnalyzer)
+    public function __construct(ClassMethodParamRemover $classMethodParamRemover, MagicClassMethodAnalyzer $magicClassMethodAnalyzer, PhpAttributeAnalyzer $phpAttributeAnalyzer)
     {
-        $this->variadicFunctionLikeDetector = $variadicFunctionLikeDetector;
         $this->classMethodParamRemover = $classMethodParamRemover;
         $this->magicClassMethodAnalyzer = $magicClassMethodAnalyzer;
         $this->phpAttributeAnalyzer = $phpAttributeAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Remove unused parameter in public method on final class without extends and interface', [new CodeSample(<<<'CODE_SAMPLE'
 final class SomeClass
@@ -67,17 +63,20 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         // may have child, or override parent that needs to follow the signature
-        if (!$node->isFinal() || $node->extends instanceof FullyQualified || $node->implements !== []) {
+        if (!$node->isFinal() && FeatureFlags::treatClassesAsFinal($node) === \false) {
+            return null;
+        }
+        if ($node->extends instanceof FullyQualified || $node->implements !== []) {
             return null;
         }
         $hasChanged = \false;
@@ -96,7 +95,7 @@ CODE_SAMPLE
         }
         return null;
     }
-    private function shouldSkipClassMethod(ClassMethod $classMethod, Class_ $class) : bool
+    private function shouldSkipClassMethod(ClassMethod $classMethod, Class_ $class): bool
     {
         // private method is handled by different rule
         if (!$classMethod->isPublic()) {
@@ -106,12 +105,9 @@ CODE_SAMPLE
             return \true;
         }
         // parameter is required for contract coupling
-        if ($this->isName($classMethod->name, '__invoke') && $this->phpAttributeAnalyzer->hasPhpAttribute($class, 'Symfony\\Component\\Messenger\\Attribute\\AsMessageHandler')) {
+        if ($this->isName($classMethod->name, MethodName::INVOKE) && $this->phpAttributeAnalyzer->hasPhpAttribute($class, 'Symfony\Component\Messenger\Attribute\AsMessageHandler')) {
             return \true;
         }
-        if ($this->magicClassMethodAnalyzer->isUnsafeOverridden($classMethod)) {
-            return \true;
-        }
-        return $this->variadicFunctionLikeDetector->isVariadic($classMethod);
+        return $this->magicClassMethodAnalyzer->isUnsafeOverridden($classMethod);
     }
 }

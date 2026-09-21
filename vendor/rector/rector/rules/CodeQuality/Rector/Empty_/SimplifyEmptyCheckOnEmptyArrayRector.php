@@ -61,16 +61,16 @@ final class SimplifyEmptyCheckOnEmptyArrayRector extends AbstractRector
         $this->allAssignNodePropertyTypeInferer = $allAssignNodePropertyTypeInferer;
         $this->reservedKeywordAnalyzer = $reservedKeywordAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Simplify empty() functions calls on empty arrays', [new CodeSample(<<<'CODE_SAMPLE'
-$array = [];
+$values = [];
 
 if (empty($values)) {
 }
 CODE_SAMPLE
 , <<<'CODE_SAMPLE'
-$array = [];
+$values = [];
 
 if ([] === $values) {
 }
@@ -80,14 +80,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Empty_::class, BooleanNot::class];
     }
     /**
      * @param Empty_|BooleanNot $node $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         $scope = ScopeFetcher::fetch($node);
         if ($node instanceof BooleanNot) {
@@ -101,14 +101,14 @@ CODE_SAMPLE
         }
         return new Identical($node->expr, new Array_());
     }
-    private function isAllowedVariable(Variable $variable) : bool
+    private function isAllowedVariable(Variable $variable): bool
     {
-        if (\is_string($variable->name) && $this->reservedKeywordAnalyzer->isNativeVariable($variable->name)) {
+        if (is_string($variable->name) && $this->reservedKeywordAnalyzer->isNativeVariable($variable->name)) {
             return \false;
         }
         return !$this->exprAnalyzer->isNonTypedFromParam($variable);
     }
-    private function isAllowedExpr(Expr $expr, Scope $scope) : bool
+    private function isAllowedExpr(Expr $expr, Scope $scope): bool
     {
         if (!$scope->getType($expr)->isArray()->yes()) {
             return \false;
@@ -145,7 +145,7 @@ CODE_SAMPLE
         if (!$property instanceof Property) {
             return \false;
         }
-        $type = $this->allAssignNodePropertyTypeInferer->inferProperty($property, $classReflection, $this->file);
+        $type = $this->allAssignNodePropertyTypeInferer->inferProperty($property, $classReflection, $this->getFile());
         if (!$type instanceof Type) {
             return \false;
         }

@@ -8,7 +8,7 @@
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\Symfony\Component\Finder\Comparator;
+namespace RectorPrefix202609\Symfony\Component\Finder\Comparator;
 
 /**
  * NumberComparator compiles a simple comparison to an anonymous
@@ -18,7 +18,7 @@ namespace RectorPrefix202502\Symfony\Component\Finder\Comparator;
  * magnitudes.
  *
  * The target value may use magnitudes of kilobytes (k, ki),
- * megabytes (m, mi), or gigabytes (g, gi).  Those suffixed
+ * megabytes (m, mi), or gigabytes (g, gi). Those suffixed
  * with an i use the appropriate 2**n version in accordance with the
  * IEC standard: http://physics.nist.gov/cuu/Units/binary.html
  *
@@ -40,16 +40,16 @@ class NumberComparator extends Comparator
      */
     public function __construct(?string $test)
     {
-        if (null === $test || !\preg_match('#^\\s*(==|!=|[<>]=?)?\\s*([0-9\\.]+)\\s*([kmg]i?)?\\s*$#i', $test, $matches)) {
+        if (null === $test || !preg_match('#^\s*(==|!=|[<>]=?)?\s*([0-9\.]+)\s*([kmg]i?)?\s*$#i', $test, $matches)) {
             throw new \InvalidArgumentException(\sprintf('Don\'t understand "%s" as a number test.', $test ?? 'null'));
         }
         $target = $matches[2];
-        if (!\is_numeric($target)) {
+        if (!is_numeric($target)) {
             throw new \InvalidArgumentException(\sprintf('Invalid number "%s".', $target));
         }
         if (isset($matches[3])) {
             // magnitude
-            switch (\strtolower($matches[3])) {
+            switch (strtolower($matches[3])) {
                 case 'k':
                     $target *= 1000;
                     break;

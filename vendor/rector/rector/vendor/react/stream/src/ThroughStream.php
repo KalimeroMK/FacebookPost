@@ -1,8 +1,8 @@
 <?php
 
-namespace RectorPrefix202502\React\Stream;
+namespace RectorPrefix202609\React\Stream;
 
-use RectorPrefix202502\Evenement\EventEmitter;
+use RectorPrefix202609\Evenement\EventEmitter;
 use InvalidArgumentException;
 /**
  * The `ThroughStream` implements the

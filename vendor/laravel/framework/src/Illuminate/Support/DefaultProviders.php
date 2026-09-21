@@ -7,14 +7,14 @@ class DefaultProviders
     /**
      * The current providers.
      *
-     * @var array
+     * @var array<class-string>
      */
     protected $providers;
 
     /**
      * Create a new default provider collection.
      *
-     * @return void
+     * @param  array<class-string>|null  $providers
      */
     public function __construct(?array $providers = null)
     {
@@ -29,6 +29,7 @@ class DefaultProviders
             \Illuminate\Database\DatabaseServiceProvider::class,
             \Illuminate\Encryption\EncryptionServiceProvider::class,
             \Illuminate\Filesystem\FilesystemServiceProvider::class,
+            \Illuminate\Image\ImageServiceProvider::class,
             \Illuminate\Foundation\Providers\FoundationServiceProvider::class,
             \Illuminate\Hashing\HashServiceProvider::class,
             \Illuminate\Mail\MailServiceProvider::class,
@@ -48,7 +49,7 @@ class DefaultProviders
     /**
      * Merge the given providers into the provider collection.
      *
-     * @param  array  $providers
+     * @param  array<class-string>  $providers
      * @return static
      */
     public function merge(array $providers)
@@ -61,7 +62,7 @@ class DefaultProviders
     /**
      * Replace the given providers with other providers.
      *
-     * @param  array  $replacements
+     * @param  array<class-string, class-string>  $replacements
      * @return static
      */
     public function replace(array $replacements)
@@ -80,13 +81,13 @@ class DefaultProviders
     /**
      * Disable the given providers.
      *
-     * @param  array  $providers
+     * @param  array<class-string>  $providers
      * @return static
      */
     public function except(array $providers)
     {
         return new static((new Collection($this->providers))
-            ->reject(fn ($p) => in_array($p, $providers))
+            ->diff($providers)
             ->values()
             ->toArray());
     }
@@ -94,7 +95,7 @@ class DefaultProviders
     /**
      * Convert the provider collection to an array.
      *
-     * @return array
+     * @return array<class-string>
      */
     public function toArray()
     {

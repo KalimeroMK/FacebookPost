@@ -8,9 +8,24 @@ use PhpParser\Node\ArrayItem;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\BinaryOp;
+use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
+use PhpParser\Node\Expr\BinaryOp\BooleanOr;
+use PhpParser\Node\Expr\BinaryOp\Equal;
+use PhpParser\Node\Expr\BinaryOp\Greater;
+use PhpParser\Node\Expr\BinaryOp\GreaterOrEqual;
+use PhpParser\Node\Expr\BinaryOp\Identical;
+use PhpParser\Node\Expr\BinaryOp\LogicalAnd;
+use PhpParser\Node\Expr\BinaryOp\LogicalOr;
+use PhpParser\Node\Expr\BinaryOp\LogicalXor;
+use PhpParser\Node\Expr\BinaryOp\NotEqual;
+use PhpParser\Node\Expr\BinaryOp\NotIdentical;
+use PhpParser\Node\Expr\BinaryOp\Smaller;
+use PhpParser\Node\Expr\BinaryOp\SmallerOrEqual;
 use PhpParser\Node\Expr\BitwiseNot;
 use PhpParser\Node\Expr\BooleanNot;
+use PhpParser\Node\Expr\CallLike;
 use PhpParser\Node\Expr\Cast;
+use PhpParser\Node\Expr\Cast\Bool_;
 use PhpParser\Node\Expr\ClassConstFetch;
 use PhpParser\Node\Expr\Clone_;
 use PhpParser\Node\Expr\ConstFetch;
@@ -20,6 +35,7 @@ use PhpParser\Node\Expr\Eval_;
 use PhpParser\Node\Expr\Exit_;
 use PhpParser\Node\Expr\Include_;
 use PhpParser\Node\Expr\Instanceof_;
+use PhpParser\Node\Expr\Isset_;
 use PhpParser\Node\Expr\Print_;
 use PhpParser\Node\Expr\Throw_;
 use PhpParser\Node\Expr\UnaryMinus;
@@ -33,17 +49,43 @@ use PhpParser\Node\Scalar\Int_;
 use PhpParser\Node\Scalar\InterpolatedString;
 use PhpParser\Node\Scalar\String_;
 use PHPStan\Analyser\Scope;
+use PHPStan\Type\Constant\ConstantStringType;
 use PHPStan\Type\MixedType;
 use PHPStan\Type\ObjectWithoutClassType;
 use PHPStan\Type\UnionType;
 use Rector\Enum\ObjectReference;
+use Rector\NodeNameResolver\NodeNameResolver;
 use Rector\NodeTypeResolver\Node\AttributeKey;
 final class ExprAnalyzer
 {
     /**
+     * @readonly
+     */
+    private NodeNameResolver $nodeNameResolver;
+    public function __construct(NodeNameResolver $nodeNameResolver)
+    {
+        $this->nodeNameResolver = $nodeNameResolver;
+    }
+    public function isBoolExpr(Expr $expr): bool
+    {
+        return $expr instanceof BooleanNot || $expr instanceof Empty_ || $expr instanceof Isset_ || $expr instanceof Instanceof_ || $expr instanceof Bool_ || $expr instanceof Equal || $expr instanceof NotEqual || $expr instanceof Identical || $expr instanceof NotIdentical || $expr instanceof Greater || $expr instanceof GreaterOrEqual || $expr instanceof Smaller || $expr instanceof SmallerOrEqual || $expr instanceof BooleanAnd || $expr instanceof BooleanOr || $expr instanceof LogicalAnd || $expr instanceof LogicalOr || $expr instanceof LogicalXor;
+    }
+    public function isCallLikeReturnNativeBool(Expr $expr): bool
+    {
+        if (!$expr instanceof CallLike) {
+            return \false;
+        }
+        $scope = $expr->getAttribute(AttributeKey::SCOPE);
+        if (!$scope instanceof Scope) {
+            return \false;
+        }
+        $nativeType = $scope->getNativeType($expr);
+        return $nativeType->isBoolean()->yes();
+    }
+    /**
      * Verify that Expr has ->expr property that can be wrapped by parentheses
      */
-    public function isExprWithExprPropertyWrappable(Node $node) : bool
+    public function isExprWithExprPropertyWrappable(Node $node): bool
     {
         if (!$node instanceof Expr) {
             return \false;
@@ -57,7 +99,7 @@ final class ExprAnalyzer
         }
         return \false;
     }
-    public function isNonTypedFromParam(Expr $expr) : bool
+    public function isNonTypedFromParam(Expr $expr): bool
     {
         if (!$expr instanceof Variable) {
             return \false;
@@ -75,12 +117,25 @@ final class ExprAnalyzer
         if ($nativeType instanceof ObjectWithoutClassType && !$type instanceof ObjectWithoutClassType) {
             return \true;
         }
-        if ($nativeType instanceof UnionType) {
-            return !$nativeType->equals($type);
+        if (!$scope->hasVariableType((string) $this->nodeNameResolver->getName($expr))->yes()) {
+            return \true;
         }
-        return !$nativeType->isSuperTypeOf($type)->yes();
+        if ($nativeType instanceof UnionType && !$nativeType->equals($type)) {
+            return \true;
+        }
+        if (!$nativeType->isSuperTypeOf($type)->yes()) {
+            return \true;
+        }
+        $definedVariables = $scope->getDefinedVariables();
+        foreach ($definedVariables as $definedVariable) {
+            $variableType = $scope->getVariableType($definedVariable);
+            if ($variableType instanceof ConstantStringType && in_array($variableType->getValue(), $definedVariables, \true)) {
+                return \true;
+            }
+        }
+        return \false;
     }
-    public function isDynamicExpr(Expr $expr) : bool
+    public function isDynamicExpr(Expr $expr): bool
     {
         // Unwrap UnaryPlus and UnaryMinus
         if ($expr instanceof UnaryPlus || $expr instanceof UnaryMinus) {
@@ -95,7 +150,7 @@ final class ExprAnalyzer
         }
         return !$this->isAllowedConstFetchOrClassConstFetch($expr);
     }
-    public function isDynamicArray(Array_ $array) : bool
+    public function isDynamicArray(Array_ $array): bool
     {
         foreach ($array->items as $item) {
             if (!$item instanceof ArrayItem) {
@@ -110,7 +165,7 @@ final class ExprAnalyzer
         }
         return \false;
     }
-    private function isAllowedConstFetchOrClassConstFetch(Expr $expr) : bool
+    private function isAllowedConstFetchOrClassConstFetch(Expr $expr): bool
     {
         if ($expr instanceof ConstFetch) {
             return \true;
@@ -127,7 +182,7 @@ final class ExprAnalyzer
         }
         return \false;
     }
-    private function isAllowedArrayKey(?Expr $expr) : bool
+    private function isAllowedArrayKey(?Expr $expr): bool
     {
         if (!$expr instanceof Expr) {
             return \true;
@@ -137,7 +192,7 @@ final class ExprAnalyzer
         }
         return $expr instanceof Int_;
     }
-    private function isAllowedArrayValue(Expr $expr) : bool
+    private function isAllowedArrayValue(Expr $expr): bool
     {
         if ($expr instanceof Array_) {
             return !$this->isDynamicArray($expr);

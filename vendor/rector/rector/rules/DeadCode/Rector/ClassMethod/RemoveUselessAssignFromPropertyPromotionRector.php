@@ -18,7 +18,7 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  */
 final class RemoveUselessAssignFromPropertyPromotionRector extends AbstractRector
 {
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Remove useless re-assign from property promotion', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
@@ -42,14 +42,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [ClassMethod::class];
     }
     /**
      * @param ClassMethod $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$this->isName($node, MethodName::CONSTRUCT)) {
             return null;
@@ -67,7 +67,7 @@ CODE_SAMPLE
             if ($param->isReadonly()) {
                 continue;
             }
-            $variableNames[] = (string) $this->getName($param->var);
+            $variableNames[] = $this->getName($param);
         }
         if ($variableNames === []) {
             return null;
@@ -78,7 +78,6 @@ CODE_SAMPLE
             if (!$stmt instanceof Expression || !$stmt->expr instanceof Assign) {
                 return null;
             }
-            /** @var Assign $assign */
             $assign = $stmt->expr;
             // has non property fetches assignments, skip
             if (!$assign->var instanceof PropertyFetch) {

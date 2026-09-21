@@ -17,7 +17,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\select;
-use function Orchestra\Sidekick\join_paths;
+use function Orchestra\Sidekick\Filesystem\join_paths;
 use function Orchestra\Testbench\package_path;
 
 #[AsCommand(name: 'workbench:install', description: 'Setup Workbench for package development')]
@@ -35,7 +35,7 @@ class InstallCommand extends Command implements PromptsForMissingInput
 
     /** {@inheritDoc} */
     #[\Override]
-    protected function initialize(InputInterface $input, OutputInterface $output)
+    protected function initialize(InputInterface $input, OutputInterface $output): void
     {
         $this->hasTestbenchDusk = InstalledVersions::isInstalled('orchestra/testbench-dusk');
 
@@ -136,7 +136,7 @@ class InstallCommand extends Command implements PromptsForMissingInput
         }
 
         /** @var \Illuminate\Support\Collection<int, string> $choices */
-        $choices = Collection::make($this->environmentFiles())
+        $choices = (new Collection($this->environmentFiles()))
             ->reject(static fn ($file) => $filesystem->isFile(join_paths($workbenchWorkingPath, $file)))
             ->values();
 

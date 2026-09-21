@@ -102,9 +102,10 @@ trait InteractsWithTestCase
      *
      * @param  object  $attribute
      * @param  int  $flag
-     * @return void
      *
      * @phpstan-param TAttributes $attribute
+     *
+     * @return void
      */
     public static function usesTestingFeature($attribute, int $flag = Attribute::TARGET_CLASS): void
     {
@@ -195,6 +196,11 @@ trait InteractsWithTestCase
      */
     public static function setUpBeforeClassUsingTestCase(): void
     {
+        if (static::usesTestingConcern(WithFixtures::class)) {
+            /** @phpstan-ignore-next-line */
+            static::setupWithFixturesForTestingEnvironment();
+        }
+
         static::resolvePhpUnitAttributesForMethod(static::class)
             ->flatten()
             ->filter(static fn ($instance) => $instance instanceof BeforeAllContract)

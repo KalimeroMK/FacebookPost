@@ -10,7 +10,7 @@ use PHPStan\Analyser\Scope;
 final class AttributeKey
 {
     /**
-     * Internal php-parser key for String_, LNumber and DNumber nodes to hold original value (with "_" separators etc.)
+     * Internal php-parser key for String_, Int_ and Float_ nodes to hold original value (with "_" separators etc.)
      * @var string
      */
     public const RAW_VALUE = 'rawValue';
@@ -22,28 +22,24 @@ final class AttributeKey
     /**
      * Internal php-parser name.
      * Do not change this even if you want!
-     *
      * @var string
      */
     public const ORIGINAL_NODE = 'origNode';
     /**
      * Internal php-parser name.
      * Do not change this even if you want!
-     *
      * @var string
      */
     public const COMMENTS = 'comments';
     /**
      * Internal php-parser name.
      * Do not change this even if you want!
-     *
      * @var string
      */
     public const ORIGINAL_NAME = 'originalName';
     /**
      * Internal php-parser name.
      * Do not change this even if you want!
-     *
      * @var string
      */
     public const NAMESPACED_NAME = 'namespacedName';
@@ -52,7 +48,6 @@ final class AttributeKey
      *
      * Internal php-parser name.
      * Do not change this even if you want!
-     *
      * @var string
      */
     public const DOC_INDENTATION = 'docIndentation';
@@ -70,42 +65,25 @@ final class AttributeKey
      */
     public const IS_REGULAR_PATTERN = 'is_regular_pattern';
     /**
-     * @var string
-     */
-    public const DO_NOT_CHANGE = 'do_not_change';
-    /**
      * Helps with infinite loop detection
      * @var string
      */
     public const CREATED_BY_RULE = 'created_by_rule';
     /**
-     * Helps with skipped below node
-     * @var string
-     */
-    public const SKIPPED_BY_RECTOR_RULE = 'skipped_rector_rule';
-    /**
      * @var string
      */
     public const WRAPPED_IN_PARENTHESES = 'wrapped_in_parentheses';
-    /**
-     * @var string
-     */
-    public const COMMENT_CLOSURE_RETURN_MIRRORED = 'comment_closure_return_mirrored';
     /**
      * To pass PHP 8.0 attribute FQN names
      * @var string
      */
     public const PHP_ATTRIBUTE_NAME = 'php_attribute_name';
     /**
-     * Helper attribute to reprint raw value of int/float/string
-     * @var string
-     */
-    public const REPRINT_RAW_VALUE = 'reprint_raw_value';
-    /**
      * @var string
      */
     public const EXTRA_USE_IMPORT = 'extra_use_import';
     /**
+     * Used internally by php-parser
      * @var string
      */
     public const DOC_LABEL = 'docLabel';
@@ -137,10 +115,6 @@ final class AttributeKey
     /**
      * @var string
      */
-    public const STMT_KEY = 'stmt_key';
-    /**
-     * @var string
-     */
     public const IS_BEING_ASSIGNED = 'is_being_assigned';
     /**
      * @var string
@@ -157,7 +131,7 @@ final class AttributeKey
     /**
      * @var string
      */
-    public const IS_IN_LOOP = 'is_in_loop';
+    public const IS_IN_LOOP_OR_SWITCH = 'is_in_loop';
     /**
      * @var string
      */
@@ -173,7 +147,15 @@ final class AttributeKey
     /**
      * @var string
      */
+    public const IS_ISSET_VAR = 'is_isset_var';
+    /**
+     * @var string
+     */
     public const IS_ARRAY_IN_ATTRIBUTE = 'is_array_in_attribute';
+    /**
+     * @var string
+     */
+    public const IS_CLOSURE_IN_ATTRIBUTE = 'is_closure_in_attribute';
     /**
      * @var string
      */
@@ -197,7 +179,15 @@ final class AttributeKey
     /**
      * @var string
      */
+    public const IS_UNPACKED_ARG_VALUE = 'is_unpacked_arg_value';
+    /**
+     * @var string
+     */
     public const IS_PARAM_VAR = 'is_param_var';
+    /**
+     * @var string
+     */
+    public const IS_PARAM_DEFAULT = 'is_param_default';
     /**
      * @var string
      */
@@ -229,9 +219,49 @@ final class AttributeKey
     /**
      * @var string
      */
-    public const ATTRIBUTE_COMMENT = 'attribute_comment';
+    public const IS_FIRST_LEVEL_STATEMENT = 'first_level_stmt';
     /**
      * @var string
      */
-    public const IS_FIRST_LEVEL_STATEMENT = 'first_level_stmt';
+    public const IS_DEFAULT_PROPERTY_VALUE = 'is_default_property_value';
+    /**
+     * @var string
+     */
+    public const IS_CLASS_CONST_VALUE = 'is_default_class_const_value';
+    /**
+     * Array callable kept as data, not converted to first class callable,
+     * e.g. 'callback'/'factory' keyed array item, or Definition::setFactory() argument
+     * @var string
+     */
+    public const IS_ARRAY_AS_STRING_CALLABLE = 'is_array_as_string_callable';
+    /**
+     * @var string
+     */
+    public const IS_INSIDE_BYREF_FUNCTION_LIKE = 'is_inside_byref_function_like';
+    /**
+     * @var string
+     */
+    public const CLASS_CONST_FETCH_NAME = 'class_const_fetch_name';
+    /**
+     * @var string
+     */
+    public const PHP_VERSION_CONDITIONED = 'php_version_conditioned';
+    /**
+     * @var string
+     */
+    public const HAS_CLOSURE_WITH_VARIADIC_ARGS = 'has_closure_with_variadic_args';
+    /**
+     * @var string
+     */
+    public const IS_IN_TRY_BLOCK = 'is_in_try_block';
+    /**
+     * @var string
+     */
+    public const NEWLINE_ON_FLUENT_CALL = 'newline_on_fluent_call';
+    /**
+     * The arg value is passed to a parameter whose type does not accept a Closure,
+     * e.g. an array callable passed to a "string|array|null" parameter
+     * @var string
+     */
+    public const IS_ARG_NOT_ACCEPTING_CLOSURE = 'is_arg_not_accepting_closure';
 }

@@ -12,6 +12,7 @@ use PhpParser\Node\Expr\BinaryOp\BooleanOr;
 use PhpParser\Node\Expr\BinaryOp\Coalesce;
 use PhpParser\Node\Expr\BinaryOp\LogicalAnd;
 use PhpParser\Node\Expr\BinaryOp\LogicalOr;
+use PhpParser\Node\Expr\BinaryOp\Pipe;
 use PhpParser\Node\Expr\BitwiseNot;
 use PhpParser\Node\Expr\BooleanNot;
 use PhpParser\Node\Expr\Cast;
@@ -28,29 +29,39 @@ use PhpParser\Node\Expr\UnaryMinus;
 use PhpParser\Node\Expr\UnaryPlus;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Scalar;
+use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Type\ObjectType;
 use Rector\NodeTypeResolver\NodeTypeResolver;
+use Rector\ValueObject\MethodName;
 final class LivingCodeManipulator
 {
     /**
      * @readonly
      */
     private NodeTypeResolver $nodeTypeResolver;
-    public function __construct(NodeTypeResolver $nodeTypeResolver)
+    /**
+     * @readonly
+     */
+    private ReflectionProvider $reflectionProvider;
+    public function __construct(NodeTypeResolver $nodeTypeResolver, ReflectionProvider $reflectionProvider)
     {
         $this->nodeTypeResolver = $nodeTypeResolver;
+        $this->reflectionProvider = $reflectionProvider;
     }
     /**
      * @return Expr[]|mixed[]
      * @param \PhpParser\Node|int|string|null $expr
      */
-    public function keepLivingCodeFromExpr($expr) : array
+    public function keepLivingCodeFromExpr($expr): array
     {
         if (!$expr instanceof Expr) {
             return [];
         }
         if ($expr instanceof Closure || $expr instanceof Scalar || $expr instanceof ConstFetch) {
             return [];
+        }
+        if ($expr instanceof Clone_ && $this->hasCloneMagicMethod($expr)) {
+            return [$expr];
         }
         if ($this->isNestedExpr($expr)) {
             return $this->keepLivingCodeFromExpr($expr->expr);
@@ -59,7 +70,7 @@ final class LivingCodeManipulator
             return $this->keepLivingCodeFromExpr($expr->name);
         }
         if ($expr instanceof PropertyFetch) {
-            return \array_merge($this->keepLivingCodeFromExpr($expr->var), $this->keepLivingCodeFromExpr($expr->name));
+            return array_merge($this->keepLivingCodeFromExpr($expr->var), $this->keepLivingCodeFromExpr($expr->name));
         }
         if ($expr instanceof ArrayDimFetch) {
             $type = $this->nodeTypeResolver->getType($expr->var);
@@ -69,10 +80,10 @@ final class LivingCodeManipulator
                     return [$expr];
                 }
             }
-            return \array_merge($this->keepLivingCodeFromExpr($expr->var), $this->keepLivingCodeFromExpr($expr->dim));
+            return array_merge($this->keepLivingCodeFromExpr($expr->var), $this->keepLivingCodeFromExpr($expr->dim));
         }
         if ($expr instanceof ClassConstFetch || $expr instanceof StaticPropertyFetch) {
-            return \array_merge($this->keepLivingCodeFromExpr($expr->class), $this->keepLivingCodeFromExpr($expr->name));
+            return array_merge($this->keepLivingCodeFromExpr($expr->class), $this->keepLivingCodeFromExpr($expr->name));
         }
         if ($this->isBinaryOpWithoutChange($expr)) {
             /** @var BinaryOp $binaryOp */
@@ -80,39 +91,52 @@ final class LivingCodeManipulator
             return $this->processBinary($binaryOp);
         }
         if ($expr instanceof Instanceof_) {
-            return \array_merge($this->keepLivingCodeFromExpr($expr->expr), $this->keepLivingCodeFromExpr($expr->class));
+            return array_merge($this->keepLivingCodeFromExpr($expr->expr), $this->keepLivingCodeFromExpr($expr->class));
         }
         if ($expr instanceof Isset_) {
             return $this->processIsset($expr);
         }
         return [$expr];
     }
-    private function isNestedExpr(Expr $expr) : bool
+    private function isNestedExpr(Expr $expr): bool
     {
         return $expr instanceof Cast || $expr instanceof Empty_ || $expr instanceof UnaryMinus || $expr instanceof UnaryPlus || $expr instanceof BitwiseNot || $expr instanceof BooleanNot || $expr instanceof Clone_;
     }
-    private function isBinaryOpWithoutChange(Expr $expr) : bool
+    private function hasCloneMagicMethod(Clone_ $clone): bool
+    {
+        $cloneObjectType = $this->nodeTypeResolver->getType($clone->expr);
+        foreach ($cloneObjectType->getObjectClassNames() as $className) {
+            if (!$this->reflectionProvider->hasClass($className)) {
+                continue;
+            }
+            if ($this->reflectionProvider->getClass($className)->hasNativeMethod(MethodName::CLONE)) {
+                return \true;
+            }
+        }
+        return \false;
+    }
+    private function isBinaryOpWithoutChange(Expr $expr): bool
     {
         if (!$expr instanceof BinaryOp) {
             return \false;
         }
-        return !($expr instanceof LogicalAnd || $expr instanceof BooleanAnd || $expr instanceof LogicalOr || $expr instanceof BooleanOr || $expr instanceof Coalesce);
+        return !($expr instanceof LogicalAnd || $expr instanceof BooleanAnd || $expr instanceof LogicalOr || $expr instanceof BooleanOr || $expr instanceof Coalesce || $expr instanceof Pipe);
     }
     /**
      * @return Expr[]
      */
-    private function processBinary(BinaryOp $binaryOp) : array
+    private function processBinary(BinaryOp $binaryOp): array
     {
-        return \array_merge($this->keepLivingCodeFromExpr($binaryOp->left), $this->keepLivingCodeFromExpr($binaryOp->right));
+        return array_merge($this->keepLivingCodeFromExpr($binaryOp->left), $this->keepLivingCodeFromExpr($binaryOp->right));
     }
     /**
      * @return mixed[]
      */
-    private function processIsset(Isset_ $isset) : array
+    private function processIsset(Isset_ $isset): array
     {
         $livingExprs = [];
         foreach ($isset->vars as $expr) {
-            $livingExprs = \array_merge($livingExprs, $this->keepLivingCodeFromExpr($expr));
+            $livingExprs = array_merge($livingExprs, $this->keepLivingCodeFromExpr($expr));
         }
         return $livingExprs;
     }

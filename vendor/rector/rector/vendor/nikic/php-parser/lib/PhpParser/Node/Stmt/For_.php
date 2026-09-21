@@ -4,8 +4,7 @@ declare (strict_types=1);
 namespace PhpParser\Node\Stmt;
 
 use PhpParser\Node;
-use Rector\Contract\PhpParser\Node\StmtsAwareInterface;
-class For_ extends Node\Stmt implements StmtsAwareInterface
+class For_ extends Node\Stmt
 {
     /** @var Node\Expr[] Init expressions */
     public array $init;
@@ -38,11 +37,11 @@ class For_ extends Node\Stmt implements StmtsAwareInterface
         $this->loop = $subNodes['loop'] ?? [];
         $this->stmts = $subNodes['stmts'] ?? [];
     }
-    public function getSubNodeNames() : array
+    public function getSubNodeNames(): array
     {
         return ['init', 'cond', 'loop', 'stmts'];
     }
-    public function getType() : string
+    public function getType(): string
     {
         return 'Stmt_For';
     }

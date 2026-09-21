@@ -1,15 +1,15 @@
 <?php
 
 declare (strict_types=1);
-namespace RectorPrefix202502;
+namespace RectorPrefix202609;
 
-use RectorPrefix202502\PhpCsFixer\Fixer\ClassNotation\OrderedClassElementsFixer;
-use RectorPrefix202502\PhpCsFixer\Fixer\Phpdoc\PhpdocLineSpanFixer;
-use RectorPrefix202502\PhpCsFixer\Fixer\PhpUnit\PhpUnitTestAnnotationFixer;
-use RectorPrefix202502\Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
-use RectorPrefix202502\Symplify\CodingStandard\Fixer\LineLength\LineLengthFixer;
-use RectorPrefix202502\Symplify\EasyCodingStandard\ValueObject\Option;
-return static function (ContainerConfigurator $containerConfigurator) : void {
+use RectorPrefix202609\PhpCsFixer\Fixer\ClassNotation\OrderedClassElementsFixer;
+use RectorPrefix202609\PhpCsFixer\Fixer\Phpdoc\PhpdocLineSpanFixer;
+use RectorPrefix202609\PhpCsFixer\Fixer\PhpUnit\PhpUnitTestAnnotationFixer;
+use RectorPrefix202609\Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+use RectorPrefix202609\Symplify\CodingStandard\Fixer\LineLength\LineLengthFixer;
+use RectorPrefix202609\Symplify\EasyCodingStandard\ValueObject\Option;
+return static function (ContainerConfigurator $containerConfigurator): void {
     $parameters = $containerConfigurator->parameters();
     $parameters->set(Option::SKIP, [__DIR__ . '/tests/PropertiesPrinterHelper.php']);
     $containerConfigurator->import(__DIR__ . '/vendor/lmc/coding-standard/ecs.php');

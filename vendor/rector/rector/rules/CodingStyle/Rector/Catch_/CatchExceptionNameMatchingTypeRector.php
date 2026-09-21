@@ -3,7 +3,7 @@
 declare (strict_types=1);
 namespace Rector\CodingStyle\Rector\Catch_;
 
-use RectorPrefix202502\Nette\Utils\Strings;
+use RectorPrefix202609\Nette\Utils\Strings;
 use PhpParser\Node;
 use PhpParser\Node\Expr\Assign;
 use PhpParser\Node\Expr\Closure;
@@ -20,7 +20,7 @@ use PHPStan\Analyser\Scope;
 use PHPStan\Type\ObjectType;
 use Rector\Naming\Naming\PropertyNaming;
 use Rector\NodeTypeResolver\Node\AttributeKey;
-use Rector\PhpParser\Node\CustomNode\FileWithoutNamespace;
+use Rector\PhpParser\Node\FileNode;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
@@ -34,15 +34,15 @@ final class CatchExceptionNameMatchingTypeRector extends AbstractRector
      */
     private PropertyNaming $propertyNaming;
     /**
-     * @var string
      * @see https://regex101.com/r/xmfMAX/1
+     * @var string
      */
     private const STARTS_WITH_ABBREVIATION_REGEX = '#^([A-Za-z]+?)([A-Z]{1}[a-z]{1})([A-Za-z]*)#';
     public function __construct(PropertyNaming $propertyNaming)
     {
         $this->propertyNaming = $propertyNaming;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Type and name of catch exception should match', [new CodeSample(<<<'CODE_SAMPLE'
 try {
@@ -63,16 +63,20 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
-        return [ClassMethod::class, Function_::class, Closure::class, FileWithoutNamespace::class, Namespace_::class];
+        return [ClassMethod::class, Function_::class, Closure::class, FileNode::class, Namespace_::class];
     }
     /**
-     * @param ClassMethod|Function_|Closure|FileWithoutNamespace|Namespace_ $node
+     * @param ClassMethod|Function_|Closure|FileNode|Namespace_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($node->stmts === null) {
+            return null;
+        }
+        if ($node instanceof FileNode && $node->isNamespaced()) {
+            // handled in Namespace_ node
             return null;
         }
         $hasChanged = \false;
@@ -89,7 +93,6 @@ CODE_SAMPLE
             $catch = $stmt->catches[0];
             /** @var Variable $catchVar */
             $catchVar = $catch->var;
-            /** @var string $oldVariableName */
             $oldVariableName = (string) $this->getName($catchVar);
             $typeShortName = $this->resolveVariableName($catch->types[0]);
             $newVariableName = $this->resolveNewVariableName($typeShortName);
@@ -111,23 +114,35 @@ CODE_SAMPLE
         }
         return null;
     }
-    private function resolveNewVariableName(string $typeShortName) : string
+    private function shouldSkipFollowingCatch(Catch_ $catch, string $newVariableName, string $oldVariableName): bool
     {
-        return Strings::replace(\lcfirst($typeShortName), self::STARTS_WITH_ABBREVIATION_REGEX, static function (array $matches) : string {
-            $output = isset($matches[1]) ? \strtolower((string) $matches[1]) : '';
+        if ($catch->var instanceof Variable) {
+            $nextCatchVariableName = $this->getName($catch->var);
+            return in_array($nextCatchVariableName, [$newVariableName, $oldVariableName], \true);
+        }
+        if (count($catch->types) === 1) {
+            $soleType = $catch->types[0]->toString();
+            return lcfirst($soleType) === $newVariableName;
+        }
+        return \false;
+    }
+    private function resolveNewVariableName(string $typeShortName): string
+    {
+        return Strings::replace(lcfirst($typeShortName), self::STARTS_WITH_ABBREVIATION_REGEX, static function (array $matches): string {
+            $output = isset($matches[1]) ? strtolower((string) $matches[1]) : '';
             $output .= $matches[2] ?? '';
             return $output . ($matches[3] ?? '');
         });
     }
-    private function shouldSkip(Stmt $stmt) : bool
+    private function shouldSkip(Stmt $stmt): bool
     {
         if (!$stmt instanceof TryCatch) {
             return \true;
         }
-        if (\count($stmt->catches) !== 1) {
+        if (count($stmt->catches) !== 1) {
             return \true;
         }
-        if (\count($stmt->catches[0]->types) !== 1) {
+        if (count($stmt->catches[0]->types) !== 1) {
             return \true;
         }
         $catch = $stmt->catches[0];
@@ -136,13 +151,13 @@ CODE_SAMPLE
     /**
      * @param Stmt[] $stmts
      */
-    private function renameVariableInStmts(Catch_ $catch, string $oldVariableName, string $newVariableName, int $key, array $stmts, ?Stmt $stmt) : void
+    private function renameVariableInStmts(Catch_ $catch, string $oldVariableName, string $newVariableName, int $key, array $stmts, ?Stmt $stmt): void
     {
-        $this->traverseNodesWithCallable($catch->stmts, function (Node $node) use($oldVariableName, $newVariableName) {
+        $this->traverseNodesWithCallable($catch->stmts, function (Node $node) use ($oldVariableName, $newVariableName) {
             if (!$node instanceof Variable) {
                 return null;
             }
-            if (!$this->nodeNameResolver->isName($node, $oldVariableName)) {
+            if (!$this->isName($node, $oldVariableName)) {
                 return null;
             }
             $node->name = $newVariableName;
@@ -153,20 +168,23 @@ CODE_SAMPLE
     /**
      * @param Stmt[] $stmts
      */
-    private function replaceNextUsageVariable(string $oldVariableName, string $newVariableName, int $key, array $stmts, ?Node $nextNode) : void
+    private function replaceNextUsageVariable(string $oldVariableName, string $newVariableName, int $key, array $stmts, ?Node $nextNode): void
     {
         if (!$nextNode instanceof Node) {
             return;
         }
         $nonAssignedVariables = [];
-        $this->traverseNodesWithCallable($nextNode, function (Node $node) use($oldVariableName, &$nonAssignedVariables) : ?int {
+        $this->traverseNodesWithCallable($nextNode, function (Node $node) use ($oldVariableName, $newVariableName, &$nonAssignedVariables): ?int {
             if ($node instanceof Assign && $node->var instanceof Variable) {
+                return NodeVisitor::STOP_TRAVERSAL;
+            }
+            if ($node instanceof Catch_ && $this->shouldSkipFollowingCatch($node, $newVariableName, $oldVariableName)) {
                 return NodeVisitor::STOP_TRAVERSAL;
             }
             if (!$node instanceof Variable) {
                 return null;
             }
-            if (!$this->nodeNameResolver->isName($node, $oldVariableName)) {
+            if (!$this->isName($node, $oldVariableName)) {
                 return null;
             }
             $nonAssignedVariables[] = $node;
@@ -185,7 +203,7 @@ CODE_SAMPLE
         $key += 2;
         $this->replaceNextUsageVariable($oldVariableName, $newVariableName, $key, $stmts, $nextNode);
     }
-    private function resolveVariableName(Name $name) : string
+    private function resolveVariableName(Name $name): string
     {
         $originalName = $name->getAttribute(AttributeKey::ORIGINAL_NAME);
         // this allows to respect the name alias, if used

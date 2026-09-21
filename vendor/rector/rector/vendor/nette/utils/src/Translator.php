@@ -1,14 +1,14 @@
 <?php
 
+declare (strict_types=1);
 /**
  * This file is part of the Nette Framework (https://nette.org)
  * Copyright (c) 2004 David Grudl (https://davidgrudl.com)
  */
-declare (strict_types=1);
-namespace RectorPrefix202502\Nette\Localization;
+namespace RectorPrefix202609\Nette\Localization;
 
 /**
- * Translator adapter.
+ * Translation provider.
  */
 interface Translator
 {
@@ -20,4 +20,4 @@ interface Translator
      */
     function translate($message, ...$parameters);
 }
-\interface_exists(ITranslator::class);
+interface_exists(ITranslator::class);

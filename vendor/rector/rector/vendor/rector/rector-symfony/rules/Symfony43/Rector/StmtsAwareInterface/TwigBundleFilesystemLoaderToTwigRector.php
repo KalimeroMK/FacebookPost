@@ -11,16 +11,22 @@ use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Stmt\Expression;
 use PHPStan\Type\ObjectType;
-use Rector\Contract\PhpParser\Node\StmtsAwareInterface;
+use Rector\PhpParser\Enum\NodeGroup;
 use Rector\Rector\AbstractRector;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
  * @see \Rector\Symfony\Tests\Symfony43\Rector\StmtsAwareInterface\TwigBundleFilesystemLoaderToTwigRector\TwigBundleFilesystemLoaderToTwigRectorTest
  */
-final class TwigBundleFilesystemLoaderToTwigRector extends AbstractRector
+final class TwigBundleFilesystemLoaderToTwigRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('symfony/twig-bundle', '>=4.3');
+    }
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Change TwigBundle FilesystemLoader to native one', [new CodeSample(<<<'CODE_SAMPLE'
 use Symfony\Bundle\TwigBundle\Loader\FilesystemLoader;
@@ -40,14 +46,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
-        return [StmtsAwareInterface::class];
+        return NodeGroup::STMTS_AWARE;
     }
     /**
-     * @param StmtsAwareInterface $node
+     * @param StmtsAware $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         $filesystemLoaderNew = $this->resolveFileSystemLoaderNew($node);
         if (!$filesystemLoaderNew instanceof New_) {
@@ -68,12 +74,15 @@ CODE_SAMPLE
             $collectedPathExprs[] = $methodCall->getArgs()[0];
             unset($node->stmts[$key]);
         }
-        $filesystemLoaderNew->class = new FullyQualified('Twig\\Loader\\FilesystemLoader');
+        $filesystemLoaderNew->class = new FullyQualified('Twig\Loader\FilesystemLoader');
         $array = $this->nodeFactory->createArray($collectedPathExprs);
         $filesystemLoaderNew->args = [new Arg($array)];
         return $node;
     }
-    private function resolveFileSystemLoaderNew(StmtsAwareInterface $stmtsAware) : ?New_
+    /**
+     * @param StmtsAware $stmtsAware
+     */
+    private function resolveFileSystemLoaderNew(Node $stmtsAware): ?New_
     {
         foreach ((array) $stmtsAware->stmts as $stmt) {
             if (!$stmt instanceof Expression) {
@@ -87,7 +96,7 @@ CODE_SAMPLE
                 continue;
             }
             $new = $assign->expr;
-            if (!$this->isObjectType($new, new ObjectType('Symfony\\Bundle\\TwigBundle\\Loader\\FilesystemLoader'))) {
+            if (!$this->isObjectType($new, new ObjectType('Symfony\Bundle\TwigBundle\Loader\FilesystemLoader'))) {
                 continue;
             }
             return $new;

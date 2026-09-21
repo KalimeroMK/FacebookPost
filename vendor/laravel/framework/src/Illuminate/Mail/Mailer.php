@@ -2,6 +2,7 @@
 
 namespace Illuminate\Mail;
 
+use BackedEnum;
 use Closure;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Mail\Mailable as MailableContract;
@@ -95,7 +96,6 @@ class Mailer implements MailerContract, MailQueueContract
      * @param  \Illuminate\Contracts\View\Factory  $views
      * @param  \Symfony\Component\Mailer\Transport\TransportInterface  $transport
      * @param  \Illuminate\Contracts\Events\Dispatcher|null  $events
-     * @return void
      */
     public function __construct(string $name, Factory $views, TransportInterface $transport, ?Dispatcher $events = null)
     {
@@ -114,7 +114,7 @@ class Mailer implements MailerContract, MailQueueContract
      */
     public function alwaysFrom($address, $name = null)
     {
-        $this->from = compact('address', 'name');
+        $this->from = ['address' => $address, 'name' => $name];
     }
 
     /**
@@ -126,7 +126,7 @@ class Mailer implements MailerContract, MailQueueContract
      */
     public function alwaysReplyTo($address, $name = null)
     {
-        $this->replyTo = compact('address', 'name');
+        $this->replyTo = ['address' => $address, 'name' => $name];
     }
 
     /**
@@ -137,7 +137,7 @@ class Mailer implements MailerContract, MailQueueContract
      */
     public function alwaysReturnPath($address)
     {
-        $this->returnPath = compact('address');
+        $this->returnPath = ['address' => $address];
     }
 
     /**
@@ -149,7 +149,7 @@ class Mailer implements MailerContract, MailQueueContract
      */
     public function alwaysTo($address, $name = null)
     {
-        $this->to = compact('address', 'name');
+        $this->to = ['address' => $address, 'name' => $name];
     }
 
     /**
@@ -249,7 +249,7 @@ class Mailer implements MailerContract, MailQueueContract
         // First we need to parse the view, which could either be a string or an array
         // containing both an HTML and plain text versions of the view which should
         // be used when sending an e-mail. We will extract both of them out here.
-        [$view, $plain, $raw] = $this->parseView($view);
+        [$view, $plain] = $this->parseView($view);
 
         $data['message'] = $this->createMessage();
 
@@ -268,10 +268,10 @@ class Mailer implements MailerContract, MailQueueContract
      */
     protected function replaceEmbeddedAttachments(string $renderedView, array $attachments)
     {
-        if (preg_match_all('/<img.+?src=[\'"]cid:([^\'"]+)[\'"].*?>/i', $renderedView, $matches)) {
+        if (preg_match_all('/<img.+?src=[\'"]cid:([^\'"]+)[\'"].*?>/is', $renderedView, $matches)) {
             foreach (array_unique($matches[1]) as $image) {
                 foreach ($attachments as $attachment) {
-                    if ($attachment->getFilename() === $image) {
+                    if ($attachment->getContentId() === $image || $attachment->getFilename() === $image) {
                         $renderedView = str_replace(
                             'cid:'.$image,
                             'data:'.$attachment->getContentType().';base64,'.$attachment->bodyToString(),
@@ -350,8 +350,8 @@ class Mailer implements MailerContract, MailQueueContract
     protected function sendMailable(MailableContract $mailable)
     {
         return $mailable instanceof ShouldQueue
-                        ? $mailable->mailer($this->name)->queue($this->queue)
-                        : $mailable->mailer($this->name)->send($this);
+            ? $mailable->mailer($this->name)->queue($this->queue)
+            : $mailable->mailer($this->name)->send($this);
     }
 
     /**
@@ -441,8 +441,8 @@ class Mailer implements MailerContract, MailQueueContract
         $view = value($view, $data);
 
         return $view instanceof Htmlable
-                        ? $view->toHtml()
-                        : $this->views->make($view, $data)->render();
+            ? $view->toHtml()
+            : $this->views->make($view, $data)->render();
     }
 
     /**
@@ -464,7 +464,7 @@ class Mailer implements MailerContract, MailQueueContract
     /**
      * Queue a new mail message for sending.
      *
-     * @param  \Illuminate\Contracts\Mail\Mailable|string|array  $view
+     * @param  \Illuminate\Contracts\Mail\Mailable  $view
      * @param  \BackedEnum|string|null  $queue
      * @return mixed
      *
@@ -476,7 +476,7 @@ class Mailer implements MailerContract, MailQueueContract
             throw new InvalidArgumentException('Only mailables may be queued.');
         }
 
-        if (is_string($queue)) {
+        if (is_string($queue) || $queue instanceof BackedEnum) {
             $view->onQueue($queue);
         }
 
@@ -525,8 +525,12 @@ class Mailer implements MailerContract, MailQueueContract
             throw new InvalidArgumentException('Only mailables may be queued.');
         }
 
+        if (! is_null($queue)) {
+            $view->onQueue($queue);
+        }
+
         return $view->mailer($this->name)->later(
-            $delay, is_null($queue) ? $this->queue : $queue
+            $delay, $this->queue
         );
     }
 

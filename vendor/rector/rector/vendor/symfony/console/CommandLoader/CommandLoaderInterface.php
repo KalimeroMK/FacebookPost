@@ -8,10 +8,10 @@
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\Symfony\Component\Console\CommandLoader;
+namespace RectorPrefix202609\Symfony\Component\Console\CommandLoader;
 
-use RectorPrefix202502\Symfony\Component\Console\Command\Command;
-use RectorPrefix202502\Symfony\Component\Console\Exception\CommandNotFoundException;
+use RectorPrefix202609\Symfony\Component\Console\Command\Command;
+use RectorPrefix202609\Symfony\Component\Console\Exception\CommandNotFoundException;
 /**
  * @author Robin Chalas <robin.chalas@gmail.com>
  */
@@ -22,13 +22,13 @@ interface CommandLoaderInterface
      *
      * @throws CommandNotFoundException
      */
-    public function get(string $name) : Command;
+    public function get(string $name): Command;
     /**
      * Checks if a command exists.
      */
-    public function has(string $name) : bool;
+    public function has(string $name): bool;
     /**
      * @return string[]
      */
-    public function getNames() : array;
+    public function getNames(): array;
 }

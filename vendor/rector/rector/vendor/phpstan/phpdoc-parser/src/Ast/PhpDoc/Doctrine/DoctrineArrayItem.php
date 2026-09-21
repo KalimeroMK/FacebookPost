@@ -29,11 +29,24 @@ class DoctrineArrayItem implements Node
         $this->key = $key;
         $this->value = $value;
     }
-    public function __toString() : string
+    public function __toString(): string
     {
         if ($this->key === null) {
             return (string) $this->value;
         }
         return $this->key . '=' . $this->value;
+    }
+    /**
+     * @param array<string, mixed> $properties
+     */
+    public static function __set_state(array $properties): self
+    {
+        $instance = new self($properties['key'], $properties['value']);
+        if (isset($properties['attributes'])) {
+            foreach ($properties['attributes'] as $key => $value) {
+                $instance->setAttribute($key, $value);
+            }
+        }
+        return $instance;
     }
 }

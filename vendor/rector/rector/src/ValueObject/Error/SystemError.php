@@ -3,8 +3,12 @@
 declare (strict_types=1);
 namespace Rector\ValueObject\Error;
 
+use RectorPrefix202609\Nette\Utils\Strings;
+use Rector\Parallel\Contract\SerializableInterface;
 use Rector\Parallel\ValueObject\BridgeItem;
-use RectorPrefix202502\Symplify\EasyParallel\Contract\SerializableInterface;
+/**
+ * @see \Rector\Tests\ValueObject\Error\SystemErrorTest
+ */
 final class SystemError implements SerializableInterface
 {
     /**
@@ -33,19 +37,19 @@ final class SystemError implements SerializableInterface
         $this->line = $line;
         $this->rectorClass = $rectorClass;
     }
-    public function getMessage() : string
+    public function getMessage(): string
     {
         return $this->message;
     }
-    public function getLine() : ?int
+    public function getLine(): ?int
     {
         return $this->line;
     }
-    public function getRelativeFilePath() : ?string
+    public function getRelativeFilePath(): ?string
     {
         return $this->relativeFilePath;
     }
-    public function getAbsoluteFilePath() : ?string
+    public function getAbsoluteFilePath(): ?string
     {
         if ($this->relativeFilePath === null) {
             return null;
@@ -61,19 +65,27 @@ final class SystemError implements SerializableInterface
      *     rector_class: string|null
      * }
      */
-    public function jsonSerialize() : array
+    public function jsonSerialize(): array
     {
         return [BridgeItem::MESSAGE => $this->message, BridgeItem::RELATIVE_FILE_PATH => $this->relativeFilePath, BridgeItem::ABSOLUTE_FILE_PATH => $this->getAbsoluteFilePath(), BridgeItem::LINE => $this->line, BridgeItem::RECTOR_CLASS => $this->rectorClass];
     }
     /**
-     * @param mixed[] $json
+     * @param array<string, mixed> $json
      */
-    public static function decode(array $json) : self
+    public static function decode(array $json): self
     {
         return new self($json[BridgeItem::MESSAGE], $json[BridgeItem::RELATIVE_FILE_PATH], $json[BridgeItem::LINE], $json[BridgeItem::RECTOR_CLASS]);
     }
-    public function getRectorClass() : ?string
+    public function getRectorClass(): ?string
     {
         return $this->rectorClass;
+    }
+    public function getRectorShortClass(): ?string
+    {
+        $rectorClass = $this->rectorClass;
+        if (!in_array($rectorClass, [null, ''], \true)) {
+            return (string) Strings::after($rectorClass, '\\', -1);
+        }
+        return null;
     }
 }

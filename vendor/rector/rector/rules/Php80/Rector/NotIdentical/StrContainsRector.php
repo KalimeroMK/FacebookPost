@@ -14,7 +14,8 @@ use PhpParser\Node\Expr\BooleanNot;
 use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Name;
 use PhpParser\Node\Scalar\Int_;
-use Rector\PhpParser\Node\Value\ValueResolver;
+use PhpParser\Node\Scalar\String_;
+use Rector\Php80\NodeResolver\StrFalseComparisonResolver;
 use Rector\Rector\AbstractRector;
 use Rector\ValueObject\PhpVersionFeature;
 use Rector\ValueObject\PolyfillPackage;
@@ -30,20 +31,20 @@ final class StrContainsRector extends AbstractRector implements MinPhpVersionInt
     /**
      * @readonly
      */
-    private ValueResolver $valueResolver;
+    private StrFalseComparisonResolver $strFalseComparisonResolver;
     /**
      * @var string[]
      */
     private const OLD_STR_NAMES = ['strpos', 'strstr'];
-    public function __construct(ValueResolver $valueResolver)
+    public function __construct(StrFalseComparisonResolver $strFalseComparisonResolver)
     {
-        $this->valueResolver = $valueResolver;
+        $this->strFalseComparisonResolver = $strFalseComparisonResolver;
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::STR_CONTAINS;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Replace strpos() !== false and strstr()  with str_contains()', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
@@ -68,20 +69,24 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Identical::class, NotIdentical::class, Equal::class, NotEqual::class];
     }
     /**
      * @param Identical|NotIdentical|Equal|NotEqual $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
-        $funcCall = $this->matchIdenticalOrNotIdenticalToFalse($node);
+        $funcCall = $this->strFalseComparisonResolver->resolve($node, self::OLD_STR_NAMES);
         if (!$funcCall instanceof FuncCall) {
             return null;
         }
         if ($funcCall->isFirstClassCallable()) {
+            return null;
+        }
+        $args = $funcCall->getArgs();
+        if (isset($args[1]) && $this->isEmptyStringNeedle($args[1]->value)) {
             return null;
         }
         if (isset($funcCall->getArgs()[2])) {
@@ -97,44 +102,22 @@ CODE_SAMPLE
         }
         return $funcCall;
     }
-    public function providePolyfillPackage() : string
+    public function providePolyfillPackage(): string
     {
         return PolyfillPackage::PHP_80;
     }
-    /**
-     * @param \PhpParser\Node\Expr\BinaryOp\Identical|\PhpParser\Node\Expr\BinaryOp\NotIdentical|\PhpParser\Node\Expr\BinaryOp\Equal|\PhpParser\Node\Expr\BinaryOp\NotEqual $expr
-     */
-    private function matchIdenticalOrNotIdenticalToFalse($expr) : ?FuncCall
-    {
-        if ($this->valueResolver->isFalse($expr->left)) {
-            if (!$expr->right instanceof FuncCall) {
-                return null;
-            }
-            if (!$this->isNames($expr->right, self::OLD_STR_NAMES)) {
-                return null;
-            }
-            /** @var FuncCall $funcCall */
-            $funcCall = $expr->right;
-            return $funcCall;
-        }
-        if ($this->valueResolver->isFalse($expr->right)) {
-            if (!$expr->left instanceof FuncCall) {
-                return null;
-            }
-            if (!$this->isNames($expr->left, self::OLD_STR_NAMES)) {
-                return null;
-            }
-            /** @var FuncCall $funcCall */
-            $funcCall = $expr->left;
-            return $funcCall;
-        }
-        return null;
-    }
-    private function isIntegerZero(Expr $expr) : bool
+    private function isIntegerZero(Expr $expr): bool
     {
         if (!$expr instanceof Int_) {
             return \false;
         }
         return $expr->value === 0;
+    }
+    private function isEmptyStringNeedle(Expr $expr): bool
+    {
+        if (!$expr instanceof String_) {
+            return \false;
+        }
+        return $expr->value === '';
     }
 }

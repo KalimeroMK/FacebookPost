@@ -9,7 +9,6 @@ use PhpParser\Node\Param;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
-use PhpParser\Node\Stmt\Interface_;
 use PHPStan\PhpDocParser\Ast\PhpDoc\ParamTagValueNode;
 use PHPStan\Reflection\ClassReflection;
 use Rector\BetterPhpDocParser\PhpDocInfo\PhpDocInfo;
@@ -86,20 +85,17 @@ final class PropertyPromotionRenamer
         $this->reflectionResolver = $reflectionResolver;
         $this->propertyManipulator = $propertyManipulator;
     }
-    /**
-     * @param \PhpParser\Node\Stmt\Class_|\PhpParser\Node\Stmt\Interface_ $classLike
-     */
-    public function renamePropertyPromotion($classLike) : bool
+    public function renamePropertyPromotion(Class_ $class): bool
     {
         $hasChanged = \false;
         if (!$this->phpVersionProvider->isAtLeastPhpVersion(PhpVersionFeature::PROPERTY_PROMOTION)) {
             return \false;
         }
-        $constructClassMethod = $classLike->getMethod(MethodName::CONSTRUCT);
+        $constructClassMethod = $class->getMethod(MethodName::CONSTRUCT);
         if (!$constructClassMethod instanceof ClassMethod) {
             return \false;
         }
-        $classReflection = $this->reflectionResolver->resolveClassReflection($classLike);
+        $classReflection = $this->reflectionResolver->resolveClassReflection($class);
         if (!$classReflection instanceof ClassReflection) {
             return \false;
         }
@@ -109,12 +105,19 @@ final class PropertyPromotionRenamer
             if (!$param->isPromoted()) {
                 continue;
             }
+            // skip public properties, as they can be used in external code
+            if ($param->isPublic()) {
+                continue;
+            }
+            if (!$class->isFinal() && $param->isProtected()) {
+                continue;
+            }
             // promoted property
             $desiredPropertyName = $this->matchParamTypeExpectedNameResolver->resolve($param);
             if ($desiredPropertyName === null) {
                 continue;
             }
-            if (\in_array($desiredPropertyName, $blockingParamNames, \true)) {
+            if (in_array($desiredPropertyName, $blockingParamNames, \true)) {
                 continue;
             }
             $currentParamName = $this->nodeNameResolver->getName($param);
@@ -124,12 +127,12 @@ final class PropertyPromotionRenamer
             if ($this->propertyManipulator->isUsedByTrait($classReflection, $currentParamName)) {
                 continue;
             }
-            $this->renameParamVarNameAndVariableUsage($classLike, $constructClassMethod, $desiredPropertyName, $param);
+            $this->renameParamVarNameAndVariableUsage($class, $constructClassMethod, $desiredPropertyName, $param);
             $hasChanged = \true;
         }
         return $hasChanged;
     }
-    public function renameParamDoc(PhpDocInfo $phpDocInfo, ClassMethod $classMethod, Param $param, string $paramVarName, string $desiredPropertyName) : void
+    public function renameParamDoc(PhpDocInfo $phpDocInfo, ClassMethod $classMethod, Param $param, string $paramVarName, string $desiredPropertyName): void
     {
         $paramTagValueNode = $phpDocInfo->getParamTagValueByName($paramVarName);
         if (!$paramTagValueNode instanceof ParamTagValueNode) {
@@ -142,7 +145,7 @@ final class PropertyPromotionRenamer
         $this->paramRenamer->rename($paramRename);
         $this->docBlockUpdater->updateRefactoredNodeWithPhpDocInfo($classMethod);
     }
-    private function renameParamVarNameAndVariableUsage(ClassLike $classLike, ClassMethod $classMethod, string $desiredPropertyName, Param $param) : void
+    private function renameParamVarNameAndVariableUsage(ClassLike $classLike, ClassMethod $classMethod, string $desiredPropertyName, Param $param): void
     {
         if ($param->var instanceof Error) {
             return;
@@ -160,16 +163,16 @@ final class PropertyPromotionRenamer
      * Sometimes the bare type is not enough.
      * This allows prefixing type in variable names, e.g. "Type $firstType"
      */
-    private function isNameSuffixed(string $currentParamName, string $desiredPropertyName) : bool
+    private function isNameSuffixed(string $currentParamName, string $desiredPropertyName): bool
     {
-        $currentNameLowercased = \strtolower($currentParamName);
-        $expectedNameLowercased = \strtolower($desiredPropertyName);
-        return \substr_compare($currentNameLowercased, $expectedNameLowercased, -\strlen($expectedNameLowercased)) === 0;
+        $currentNameLowercased = strtolower($currentParamName);
+        $expectedNameLowercased = strtolower($desiredPropertyName);
+        return substr_compare($currentNameLowercased, $expectedNameLowercased, -strlen($expectedNameLowercased)) === 0;
     }
     /**
      * @return int[]|string[]
      */
-    private function resolveBlockingParamNames(ClassMethod $classMethod) : array
+    private function resolveBlockingParamNames(ClassMethod $classMethod): array
     {
         $futureParamNames = [];
         foreach ($classMethod->params as $param) {
@@ -180,13 +183,13 @@ final class PropertyPromotionRenamer
             $futureParamNames[] = $futureParamName;
         }
         // remove null values
-        $futureParamNames = \array_filter($futureParamNames);
+        $futureParamNames = array_filter($futureParamNames);
         if ($futureParamNames === []) {
             return [];
         }
         // resolve duplicated names
         $blockingParamNames = [];
-        $valuesToCount = \array_count_values($futureParamNames);
+        $valuesToCount = array_count_values($futureParamNames);
         foreach ($valuesToCount as $value => $count) {
             if ($count < 2) {
                 continue;

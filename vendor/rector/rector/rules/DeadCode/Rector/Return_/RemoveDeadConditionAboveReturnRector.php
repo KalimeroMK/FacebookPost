@@ -8,10 +8,8 @@ use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\Else_;
 use PhpParser\Node\Stmt\If_;
 use PhpParser\Node\Stmt\Return_;
-use PHPStan\Analyser\Scope;
-use Rector\Contract\PhpParser\Node\StmtsAwareInterface;
 use Rector\DeadCode\SideEffect\SideEffectNodeDetector;
-use Rector\NodeTypeResolver\Node\AttributeKey;
+use Rector\PhpParser\Enum\NodeGroup;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
@@ -28,7 +26,7 @@ final class RemoveDeadConditionAboveReturnRector extends AbstractRector
     {
         $this->sideEffectNodeDetector = $sideEffectNodeDetector;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Remove dead condition above return', [new CodeSample(<<<'CODE_SAMPLE'
 final class SomeClass
@@ -57,14 +55,15 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
-        return [StmtsAwareInterface::class];
+        return NodeGroup::STMTS_AWARE;
     }
     /**
-     * @param StmtsAwareInterface $node
+     * @param StmtsAware $node
+     * @return StmtsAware
      */
-    public function refactor(Node $node) : ?StmtsAwareInterface
+    public function refactor(Node $node): ?Node
     {
         foreach ((array) $node->stmts as $key => $stmt) {
             if (!$stmt instanceof Return_) {
@@ -74,13 +73,11 @@ CODE_SAMPLE
             if (!$this->isBareIf($previousNode)) {
                 continue;
             }
-            /** @var Scope $scope */
-            $scope = $stmt->getAttribute(AttributeKey::SCOPE);
             /** @var If_ $previousNode */
-            if ($this->sideEffectNodeDetector->detect($previousNode->cond, $scope)) {
+            if ($this->sideEffectNodeDetector->detect($previousNode->cond)) {
                 continue;
             }
-            $countStmt = \count($previousNode->stmts);
+            $countStmt = count($previousNode->stmts);
             if ($countStmt === 0) {
                 unset($node->stmts[$key - 1]);
                 return $node;
@@ -100,7 +97,7 @@ CODE_SAMPLE
         }
         return null;
     }
-    private function isBareIf(?Stmt $stmt) : bool
+    private function isBareIf(?Stmt $stmt): bool
     {
         if (!$stmt instanceof If_) {
             return \false;

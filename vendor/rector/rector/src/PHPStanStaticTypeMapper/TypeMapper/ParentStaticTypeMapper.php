@@ -14,21 +14,24 @@ use Rector\StaticTypeMapper\ValueObject\Type\ParentStaticType;
  */
 final class ParentStaticTypeMapper implements TypeMapperInterface
 {
-    public function getNodeClass() : string
+    /**
+     * @return array<class-string<Type>>
+     */
+    public function getNodeClasses(): array
     {
-        return ParentStaticType::class;
+        return [ParentStaticType::class];
     }
     /**
      * @param ParentStaticType $type
      */
-    public function mapToPHPStanPhpDocTypeNode(Type $type) : TypeNode
+    public function mapToPHPStanPhpDocTypeNode(Type $type): TypeNode
     {
         return $type->toPhpDocNode();
     }
     /**
      * @param ParentStaticType $type
      */
-    public function mapToPhpParserNode(Type $type, string $typeKind) : Name
+    public function mapToPhpParserNode(Type $type, string $typeKind): Name
     {
         return new Name(ObjectReference::PARENT);
     }

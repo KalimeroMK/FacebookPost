@@ -1,7 +1,7 @@
 <?php
 
 declare (strict_types=1);
-namespace RectorPrefix202502\OndraM\CiDetector;
+namespace RectorPrefix202609\OndraM\CiDetector;
 
 /**
  * Encapsulate access to the environment variables
@@ -13,9 +13,9 @@ class Env
      */
     public function get(string $name)
     {
-        return \getenv($name);
+        return getenv($name);
     }
-    public function getString(string $name) : string
+    public function getString(string $name): string
     {
         return (string) $this->get($name);
     }

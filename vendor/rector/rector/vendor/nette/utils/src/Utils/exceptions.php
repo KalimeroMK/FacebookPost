@@ -1,39 +1,51 @@
 <?php
 
+declare (strict_types=1);
 /**
  * This file is part of the Nette Framework (https://nette.org)
  * Copyright (c) 2004 David Grudl (https://davidgrudl.com)
  */
-declare (strict_types=1);
-namespace RectorPrefix202502\Nette\Utils;
+namespace RectorPrefix202609\Nette\Utils;
 
 /**
- * The exception that is thrown when an image error occurs.
+ * An error occurred while working with the image.
  */
 class ImageException extends \Exception
 {
 }
 /**
- * The exception that indicates invalid image file.
+ * The image file is invalid or in an unsupported format.
  */
 class UnknownImageFileException extends ImageException
 {
 }
 /**
- * The exception that indicates error of JSON encoding/decoding.
+ * JSON encoding or decoding failed.
  */
 class JsonException extends \JsonException
 {
 }
 /**
- * The exception that indicates error of the last Regexp execution.
+ * Regular expression pattern or execution failed.
  */
 class RegexpException extends \Exception
 {
 }
 /**
- * The exception that indicates assertion error.
+ * Type validation failed. The value doesn't match the expected type constraints.
  */
 class AssertionException extends \Exception
+{
+}
+/**
+ * The process failed to run successfully.
+ */
+class ProcessFailedException extends \RuntimeException
+{
+}
+/**
+ * The process execution exceeded its timeout limit.
+ */
+class ProcessTimeoutException extends \RuntimeException
 {
 }

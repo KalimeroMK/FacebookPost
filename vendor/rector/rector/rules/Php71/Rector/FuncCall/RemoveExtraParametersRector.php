@@ -8,6 +8,7 @@ use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Name;
+use PHPStan\Reflection\Annotations\AnnotationMethodReflection;
 use PHPStan\Reflection\FunctionReflection;
 use PHPStan\Reflection\MethodReflection;
 use PHPStan\Reflection\Php\PhpMethodReflection;
@@ -38,25 +39,25 @@ final class RemoveExtraParametersRector extends AbstractRector implements MinPhp
         $this->variadicAnalyzer = $variadicAnalyzer;
         $this->reflectionResolver = $reflectionResolver;
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::NO_EXTRA_PARAMETERS;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Remove extra parameters', [new CodeSample('strlen("asdf", 1);', 'strlen("asdf");')]);
     }
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [FuncCall::class, MethodCall::class, StaticCall::class];
     }
     /**
      * @param FuncCall|MethodCall|StaticCall $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($this->shouldSkip($node)) {
             return null;
@@ -67,6 +68,10 @@ final class RemoveExtraParametersRector extends AbstractRector implements MinPhp
             return null;
         }
         if ($functionLikeReflection === null) {
+            return null;
+        }
+        // magic @method has no real parameters to compare against
+        if ($functionLikeReflection instanceof AnnotationMethodReflection) {
             return null;
         }
         if ($functionLikeReflection instanceof PhpMethodReflection) {
@@ -85,7 +90,7 @@ final class RemoveExtraParametersRector extends AbstractRector implements MinPhp
         if ($this->shouldSkipFunctionReflection($functionLikeReflection)) {
             return null;
         }
-        $numberOfArguments = \count($node->getRawArgs());
+        $numberOfArguments = count($node->getRawArgs());
         if ($numberOfArguments <= $maximumAllowedParameterCount) {
             return null;
         }
@@ -97,18 +102,18 @@ final class RemoveExtraParametersRector extends AbstractRector implements MinPhp
     /**
      * @param \PHPStan\Reflection\MethodReflection|\PHPStan\Reflection\FunctionReflection $reflection
      */
-    private function shouldSkipFunctionReflection($reflection) : bool
+    private function shouldSkipFunctionReflection($reflection): bool
     {
         if ($reflection instanceof FunctionReflection) {
             $fileName = (string) $reflection->getFileName();
-            if (\strpos($fileName, 'phpstan.phar') !== \false) {
+            if (strpos($fileName, 'phpstan.phar') !== \false) {
                 return \true;
             }
         }
         if ($reflection instanceof MethodReflection) {
             $classReflection = $reflection->getDeclaringClass();
             $fileName = (string) $classReflection->getFileName();
-            if (\strpos($fileName, 'phpstan.phar') !== \false) {
+            if (strpos($fileName, 'phpstan.phar') !== \false) {
                 return \true;
             }
         }
@@ -117,7 +122,7 @@ final class RemoveExtraParametersRector extends AbstractRector implements MinPhp
     /**
      * @param \PhpParser\Node\Expr\FuncCall|\PhpParser\Node\Expr\MethodCall|\PhpParser\Node\Expr\StaticCall $call
      */
-    private function shouldSkip($call) : bool
+    private function shouldSkip($call): bool
     {
         if ($call->args === []) {
             return \true;
@@ -135,12 +140,16 @@ final class RemoveExtraParametersRector extends AbstractRector implements MinPhp
     /**
      * @param \PHPStan\Reflection\MethodReflection|\PHPStan\Reflection\FunctionReflection $functionLikeReflection
      */
-    private function resolveMaximumAllowedParameterCount($functionLikeReflection) : int
+    private function resolveMaximumAllowedParameterCount($functionLikeReflection): int
     {
         $parameterCounts = [0];
-        foreach ($functionLikeReflection->getVariants() as $variant) {
-            $parameterCounts[] = \count($variant->getParameters());
+        foreach ($functionLikeReflection->getVariants() as $parametersAcceptor) {
+            $parameterCounts[] = count($parametersAcceptor->getParameters());
         }
-        return \max($parameterCounts);
+        // empty variants -> use max value possibly has to prevent removing arguments incorrectly
+        if ($parameterCounts === [0]) {
+            return \PHP_INT_MAX;
+        }
+        return max($parameterCounts);
     }
 }

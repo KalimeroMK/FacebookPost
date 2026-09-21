@@ -16,7 +16,7 @@ use Rector\StaticTypeMapper\StaticTypeMapper;
 use Rector\TypeDeclaration\ValueObject\AddPropertyTypeDeclaration;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\ConfiguredCodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
-use RectorPrefix202502\Webmozart\Assert\Assert;
+use RectorPrefix202609\Webmozart\Assert\Assert;
 /**
  * @see \Rector\Tests\TypeDeclaration\Rector\Property\AddPropertyTypeDeclarationRector\AddPropertyTypeDeclarationRectorTest
  */
@@ -34,7 +34,7 @@ final class AddPropertyTypeDeclarationRector extends AbstractRector implements C
     {
         $this->staticTypeMapper = $staticTypeMapper;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Add type to property by added rules, mostly public/property by parent type', [new ConfiguredCodeSample(<<<'CODE_SAMPLE'
 class SomeClass extends ParentClass
@@ -53,20 +53,20 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Property::class];
     }
     /**
      * @param Property $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
-        $scope = ScopeFetcher::fetch($node);
         // type is already known
         if ($node->type !== null) {
             return null;
         }
+        $scope = ScopeFetcher::fetch($node);
         $classReflection = $scope->getClassReflection();
         if (!$classReflection instanceof ClassReflection) {
             return null;
@@ -91,16 +91,16 @@ CODE_SAMPLE
     /**
      * @param mixed[] $configuration
      */
-    public function configure(array $configuration) : void
+    public function configure(array $configuration): void
     {
         Assert::allIsAOf($configuration, AddPropertyTypeDeclaration::class);
         $this->addPropertyTypeDeclarations = $configuration;
     }
-    private function isClassReflectionType(ClassReflection $classReflection, string $type) : bool
+    private function isClassReflectionType(ClassReflection $classReflection, string $type): bool
     {
         if ($classReflection->hasTraitUse($type)) {
             return \true;
         }
-        return $classReflection->isSubclassOf($type);
+        return $classReflection->is($type);
     }
 }

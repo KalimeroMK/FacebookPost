@@ -14,12 +14,15 @@ use PhpParser\Node\Stmt\Expression;
 use PhpParser\Node\Stmt\Return_;
 use PhpParser\Node\Stmt\Switch_;
 use PHPStan\Type\ObjectType;
-use Rector\Contract\PhpParser\Node\StmtsAwareInterface;
+use Rector\NodeAnalyzer\ExprAnalyzer;
+use Rector\NodeTypeResolver\Node\AttributeKey;
 use Rector\Php80\NodeAnalyzer\MatchSwitchAnalyzer;
 use Rector\Php80\NodeFactory\MatchFactory;
 use Rector\Php80\NodeResolver\SwitchExprsResolver;
 use Rector\Php80\ValueObject\CondAndExpr;
 use Rector\Php80\ValueObject\MatchResult;
+use Rector\PhpParser\Enum\NodeGroup;
+use Rector\PhpParser\Node\Value\ValueResolver;
 use Rector\Rector\AbstractRector;
 use Rector\ValueObject\PhpVersionFeature;
 use Rector\VersionBonding\Contract\MinPhpVersionInterface;
@@ -42,15 +45,25 @@ final class ChangeSwitchToMatchRector extends AbstractRector implements MinPhpVe
      * @readonly
      */
     private MatchFactory $matchFactory;
-    public function __construct(SwitchExprsResolver $switchExprsResolver, MatchSwitchAnalyzer $matchSwitchAnalyzer, MatchFactory $matchFactory)
+    /**
+     * @readonly
+     */
+    private ValueResolver $valueResolver;
+    /**
+     * @readonly
+     */
+    private ExprAnalyzer $exprAnalyzer;
+    public function __construct(SwitchExprsResolver $switchExprsResolver, MatchSwitchAnalyzer $matchSwitchAnalyzer, MatchFactory $matchFactory, ValueResolver $valueResolver, ExprAnalyzer $exprAnalyzer)
     {
         $this->switchExprsResolver = $switchExprsResolver;
         $this->matchSwitchAnalyzer = $matchSwitchAnalyzer;
         $this->matchFactory = $matchFactory;
+        $this->valueResolver = $valueResolver;
+        $this->exprAnalyzer = $exprAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
-        return new RuleDefinition('Change switch() to match()', [new CodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Change `switch()` to `match()`', [new CodeSample(<<<'CODE_SAMPLE'
 switch ($input) {
     case Lexer::T_SELECT:
         $statement = 'select';
@@ -74,21 +87,25 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
-        return [StmtsAwareInterface::class];
+        return NodeGroup::STMTS_AWARE;
     }
     /**
-     * @param StmtsAwareInterface $node
+     * @param StmtsAware $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?\PhpParser\Node
     {
-        if (!\is_array($node->stmts)) {
+        if (!is_array($node->stmts)) {
             return null;
         }
         $hasChanged = \false;
         foreach ($node->stmts as $key => $stmt) {
             if (!$stmt instanceof Switch_) {
+                continue;
+            }
+            // possible reference override, where match
+            if ($stmt->getAttribute(AttributeKey::IS_INSIDE_BYREF_FUNCTION_LIKE)) {
                 continue;
             }
             $nextStmt = $node->stmts[$key + 1] ?? null;
@@ -114,6 +131,7 @@ CODE_SAMPLE
             $assignVar = $this->resolveAssignVar($condAndExprs);
             $hasDefaultValue = $this->matchSwitchAnalyzer->hasDefaultValue($match);
             $this->castMatchCond($match);
+            $this->mirrorDynamicBoolExpr($match);
             if ($assignVar instanceof Expr) {
                 if (!$hasDefaultValue) {
                     continue;
@@ -131,7 +149,7 @@ CODE_SAMPLE
                 if ($arm->conds === null) {
                     continue;
                 }
-                $arm->conds = \array_values($arm->conds);
+                $arm->conds = array_values($arm->conds);
             }
             $node->stmts[$key] = $isReturn ? new Return_($match) : new Expression($match);
             $this->mirrorComments($node->stmts[$key], $stmt);
@@ -142,11 +160,11 @@ CODE_SAMPLE
         }
         return null;
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::MATCH_EXPRESSION;
     }
-    private function castMatchCond(Match_ $match) : void
+    private function castMatchCond(Match_ $match): void
     {
         $type = $this->nodeTypeResolver->getNativeType($match->cond);
         $isNativeCondString = $type->isString()->yes();
@@ -176,10 +194,38 @@ CODE_SAMPLE
             $match->cond = $newMatchCond;
         }
     }
+    private function mirrorDynamicBoolExpr(Match_ $match): void
+    {
+        // switch(true) already just use
+        // switch(false) is dead code that can be on purpose
+        if ($this->valueResolver->isTrueOrFalse($match->cond)) {
+            return;
+        }
+        $isChanged = \false;
+        foreach ($match->arms as $arm) {
+            if ($arm->conds === null) {
+                continue;
+            }
+            foreach ($arm->conds as $cond) {
+                if ($this->exprAnalyzer->isBoolExpr($cond) || $this->exprAnalyzer->isCallLikeReturnNativeBool($cond)) {
+                    // dont' stop lookup for dynamic conditions
+                    // continue verify other condition, in case of mixed condition
+                    $isChanged = \true;
+                    continue;
+                }
+                // return early here, as condition is mixed
+                // we need another real use case for mixed conditions of dynamic + non-dynamic case expr
+                return;
+            }
+        }
+        if ($isChanged) {
+            $match->cond = $this->nodeFactory->createTrue();
+        }
+    }
     /**
      * @param CondAndExpr[] $condAndExprs
      */
-    private function resolveAssignVar(array $condAndExprs) : ?Expr
+    private function resolveAssignVar(array $condAndExprs): ?Expr
     {
         foreach ($condAndExprs as $condAndExpr) {
             $expr = $condAndExpr->getExpr();

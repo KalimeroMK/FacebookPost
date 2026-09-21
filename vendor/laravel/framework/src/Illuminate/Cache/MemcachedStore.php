@@ -37,7 +37,6 @@ class MemcachedStore extends TaggableStore implements LockProvider
      *
      * @param  \Memcached  $memcached
      * @param  string  $prefix
-     * @return void
      */
     public function __construct($memcached, $prefix = '')
     {
@@ -58,7 +57,7 @@ class MemcachedStore extends TaggableStore implements LockProvider
     {
         $value = $this->memcached->get($this->prefix.$key);
 
-        if ($this->memcached->getResultCode() == 0) {
+        if ($this->memcached->getResultCode() === 0) {
             return $value;
         }
     }
@@ -85,7 +84,7 @@ class MemcachedStore extends TaggableStore implements LockProvider
             $values = $this->memcached->getMulti($prefixedKeys, $null, Memcached::GET_PRESERVE_ORDER);
         }
 
-        if ($this->memcached->getResultCode() != 0) {
+        if ($this->memcached->getResultCode() !== 0) {
             return array_fill_keys($keys, null);
         }
 
@@ -201,6 +200,18 @@ class MemcachedStore extends TaggableStore implements LockProvider
     public function restoreLock($name, $owner)
     {
         return $this->lock($name, 0, $owner);
+    }
+
+    /**
+     * Adjust the expiration time of a cached item.
+     *
+     * @param  string  $key
+     * @param  int  $seconds
+     * @return bool
+     */
+    public function touch($key, $seconds)
+    {
+        return $this->memcached->touch($this->getPrefix().$key, $this->calculateExpiration($seconds));
     }
 
     /**

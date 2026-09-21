@@ -105,13 +105,13 @@ class Response
         'etag' => true,
     ];
 
-    public ResponseHeaderBag $headers;
+    public ResponseHeaderBag $headers {
+        set {
+            trigger_deprecation('symfony/http-foundation', '8.1', 'Directly setting property "headers" of "%s" is deprecated; pass the header bag as a constructor argument instead.', static::class);
 
-    protected string $content;
-    protected string $version;
-    protected int $statusCode;
-    protected string $statusText;
-    protected ?string $charset = null;
+            $this->headers = $value;
+        }
+    }
 
     /**
      * Status codes translation table.
@@ -121,6 +121,8 @@ class Response
      * (last updated 2021-10-01).
      *
      * Unless otherwise noted, the status code is defined in RFC2616.
+     *
+     * @var array<int, string>
      */
     public static array $statusTexts = [
         100 => 'Continue',
@@ -187,6 +189,12 @@ class Response
         511 => 'Network Authentication Required',                             // RFC6585
     ];
 
+    protected string $content;
+    protected string $version;
+    protected int $statusCode;
+    protected string $statusText;
+    protected ?string $charset = null;
+
     /**
      * Tracks headers already sent in informational responses.
      */
@@ -197,9 +205,9 @@ class Response
      *
      * @throws \InvalidArgumentException When the HTTP status code is not valid
      */
-    public function __construct(?string $content = '', int $status = 200, array $headers = [])
+    public function __construct(?string $content = '', int $status = 200, array|ResponseHeaderBag $headers = [])
     {
-        $this->headers = new ResponseHeaderBag($headers);
+        self::setHeaders($this, $headers instanceof ResponseHeaderBag ? $headers : new ResponseHeaderBag($headers));
         $this->setContent($content);
         $this->setStatusCode($status);
         $this->setProtocolVersion('1.0');
@@ -227,7 +235,7 @@ class Response
      */
     public function __clone()
     {
-        $this->headers = clone $this->headers;
+        self::setHeaders($this, clone $this->headers);
     }
 
     /**
@@ -259,7 +267,7 @@ class Response
             }
 
             // Fix Content-Type
-            $charset = $this->charset ?: 'UTF-8';
+            $charset = $this->charset ?: 'utf-8';
             if (!$headers->has('Content-Type')) {
                 $headers->set('Content-Type', 'text/html; charset='.$charset);
             } elseif (0 === stripos($headers->get('Content-Type') ?? '', 'text/') && false === stripos($headers->get('Content-Type') ?? '', 'charset')) {
@@ -315,6 +323,11 @@ class Response
     {
         // headers have already been sent by the developer
         if (headers_sent()) {
+            if (!\in_array(\PHP_SAPI, ['cli', 'phpdbg', 'embed'], true)) {
+                $statusCode ??= $this->statusCode;
+                header(\sprintf('HTTP/%s %s %s', $this->version, $statusCode, $this->statusText), true, $statusCode);
+            }
+
             return $this;
         }
 
@@ -473,13 +486,7 @@ class Response
             throw new \InvalidArgumentException(\sprintf('The HTTP status code "%s" is not valid.', $code));
         }
 
-        if (null === $text) {
-            $this->statusText = self::$statusTexts[$code] ?? 'unknown status';
-
-            return $this;
-        }
-
-        $this->statusText = $text;
+        $this->statusText = $text ?? self::$statusTexts[$code] ?? 'unknown status';
 
         return $this;
     }
@@ -537,7 +544,7 @@ class Response
      */
     public function isCacheable(): bool
     {
-        if (!\in_array($this->statusCode, [200, 203, 300, 301, 302, 404, 410])) {
+        if (!\in_array($this->statusCode, [200, 203, 300, 301, 302, 404, 410], true)) {
             return false;
         }
 
@@ -953,7 +960,7 @@ class Response
                 $etag = '"'.$etag.'"';
             }
 
-            $this->headers->set('ETag', (true === $weak ? 'W/' : '').$etag);
+            $this->headers->set('ETag', ($weak ? 'W/' : '').$etag);
         }
 
         return $this;
@@ -1246,7 +1253,7 @@ class Response
      */
     public function isRedirect(?string $location = null): bool
     {
-        return \in_array($this->statusCode, [201, 301, 302, 303, 307, 308]) && (null === $location ?: $location == $this->headers->get('Location'));
+        return \in_array($this->statusCode, [201, 301, 302, 303, 307, 308], true) && (null === $location ?: $location == $this->headers->get('Location'));
     }
 
     /**
@@ -1256,7 +1263,7 @@ class Response
      */
     public function isEmpty(): bool
     {
-        return \in_array($this->statusCode, [204, 304]);
+        return \in_array($this->statusCode, [204, 304], true);
     }
 
     /**
@@ -1306,10 +1313,19 @@ class Response
      */
     protected function ensureIEOverSSLCompatibility(Request $request): void
     {
-        if (false !== stripos($this->headers->get('Content-Disposition') ?? '', 'attachment') && 1 == preg_match('/MSIE (.*?);/i', $request->server->get('HTTP_USER_AGENT') ?? '', $match) && true === $request->isSecure()) {
+        if (false !== stripos($this->headers->get('Content-Disposition') ?? '', 'attachment') && 1 == preg_match('/MSIE (.*?);/i', $request->server->get('HTTP_USER_AGENT') ?? '', $match) && $request->isSecure()) {
             if ((int) preg_replace('/(MSIE )(.*?);/', '$2', $match[0]) < 9) {
                 $this->headers->remove('Cache-Control');
             }
         }
+    }
+
+    private static function setHeaders(self $response, ResponseHeaderBag $headers): void
+    {
+        static $r;
+
+        $r ??= new \ReflectionProperty(self::class, 'headers');
+
+        $r->setRawValue($response, $headers);
     }
 }

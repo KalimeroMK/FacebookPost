@@ -29,18 +29,21 @@ final class ClosureTypeMapper implements TypeMapperInterface
     {
         $this->phpVersionProvider = $phpVersionProvider;
     }
-    public function getNodeClass() : string
+    /**
+     * @return array<class-string<Type>>
+     */
+    public function getNodeClasses(): array
     {
-        return ClosureType::class;
+        return [ClosureType::class];
     }
     /**
      * @param ClosureType $type
      */
-    public function mapToPHPStanPhpDocTypeNode(Type $type) : TypeNode
+    public function mapToPHPStanPhpDocTypeNode(Type $type): TypeNode
     {
         $typeNode = $type->toPhpDocNode();
         $phpDocNodeTraverser = new PhpDocNodeTraverser();
-        $phpDocNodeTraverser->traverseWithCallable($typeNode, '', static function (AstNode $astNode) : ?FullyQualifiedIdentifierTypeNode {
+        $phpDocNodeTraverser->traverseWithCallable($typeNode, '', static function (AstNode $astNode): ?FullyQualifiedIdentifierTypeNode {
             if (!$astNode instanceof IdentifierTypeNode) {
                 return null;
             }
@@ -55,7 +58,7 @@ final class ClosureTypeMapper implements TypeMapperInterface
      * @param TypeKind::* $typeKind
      * @param ClosureType $type
      */
-    public function mapToPhpParserNode(Type $type, string $typeKind) : ?Node
+    public function mapToPhpParserNode(Type $type, string $typeKind): ?Node
     {
         // ref https://3v4l.org/iKMK6#v5.3.29
         if ($typeKind === TypeKind::PARAM && $this->phpVersionProvider->isAtLeastPhpVersion(PhpVersionFeature::ANONYMOUS_FUNCTION_PARAM_TYPE)) {

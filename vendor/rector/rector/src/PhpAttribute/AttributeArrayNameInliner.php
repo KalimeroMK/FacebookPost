@@ -10,24 +10,28 @@ use PhpParser\Node\Identifier;
 use PhpParser\Node\Scalar\Float_;
 use PhpParser\Node\Scalar\Int_;
 use PhpParser\Node\Scalar\String_;
-use RectorPrefix202502\Webmozart\Assert\Assert;
+use RectorPrefix202609\Webmozart\Assert\Assert;
 final class AttributeArrayNameInliner
 {
+    /**
+     * @var class-string
+     */
+    private const OPEN_API_PROPERTY_ATTRIBUTE = 'OpenApi\Attributes\Property';
     /**
      * @param Array_|list<Arg> $array
      * @return list<Arg>
      */
-    public function inlineArrayToArgs($array) : array
+    public function inlineArrayToArgs($array, ?string $attributeClass = null): array
     {
-        if (\is_array($array)) {
-            return $this->inlineArray($array);
+        if (is_array($array)) {
+            return $this->inlineArray($array, $attributeClass);
         }
         return $this->inlineArrayNode($array);
     }
     /**
      * @return list<Arg>
      */
-    private function inlineArrayNode(Array_ $array) : array
+    private function inlineArrayNode(Array_ $array): array
     {
         $args = [];
         foreach ($array->items as $arrayItem) {
@@ -48,11 +52,14 @@ final class AttributeArrayNameInliner
      * @param list<Arg> $args
      * @return list<Arg>
      */
-    private function inlineArray(array $args) : array
+    private function inlineArray(array $args, ?string $attributeClass = null): array
     {
         Assert::allIsAOf($args, Arg::class);
         foreach ($args as $arg) {
-            if ($arg->value instanceof String_ && \is_numeric($arg->value->value)) {
+            if ($attributeClass === self::OPEN_API_PROPERTY_ATTRIBUTE && $arg->name instanceof Identifier && $arg->name->toString() === 'example') {
+                continue;
+            }
+            if ($arg->value instanceof String_ && is_numeric($arg->value->value)) {
                 // use equal over identical on purpose to verify if it is an integer
                 if ((float) $arg->value->value == (int) $arg->value->value) {
                     $arg->value = new Int_((int) $arg->value->value);

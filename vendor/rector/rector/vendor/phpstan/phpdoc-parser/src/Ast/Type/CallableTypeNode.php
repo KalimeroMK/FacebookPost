@@ -26,7 +26,7 @@ class CallableTypeNode implements \PHPStan\PhpDocParser\Ast\Type\TypeNode
         $this->returnType = $returnType;
         $this->templateTypes = $templateTypes;
     }
-    public function __toString() : string
+    public function __toString(): string
     {
         $returnType = $this->returnType;
         if ($returnType instanceof self) {
@@ -35,5 +35,18 @@ class CallableTypeNode implements \PHPStan\PhpDocParser\Ast\Type\TypeNode
         $template = $this->templateTypes !== [] ? '<' . implode(', ', $this->templateTypes) . '>' : '';
         $parameters = implode(', ', $this->parameters);
         return "{$this->identifier}{$template}({$parameters}): {$returnType}";
+    }
+    /**
+     * @param array<string, mixed> $properties
+     */
+    public static function __set_state(array $properties): self
+    {
+        $instance = new self($properties['identifier'], $properties['parameters'], $properties['returnType'], $properties['templateTypes']);
+        if (isset($properties['attributes'])) {
+            foreach ($properties['attributes'] as $key => $value) {
+                $instance->setAttribute($key, $value);
+            }
+        }
+        return $instance;
     }
 }

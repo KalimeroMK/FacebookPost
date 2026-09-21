@@ -5,6 +5,7 @@ namespace Rector\CodeQuality\Rector\Foreach_;
 
 use PhpParser\Node;
 use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\ArrayDimFetch;
 use PhpParser\Node\Expr\Assign;
 use PhpParser\Node\Expr\Variable;
@@ -13,7 +14,8 @@ use PhpParser\Node\Stmt\Expression;
 use PhpParser\Node\Stmt\Foreach_;
 use PhpParser\NodeVisitor;
 use Rector\CodeQuality\NodeAnalyzer\ForeachAnalyzer;
-use Rector\Contract\PhpParser\Node\StmtsAwareInterface;
+use Rector\NodeAnalyzer\ExprAnalyzer;
+use Rector\PhpParser\Enum\NodeGroup;
 use Rector\PhpParser\Node\Value\ValueResolver;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
@@ -31,12 +33,17 @@ final class ForeachItemsAssignToEmptyArrayToAssignRector extends AbstractRector
      * @readonly
      */
     private ValueResolver $valueResolver;
-    public function __construct(ForeachAnalyzer $foreachAnalyzer, ValueResolver $valueResolver)
+    /**
+     * @readonly
+     */
+    private ExprAnalyzer $exprAnalyzer;
+    public function __construct(ForeachAnalyzer $foreachAnalyzer, ValueResolver $valueResolver, ExprAnalyzer $exprAnalyzer)
     {
         $this->foreachAnalyzer = $foreachAnalyzer;
         $this->valueResolver = $valueResolver;
+        $this->exprAnalyzer = $exprAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Change foreach() items assign to empty array to direct assign', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
@@ -67,14 +74,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
-        return [StmtsAwareInterface::class];
+        return NodeGroup::STMTS_AWARE;
     }
     /**
-     * @param StmtsAwareInterface $node
+     * @param StmtsAware $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($node->stmts === null) {
             return null;
@@ -82,7 +89,7 @@ CODE_SAMPLE
         $emptyArrayVariables = [];
         foreach ($node->stmts as $key => $stmt) {
             $variableName = $this->matchEmptyArrayVariableAssign($stmt);
-            if (\is_string($variableName)) {
+            if (is_string($variableName)) {
                 $emptyArrayVariables[] = $variableName;
             }
             if (!$stmt instanceof Foreach_) {
@@ -92,6 +99,9 @@ CODE_SAMPLE
                 continue;
             }
             if ($this->shouldSkip($stmt, $emptyArrayVariables)) {
+                if ($this->isAppend($stmt, $emptyArrayVariables)) {
+                    return null;
+                }
                 continue;
             }
             $assignVariable = $this->foreachAnalyzer->matchAssignItemsOnlyForeachArrayVariable($stmt);
@@ -107,10 +117,10 @@ CODE_SAMPLE
     /**
      * @param string[] $emptyArrayVariables
      */
-    private function isAppend(Stmt $stmt, array $emptyArrayVariables) : bool
+    private function isAppend(Stmt $stmt, array $emptyArrayVariables): bool
     {
         $isAppend = \false;
-        $this->traverseNodesWithCallable($stmt, function (Node $subNode) use($emptyArrayVariables, &$isAppend) : ?int {
+        $this->traverseNodesWithCallable($stmt, function (Node $subNode) use ($emptyArrayVariables, &$isAppend): ?int {
             if ($subNode instanceof Assign && $subNode->var instanceof ArrayDimFetch) {
                 $isAppend = $this->isNames($subNode->var->var, $emptyArrayVariables);
                 if ($isAppend) {
@@ -128,7 +138,7 @@ CODE_SAMPLE
     /**
      * @param string[] $emptyArrayVariables
      */
-    private function shouldSkip(Foreach_ $foreach, array $emptyArrayVariables) : bool
+    private function shouldSkip(Foreach_ $foreach, array $emptyArrayVariables): bool
     {
         $assignVariableExpr = $this->foreachAnalyzer->matchAssignItemsOnlyForeachArrayVariable($foreach);
         if (!$assignVariableExpr instanceof Expr) {
@@ -141,7 +151,7 @@ CODE_SAMPLE
         }
         return !$this->isNames($assignVariableExpr, $emptyArrayVariables);
     }
-    private function matchEmptyArrayVariableAssign(Stmt $stmt) : ?string
+    private function matchEmptyArrayVariableAssign(Stmt $stmt): ?string
     {
         if (!$stmt instanceof Expression) {
             return null;
@@ -153,8 +163,14 @@ CODE_SAMPLE
         if (!$assign->var instanceof Variable) {
             return null;
         }
+        if (!$assign->expr instanceof Array_) {
+            return null;
+        }
         // must be assign of empty array
         if (!$this->valueResolver->isValue($assign->expr, [])) {
+            return null;
+        }
+        if ($this->exprAnalyzer->isDynamicArray($assign->expr)) {
             return null;
         }
         return $this->getName($assign->var);

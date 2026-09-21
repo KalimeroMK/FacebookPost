@@ -3,6 +3,7 @@
 declare (strict_types=1);
 namespace Rector\Symfony\Symfony30\Rector\ClassMethod;
 
+use PhpParser\Comment\Doc;
 use PhpParser\Node;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\Variable;
@@ -15,13 +16,18 @@ use Rector\Exception\ShouldNotHappenException;
 use Rector\PhpParser\Node\BetterNodeFinder;
 use Rector\Rector\AbstractRector;
 use Rector\Symfony\Bridge\NodeAnalyzer\ControllerMethodAnalyzer;
+use Rector\Symfony\Enum\SensioAnnotation;
+use Rector\Symfony\Enum\SymfonyAnnotation;
+use Rector\Symfony\Enum\SymfonyClass;
 use Rector\Symfony\TypeAnalyzer\ControllerAnalyzer;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
  * @see \Rector\Symfony\Tests\Symfony30\Rector\ClassMethod\GetRequestRector\GetRequestRectorTest
  */
-final class GetRequestRector extends AbstractRector
+final class GetRequestRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @readonly
@@ -35,10 +41,6 @@ final class GetRequestRector extends AbstractRector
      * @readonly
      */
     private BetterNodeFinder $betterNodeFinder;
-    /**
-     * @var string
-     */
-    private const REQUEST_CLASS = 'Symfony\\Component\\HttpFoundation\\Request';
     private ?string $requestVariableAndParamName = null;
     public function __construct(ControllerMethodAnalyzer $controllerMethodAnalyzer, ControllerAnalyzer $controllerAnalyzer, BetterNodeFinder $betterNodeFinder)
     {
@@ -46,14 +48,18 @@ final class GetRequestRector extends AbstractRector
         $this->controllerAnalyzer = $controllerAnalyzer;
         $this->betterNodeFinder = $betterNodeFinder;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('symfony/framework-bundle', '>=2.5');
+    }
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Turns fetching of Request via `$this->getRequest()` to action injection', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeController
 {
     public function someAction()
     {
-        $this->getRequest()->...();
+        return $this->getRequest()->getContent();
     }
 }
 CODE_SAMPLE
@@ -64,7 +70,7 @@ class SomeController
 {
     public function someAction(Request $request)
     {
-        $request->...();
+        return $request->getContent();
     }
 }
 CODE_SAMPLE
@@ -73,14 +79,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$this->controllerAnalyzer->isInsideController($node)) {
             return null;
@@ -97,7 +103,7 @@ CODE_SAMPLE
         }
         return null;
     }
-    private function resolveUniqueName(ClassMethod $classMethod, string $name) : string
+    private function resolveUniqueName(ClassMethod $classMethod, string $name): string
     {
         $candidateNames = [];
         foreach ($classMethod->params as $param) {
@@ -105,14 +111,21 @@ CODE_SAMPLE
         }
         $bareName = $name;
         $prefixes = ['main', 'default'];
-        while (\in_array($name, $candidateNames, \true)) {
-            $name = \array_shift($prefixes) . \ucfirst($bareName);
+        while (in_array($name, $candidateNames, \true)) {
+            $name = array_shift($prefixes) . ucfirst($bareName);
         }
         return $name;
     }
-    private function isActionWithGetRequestInBody(ClassMethod $classMethod) : bool
+    private function isActionWithGetRequestInBody(ClassMethod $classMethod): bool
     {
+        if (!$this->hasRouteDocblock($classMethod)) {
+            return \false;
+        }
         if (!$this->controllerMethodAnalyzer->isAction($classMethod)) {
+            return \false;
+        }
+        // an action always returns a response; without any return, this is a setter/hook method
+        if ($this->betterNodeFinder->findReturnsScoped($classMethod) === []) {
             return \false;
         }
         $containsGetRequestMethod = $this->containsGetRequestMethod($classMethod);
@@ -120,14 +133,14 @@ CODE_SAMPLE
             return \true;
         }
         /** @var MethodCall[] $getMethodCalls */
-        $getMethodCalls = $this->betterNodeFinder->find($classMethod, function (Node $node) : bool {
+        $getMethodCalls = $this->betterNodeFinder->find($classMethod, function (Node $node): bool {
             if (!$node instanceof MethodCall) {
                 return \false;
             }
             if (!$node->var instanceof Variable) {
                 return \false;
             }
-            return $this->nodeNameResolver->isName($node->name, 'get');
+            return $this->isName($node->name, 'get');
         });
         foreach ($getMethodCalls as $getMethodCall) {
             if ($this->isGetMethodCallWithRequestParameters($getMethodCall)) {
@@ -136,13 +149,13 @@ CODE_SAMPLE
         }
         return \false;
     }
-    private function isGetRequestInAction(ClassMethod $classMethod, MethodCall $methodCall) : bool
+    private function isGetRequestInAction(ClassMethod $classMethod, MethodCall $methodCall): bool
     {
         // must be $this->getRequest() in controller
         if (!$methodCall->var instanceof Variable) {
             return \false;
         }
-        if (!$this->nodeNameResolver->isName($methodCall->var, 'this')) {
+        if (!$this->isName($methodCall->var, 'this')) {
             return \false;
         }
         if (!$this->isName($methodCall->name, 'getRequest') && !$this->isGetMethodCallWithRequestParameters($methodCall)) {
@@ -150,9 +163,9 @@ CODE_SAMPLE
         }
         return $this->controllerMethodAnalyzer->isAction($classMethod);
     }
-    private function containsGetRequestMethod(ClassMethod $classMethod) : bool
+    private function containsGetRequestMethod(ClassMethod $classMethod): bool
     {
-        return (bool) $this->betterNodeFinder->find((array) $classMethod->stmts, function (Node $node) : bool {
+        return (bool) $this->betterNodeFinder->find((array) $classMethod->stmts, function (Node $node): bool {
             if (!$node instanceof MethodCall) {
                 return \false;
             }
@@ -162,15 +175,15 @@ CODE_SAMPLE
             if (!$this->isName($node->var, 'this')) {
                 return \false;
             }
-            return $this->nodeNameResolver->isName($node->name, 'getRequest');
+            return $this->isName($node->name, 'getRequest');
         });
     }
-    private function isGetMethodCallWithRequestParameters(MethodCall $methodCall) : bool
+    private function isGetMethodCallWithRequestParameters(MethodCall $methodCall): bool
     {
         if (!$this->isName($methodCall->name, 'get')) {
             return \false;
         }
-        if (\count($methodCall->args) !== 1) {
+        if (count($methodCall->args) !== 1) {
             return \false;
         }
         $firstArg = $methodCall->getArgs()[0];
@@ -180,22 +193,22 @@ CODE_SAMPLE
         $string = $firstArg->value;
         return $string->value === 'request';
     }
-    private function getRequestVariableAndParamName() : string
+    private function getRequestVariableAndParamName(): string
     {
         if ($this->requestVariableAndParamName === null) {
             throw new ShouldNotHappenException();
         }
         return $this->requestVariableAndParamName;
     }
-    private function refactorClassMethod(ClassMethod $classMethod) : ?\PhpParser\Node\Stmt\ClassMethod
+    private function refactorClassMethod(ClassMethod $classMethod): ?\PhpParser\Node\Stmt\ClassMethod
     {
         $this->requestVariableAndParamName = $this->resolveUniqueName($classMethod, 'request');
         if (!$this->isActionWithGetRequestInBody($classMethod)) {
             return null;
         }
-        $fullyQualified = new FullyQualified(self::REQUEST_CLASS);
+        $fullyQualified = new FullyQualified(SymfonyClass::REQUEST);
         $classMethod->params[] = new Param(new Variable($this->getRequestVariableAndParamName()), null, $fullyQualified);
-        $this->traverseNodesWithCallable((array) $classMethod->stmts, function (Node $node) use($classMethod) : ?Variable {
+        $this->traverseNodesWithCallable((array) $classMethod->stmts, function (Node $node) use ($classMethod): ?Variable {
             if (!$node instanceof MethodCall) {
                 return null;
             }
@@ -205,5 +218,20 @@ CODE_SAMPLE
             return null;
         });
         return $classMethod;
+    }
+    private function hasRouteDocblock(ClassMethod $classMethod): bool
+    {
+        // need a @Route docblock
+        $doc = $classMethod->getDocComment();
+        if (!$doc instanceof Doc) {
+            return \false;
+        }
+        if (strpos($doc->getText(), '@Route') !== \false) {
+            return \true;
+        }
+        if (strpos($doc->getText(), SymfonyAnnotation::ROUTE) !== \false) {
+            return \true;
+        }
+        return strpos($doc->getText(), SensioAnnotation::ROUTE) !== \false;
     }
 }

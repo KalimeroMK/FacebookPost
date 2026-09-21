@@ -10,6 +10,8 @@ use PhpParser\Node\Identifier;
 use PhpParser\Node\Scalar\String_;
 use Rector\PHPUnit\NodeAnalyzer\TestsNodeAnalyzer;
 use Rector\Rector\AbstractRector;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -18,12 +20,19 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  *
  * @see \Rector\PHPUnit\Tests\PHPUnit80\Rector\MethodCall\SpecificAssertInternalTypeRector\SpecificAssertInternalTypeRectorTest
  */
-final class SpecificAssertInternalTypeRector extends AbstractRector
+final class SpecificAssertInternalTypeRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @readonly
      */
     private TestsNodeAnalyzer $testsNodeAnalyzer;
+    /**
+     * the assertIsArray() family was added in PHPUnit 7.5
+     */
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('phpunit/phpunit', '>=7.5');
+    }
     /**
      * @var array<string, string[]>
      */
@@ -32,7 +41,7 @@ final class SpecificAssertInternalTypeRector extends AbstractRector
     {
         $this->testsNodeAnalyzer = $testsNodeAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Change assertInternalType()/assertNotInternalType() method to new specific alternatives', [new CodeSample(<<<'CODE_SAMPLE'
 final class SomeTest extends \PHPUnit\Framework\TestCase
@@ -61,14 +70,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [MethodCall::class, StaticCall::class];
     }
     /**
      * @param MethodCall|StaticCall $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$this->testsNodeAnalyzer->isPHPUnitMethodCallNames($node, ['assertInternalType', 'assertNotInternalType'])) {
             return null;
@@ -84,7 +93,7 @@ CODE_SAMPLE
         if (!isset(self::TYPE_TO_METHOD[$type])) {
             return null;
         }
-        \array_shift($node->args);
+        array_shift($node->args);
         $position = $this->isName($node->name, 'assertInternalType') ? 0 : 1;
         $methodName = self::TYPE_TO_METHOD[$type][$position];
         $node->name = new Identifier($methodName);

@@ -19,7 +19,7 @@ final class PropertyAnalyzer
     {
         $this->nodeTypeResolver = $nodeTypeResolver;
     }
-    public function hasForbiddenType(Property $property) : bool
+    public function hasForbiddenType(Property $property): bool
     {
         $propertyType = $this->nodeTypeResolver->getType($property);
         if ($propertyType->isNull()->yes()) {
@@ -32,21 +32,23 @@ final class PropertyAnalyzer
             return \false;
         }
         $types = $propertyType->getTypes();
+        $found = \false;
         foreach ($types as $type) {
             if ($this->isForbiddenType($type)) {
-                return \true;
+                $found = \true;
+                break;
             }
         }
-        return \false;
+        return $found;
     }
-    public function isForbiddenType(Type $type) : bool
+    public function isForbiddenType(Type $type): bool
     {
         if ($type instanceof NonExistingObjectType) {
             return \true;
         }
         return $this->isCallableType($type);
     }
-    private function isCallableType(Type $type) : bool
+    private function isCallableType(Type $type): bool
     {
         if (ClassNameFromObjectTypeResolver::resolve($type) === 'Closure') {
             return \false;

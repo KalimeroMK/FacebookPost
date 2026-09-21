@@ -27,7 +27,7 @@ final class ClosureToArrowFunctionRector extends AbstractRector implements MinPh
     {
         $this->closureArrowFunctionAnalyzer = $closureArrowFunctionAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Change closure to arrow function', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
@@ -54,31 +54,36 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Closure::class];
     }
     /**
      * @param Closure $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         $returnExpr = $this->closureArrowFunctionAnalyzer->matchArrowFunctionExpr($node);
         if (!$returnExpr instanceof Expr) {
             return null;
         }
-        $arrowFunction = new ArrowFunction(['params' => $node->params, 'returnType' => $node->returnType, 'byRef' => $node->byRef, 'expr' => $returnExpr]);
+        if ($node->getAttribute(AttributeKey::IS_CLOSURE_IN_ATTRIBUTE) === \true) {
+            return null;
+        }
+        $attributes = $node->getAttributes();
+        unset($attributes[AttributeKey::ORIGINAL_NODE]);
+        $arrowFunction = new ArrowFunction(['params' => $node->params, 'returnType' => $node->returnType, 'byRef' => $node->byRef, 'expr' => $returnExpr], $attributes);
         if ($node->static) {
             $arrowFunction->static = \true;
         }
         $comments = $node->stmts[0]->getAttribute(AttributeKey::COMMENTS) ?? [];
         if ($comments !== []) {
             $this->mirrorComments($arrowFunction->expr, $node->stmts[0]);
-            $arrowFunction->setAttribute(AttributeKey::COMMENT_CLOSURE_RETURN_MIRRORED, \true);
+            $arrowFunction->setAttribute(AttributeKey::COMMENTS, $node->stmts[0]->getComments());
         }
         return $arrowFunction;
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::ARROW_FUNCTION;
     }

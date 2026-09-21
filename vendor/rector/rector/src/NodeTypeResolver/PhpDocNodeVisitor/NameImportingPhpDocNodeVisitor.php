@@ -3,7 +3,7 @@
 declare (strict_types=1);
 namespace Rector\NodeTypeResolver\PhpDocNodeVisitor;
 
-use RectorPrefix202502\Nette\Utils\Strings;
+use RectorPrefix202609\Nette\Utils\Strings;
 use PhpParser\Node as PhpParserNode;
 use PHPStan\PhpDocParser\Ast\Node;
 use PHPStan\PhpDocParser\Ast\PhpDoc\TemplateTagValueNode;
@@ -15,11 +15,9 @@ use Rector\BetterPhpDocParser\PhpDoc\DoctrineAnnotationTagValueNode;
 use Rector\BetterPhpDocParser\PhpDoc\SpacelessPhpDocTagNode;
 use Rector\BetterPhpDocParser\ValueObject\PhpDocAttributeKey;
 use Rector\CodingStyle\ClassNameImport\ClassNameImportSkipper;
-use Rector\Configuration\Option;
-use Rector\Configuration\Parameter\SimpleParameterProvider;
 use Rector\Exception\ShouldNotHappenException;
 use Rector\PhpDocParser\PhpDocParser\PhpDocNodeVisitor\AbstractPhpDocNodeVisitor;
-use Rector\PostRector\Collector\UseNodesToAddCollector;
+use Rector\PhpParser\Node\FileNode;
 use Rector\StaticTypeMapper\PhpDocParser\IdentifierPhpDocTypeMapper;
 use Rector\StaticTypeMapper\ValueObject\Type\AliasedObjectType;
 use Rector\StaticTypeMapper\ValueObject\Type\FullyQualifiedObjectType;
@@ -34,10 +32,6 @@ final class NameImportingPhpDocNodeVisitor extends AbstractPhpDocNodeVisitor
     /**
      * @readonly
      */
-    private UseNodesToAddCollector $useNodesToAddCollector;
-    /**
-     * @readonly
-     */
     private CurrentFileProvider $currentFileProvider;
     /**
      * @readonly
@@ -49,21 +43,20 @@ final class NameImportingPhpDocNodeVisitor extends AbstractPhpDocNodeVisitor
     private IdentifierPhpDocTypeMapper $identifierPhpDocTypeMapper;
     private ?PhpParserNode $currentPhpParserNode = null;
     private bool $hasChanged = \false;
-    public function __construct(ClassNameImportSkipper $classNameImportSkipper, UseNodesToAddCollector $useNodesToAddCollector, CurrentFileProvider $currentFileProvider, ReflectionProvider $reflectionProvider, IdentifierPhpDocTypeMapper $identifierPhpDocTypeMapper)
+    public function __construct(ClassNameImportSkipper $classNameImportSkipper, CurrentFileProvider $currentFileProvider, ReflectionProvider $reflectionProvider, IdentifierPhpDocTypeMapper $identifierPhpDocTypeMapper)
     {
         $this->classNameImportSkipper = $classNameImportSkipper;
-        $this->useNodesToAddCollector = $useNodesToAddCollector;
         $this->currentFileProvider = $currentFileProvider;
         $this->reflectionProvider = $reflectionProvider;
         $this->identifierPhpDocTypeMapper = $identifierPhpDocTypeMapper;
     }
-    public function beforeTraverse(\PHPStan\PhpDocParser\Ast\Node $node) : void
+    public function beforeTraverse(\PHPStan\PhpDocParser\Ast\Node $node): void
     {
         if (!$this->currentPhpParserNode instanceof PhpParserNode) {
             throw new ShouldNotHappenException('Set "$currentPhpParserNode" first');
         }
     }
-    public function enterNode(Node $node) : ?Node
+    public function enterNode(Node $node): ?Node
     {
         if ($node instanceof SpacelessPhpDocTagNode) {
             return $this->enterSpacelessPhpDocTagNode($node);
@@ -79,16 +72,12 @@ final class NameImportingPhpDocNodeVisitor extends AbstractPhpDocNodeVisitor
             throw new ShouldNotHappenException();
         }
         // no \, skip early
-        if (\strpos($node->name, '\\') === \false) {
+        if (strpos($node->name, '\\') === \false) {
             return null;
         }
         $staticType = $this->identifierPhpDocTypeMapper->mapIdentifierTypeNode($node, $this->currentPhpParserNode);
         $staticType = $this->resolveFullyQualified($staticType);
         if (!$staticType instanceof FullyQualifiedObjectType) {
-            return null;
-        }
-        // Importing root namespace classes (like \DateTime) is optional
-        if ($this->shouldSkipShortClassName($staticType)) {
             return null;
         }
         $file = $this->currentFileProvider->getFile();
@@ -97,16 +86,16 @@ final class NameImportingPhpDocNodeVisitor extends AbstractPhpDocNodeVisitor
         }
         return $this->processFqnNameImport($this->currentPhpParserNode, $node, $staticType, $file);
     }
-    public function setCurrentNode(PhpParserNode $phpParserNode) : void
+    public function setCurrentNode(PhpParserNode $phpParserNode): void
     {
         $this->hasChanged = \false;
         $this->currentPhpParserNode = $phpParserNode;
     }
-    public function hasChanged() : bool
+    public function hasChanged(): bool
     {
         return $this->hasChanged;
     }
-    private function resolveFullyQualified(Type $type) : ?FullyQualifiedObjectType
+    private function resolveFullyQualified(Type $type): ?FullyQualifiedObjectType
     {
         if ($type instanceof ShortenedObjectType || $type instanceof AliasedObjectType) {
             return new FullyQualifiedObjectType($type->getFullyQualifiedName());
@@ -116,7 +105,7 @@ final class NameImportingPhpDocNodeVisitor extends AbstractPhpDocNodeVisitor
         }
         return null;
     }
-    private function processFqnNameImport(PhpParserNode $phpParserNode, IdentifierTypeNode $identifierTypeNode, FullyQualifiedObjectType $fullyQualifiedObjectType, File $file) : ?IdentifierTypeNode
+    private function processFqnNameImport(PhpParserNode $phpParserNode, IdentifierTypeNode $identifierTypeNode, FullyQualifiedObjectType $fullyQualifiedObjectType, File $file): ?IdentifierTypeNode
     {
         $parentNode = $identifierTypeNode->getAttribute(PhpDocAttributeKey::PARENT);
         if ($parentNode instanceof TemplateTagValueNode) {
@@ -124,32 +113,37 @@ final class NameImportingPhpDocNodeVisitor extends AbstractPhpDocNodeVisitor
             return null;
         }
         // standardize to FQN
-        if (\strncmp($fullyQualifiedObjectType->getClassName(), '@', \strlen('@')) === 0) {
-            $fullyQualifiedObjectType = new FullyQualifiedObjectType(\ltrim($fullyQualifiedObjectType->getClassName(), '@'));
+        if (strncmp($fullyQualifiedObjectType->getClassName(), '@', strlen('@')) === 0) {
+            $fullyQualifiedObjectType = new FullyQualifiedObjectType(ltrim($fullyQualifiedObjectType->getClassName(), '@'));
         }
         if ($this->classNameImportSkipper->shouldSkipNameForFullyQualifiedObjectType($file, $phpParserNode, $fullyQualifiedObjectType)) {
             return null;
         }
         $newNode = new IdentifierTypeNode($fullyQualifiedObjectType->getShortName());
-        // should skip because its already used
-        if ($this->useNodesToAddCollector->isShortImported($file, $fullyQualifiedObjectType) && !$this->useNodesToAddCollector->isImportShortable($file, $fullyQualifiedObjectType)) {
+        $fileNode = $file->getFileNode();
+        if (!$fileNode instanceof FileNode) {
             return null;
         }
-        if ($this->shouldImport($newNode, $identifierTypeNode, $fullyQualifiedObjectType)) {
-            $this->useNodesToAddCollector->addUseImport($fullyQualifiedObjectType);
+        $pendingImports = $fileNode->getPendingImports();
+        // should skip because its already used
+        if ($pendingImports->isShortImported($fullyQualifiedObjectType) && !$pendingImports->isImportShortable($fullyQualifiedObjectType)) {
+            return null;
+        }
+        if ($this->shouldImport($fileNode, $newNode, $identifierTypeNode, $fullyQualifiedObjectType)) {
+            $pendingImports->addUseImport($fullyQualifiedObjectType);
             $this->hasChanged = \true;
             return $newNode;
         }
         return null;
     }
-    private function shouldImport(IdentifierTypeNode $newNode, IdentifierTypeNode $identifierTypeNode, FullyQualifiedObjectType $fullyQualifiedObjectType) : bool
+    private function shouldImport(FileNode $fileNode, IdentifierTypeNode $newNode, IdentifierTypeNode $identifierTypeNode, FullyQualifiedObjectType $fullyQualifiedObjectType): bool
     {
         if ($newNode->name === $identifierTypeNode->name) {
             return \false;
         }
-        if (\strncmp($identifierTypeNode->name, '\\', \strlen('\\')) === 0) {
+        if (strncmp($identifierTypeNode->name, '\\', strlen('\\')) === 0) {
             if ($fullyQualifiedObjectType->getShortName() !== $fullyQualifiedObjectType->getClassName()) {
-                return $fullyQualifiedObjectType->getShortName() !== \ltrim($identifierTypeNode->name, '\\');
+                return $fullyQualifiedObjectType->getShortName() !== ltrim($identifierTypeNode->name, '\\');
             }
             return \true;
         }
@@ -159,23 +153,15 @@ final class NameImportingPhpDocNodeVisitor extends AbstractPhpDocNodeVisitor
         }
         $firstPath = Strings::before($identifierTypeNode->name, '\\' . $newNode->name);
         if ($firstPath === null) {
-            return \true;
+            return !$fileNode->hasImport($fullyQualifiedObjectType);
         }
         if ($firstPath === '') {
             return \true;
         }
-        $namespaceParts = \explode('\\', \ltrim($firstPath, '\\'));
-        return \count($namespaceParts) > 1;
+        $namespaceParts = explode('\\', ltrim($firstPath, '\\'));
+        return count($namespaceParts) > 1;
     }
-    private function shouldSkipShortClassName(FullyQualifiedObjectType $fullyQualifiedObjectType) : bool
-    {
-        $importShortClasses = SimpleParameterProvider::provideBoolParameter(Option::IMPORT_SHORT_CLASSES);
-        if ($importShortClasses) {
-            return \false;
-        }
-        return \substr_count($fullyQualifiedObjectType->getClassName(), '\\') === 0;
-    }
-    private function processDoctrineAnnotationTagValueNode(DoctrineAnnotationTagValueNode $doctrineAnnotationTagValueNode) : void
+    private function processDoctrineAnnotationTagValueNode(DoctrineAnnotationTagValueNode $doctrineAnnotationTagValueNode): void
     {
         $currentPhpParserNode = $this->currentPhpParserNode;
         if (!$currentPhpParserNode instanceof PhpParserNode) {
@@ -198,16 +184,16 @@ final class NameImportingPhpDocNodeVisitor extends AbstractPhpDocNodeVisitor
         $doctrineAnnotationTagValueNode->identifierTypeNode = $shortentedIdentifierTypeNode;
         $doctrineAnnotationTagValueNode->markAsChanged();
     }
-    private function enterSpacelessPhpDocTagNode(SpacelessPhpDocTagNode $spacelessPhpDocTagNode) : ?\Rector\BetterPhpDocParser\PhpDoc\SpacelessPhpDocTagNode
+    private function enterSpacelessPhpDocTagNode(SpacelessPhpDocTagNode $spacelessPhpDocTagNode): ?\Rector\BetterPhpDocParser\PhpDoc\SpacelessPhpDocTagNode
     {
         if (!$spacelessPhpDocTagNode->value instanceof DoctrineAnnotationTagValueNode) {
             return null;
         }
         // special case for doctrine annotation
-        if (\strncmp($spacelessPhpDocTagNode->name, '@', \strlen('@')) !== 0) {
+        if (strncmp($spacelessPhpDocTagNode->name, '@', strlen('@')) !== 0) {
             return null;
         }
-        $attributeClass = \ltrim($spacelessPhpDocTagNode->name, '@\\');
+        $attributeClass = ltrim($spacelessPhpDocTagNode->name, '@\\');
         $identifierTypeNode = new IdentifierTypeNode($attributeClass);
         $currentPhpParserNode = $this->currentPhpParserNode;
         if (!$currentPhpParserNode instanceof PhpParserNode) {

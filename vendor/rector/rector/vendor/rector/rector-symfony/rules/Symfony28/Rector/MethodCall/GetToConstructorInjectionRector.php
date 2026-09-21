@@ -11,12 +11,14 @@ use Rector\PostRector\ValueObject\PropertyMetadata;
 use Rector\Rector\AbstractRector;
 use Rector\Symfony\NodeAnalyzer\DependencyInjectionMethodCallAnalyzer;
 use Rector\Symfony\TypeAnalyzer\ContainerAwareAnalyzer;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
  * @see \Rector\Symfony\Tests\Symfony28\Rector\MethodCall\GetToConstructorInjectionRector\GetToConstructorInjectionRectorTest
  */
-final class GetToConstructorInjectionRector extends AbstractRector
+final class GetToConstructorInjectionRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @readonly
@@ -36,7 +38,11 @@ final class GetToConstructorInjectionRector extends AbstractRector
         $this->containerAwareAnalyzer = $containerAwareAnalyzer;
         $this->classDependencyManipulator = $classDependencyManipulator;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('symfony/framework-bundle', '>=2.8');
+    }
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Turns fetching of dependencies via `$this->get()` to constructor injection in Command and Controller', [new CodeSample(<<<'CODE_SAMPLE'
 use Symfony\Bundle\FrameworkBundle\Controller\Controller;
@@ -71,18 +77,18 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         $class = $node;
         $propertyMetadatas = [];
-        $this->traverseNodesWithCallable($class, function (Node $node) use($class, &$propertyMetadatas) : ?Node {
+        $this->traverseNodesWithCallable($class, function (Node $node) use ($class, &$propertyMetadatas): ?Node {
             if (!$node instanceof MethodCall) {
                 return null;
             }

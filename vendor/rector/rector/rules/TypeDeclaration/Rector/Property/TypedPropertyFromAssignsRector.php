@@ -7,6 +7,7 @@ use PhpParser\Node;
 use PhpParser\Node\Expr;
 use PhpParser\Node\NullableType;
 use PhpParser\Node\Stmt\Class_;
+use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Property;
 use PhpParser\Node\UnionType as NodeUnionType;
 use PHPStan\Reflection\ClassReflection;
@@ -99,11 +100,14 @@ final class TypedPropertyFromAssignsRector extends AbstractRector implements Min
         $this->staticTypeMapper = $staticTypeMapper;
         $this->attrinationFinder = $attrinationFinder;
     }
-    public function configure(array $configuration) : void
+    /**
+     * @param array<string, mixed> $configuration
+     */
+    public function configure(array $configuration): void
     {
-        $this->inlinePublic = $configuration[self::INLINE_PUBLIC] ?? (bool) \current($configuration);
+        $this->inlinePublic = $configuration[self::INLINE_PUBLIC] ?? (bool) current($configuration);
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Add typed property from assigned types', [new ConfiguredCodeSample(<<<'CODE_SAMPLE'
 final class SomeClass
@@ -132,19 +136,24 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::TYPED_PROPERTIES;
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
+        // skip Doctrine static function mapping, properties are mapped in loadMetadata() method
+        // @see https://www.doctrine-project.org/projects/doctrine-orm/en/3.6/reference/php-mapping.html#static-function
+        if ($node->getMethod('loadMetadata') instanceof ClassMethod) {
+            return null;
+        }
         $hasChanged = \false;
         $classReflection = null;
         foreach ($node->getProperties() as $property) {
@@ -164,7 +173,7 @@ CODE_SAMPLE
             if (!$this->makePropertyTypedGuard->isLegal($property, $classReflection, $this->inlinePublic)) {
                 continue;
             }
-            $inferredType = $this->allAssignNodePropertyTypeInferer->inferProperty($property, $classReflection, $this->file);
+            $inferredType = $this->allAssignNodePropertyTypeInferer->inferProperty($property, $classReflection, $this->getFile());
             if (!$inferredType instanceof Type) {
                 continue;
             }
@@ -193,7 +202,7 @@ CODE_SAMPLE
         }
         return null;
     }
-    private function decorateTypeWithNullableIfDefaultPropertyNull(Property $property, Type $inferredType) : Type
+    private function decorateTypeWithNullableIfDefaultPropertyNull(Property $property, Type $inferredType): Type
     {
         $defaultExpr = $property->props[0]->default;
         if (!$defaultExpr instanceof Expr) {
@@ -210,9 +219,9 @@ CODE_SAMPLE
     /**
      * Doctrine properties are handled in doctrine rules
      */
-    private function isDoctrineMappedProperty(Property $property) : bool
+    private function isDoctrineMappedProperty(Property $property): bool
     {
-        $mappingClasses = \array_merge(CollectionMapping::TO_MANY_CLASSES, CollectionMapping::TO_ONE_CLASSES, [MappingClass::COLUMN]);
+        $mappingClasses = array_merge(CollectionMapping::TO_MANY_CLASSES, CollectionMapping::TO_ONE_CLASSES, [MappingClass::COLUMN]);
         return $this->attrinationFinder->hasByMany($property, $mappingClasses);
     }
 }

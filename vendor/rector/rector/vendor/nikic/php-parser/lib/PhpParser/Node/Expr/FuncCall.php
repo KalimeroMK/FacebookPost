@@ -9,13 +9,13 @@ class FuncCall extends \PhpParser\Node\Expr\CallLike
 {
     /** @var Node\Name|Expr Function name */
     public Node $name;
-    /** @var array<Node\Arg|Node\VariadicPlaceholder> Arguments */
+    /** @var array<Node\Arg|Node\VariadicPlaceholder|Node\ArgPlaceholder> Arguments */
     public array $args;
     /**
      * Constructs a function call node.
      *
      * @param Node\Name|Expr $name Function name
-     * @param array<Node\Arg|Node\VariadicPlaceholder> $args Arguments
+     * @param array<Node\Arg|Node\VariadicPlaceholder|Node\ArgPlaceholder> $args Arguments
      * @param array<string, mixed> $attributes Additional attributes
      */
     public function __construct(Node $name, array $args = [], array $attributes = [])
@@ -24,15 +24,15 @@ class FuncCall extends \PhpParser\Node\Expr\CallLike
         $this->name = $name;
         $this->args = $args;
     }
-    public function getSubNodeNames() : array
+    public function getSubNodeNames(): array
     {
         return ['name', 'args'];
     }
-    public function getType() : string
+    public function getType(): string
     {
         return 'Expr_FuncCall';
     }
-    public function getRawArgs() : array
+    public function getRawArgs(): array
     {
         return $this->args;
     }

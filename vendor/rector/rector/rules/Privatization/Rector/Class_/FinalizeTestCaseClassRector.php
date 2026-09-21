@@ -6,7 +6,6 @@ namespace Rector\Privatization\Rector\Class_;
 use PhpParser\Node;
 use PhpParser\Node\Stmt\Class_;
 use PHPStan\Reflection\ReflectionProvider;
-use Rector\Php81\NodeManipulator\AttributeGroupNewLiner;
 use Rector\Privatization\NodeManipulator\VisibilityManipulator;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
@@ -24,19 +23,14 @@ final class FinalizeTestCaseClassRector extends AbstractRector
      * @readonly
      */
     private VisibilityManipulator $visibilityManipulator;
-    /**
-     * @readonly
-     */
-    private AttributeGroupNewLiner $attributeGroupNewLiner;
-    public function __construct(ReflectionProvider $reflectionProvider, VisibilityManipulator $visibilityManipulator, AttributeGroupNewLiner $attributeGroupNewLiner)
+    public function __construct(ReflectionProvider $reflectionProvider, VisibilityManipulator $visibilityManipulator)
     {
         $this->reflectionProvider = $reflectionProvider;
         $this->visibilityManipulator = $visibilityManipulator;
-        $this->attributeGroupNewLiner = $attributeGroupNewLiner;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
-        return new RuleDefinition('PHPUnit test case will be finalized', [new CodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Make PHPUnit test case final', [new CodeSample(<<<'CODE_SAMPLE'
 use PHPUnit\Framework\TestCase;
 
 class SomeClass extends TestCase
@@ -55,35 +49,36 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         // skip obvious cases
         if ($node->isAbstract() || $node->isAnonymous() || $node->isFinal()) {
             return null;
         }
         $className = $this->getName($node);
-        if (!\is_string($className)) {
+        if (!is_string($className)) {
             return null;
         }
-        if (\substr_compare($className, 'TestCase', -\strlen('TestCase')) === 0) {
+        if (substr_compare($className, 'TestCase', -strlen('TestCase')) === 0) {
+            return null;
+        }
+        // skip classes without "Test" suffix, as those are meant to be extended
+        if (substr_compare($className, 'Test', -strlen('Test')) !== 0) {
             return null;
         }
         if (!$this->reflectionProvider->hasClass($className)) {
             return null;
         }
         $classReflection = $this->reflectionProvider->getClass($className);
-        if (!$classReflection->isSubclassOf('PHPUnit\\Framework\\TestCase')) {
+        if (!$classReflection->is('PHPUnit\Framework\TestCase')) {
             return null;
-        }
-        if ($node->attrGroups !== []) {
-            $this->attributeGroupNewLiner->newLine($this->file, $node);
         }
         $this->visibilityManipulator->makeFinal($node);
         return $node;

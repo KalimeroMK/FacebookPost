@@ -21,7 +21,7 @@ class PrintableNewAnonClassNode extends Expr
     public array $attrGroups;
     /** @var int Modifiers */
     public int $flags;
-    /** @var (Node\Arg|Node\VariadicPlaceholder)[] Arguments */
+    /** @var (Node\Arg|Node\VariadicPlaceholder|Node\ArgPlaceholder)[] Arguments */
     public array $args;
     /** @var null|Node\Name Name of extended class */
     public ?Node\Name $extends;
@@ -31,7 +31,7 @@ class PrintableNewAnonClassNode extends Expr
     public array $stmts;
     /**
      * @param Node\AttributeGroup[] $attrGroups PHP attribute groups
-     * @param (Node\Arg|Node\VariadicPlaceholder)[] $args Arguments
+     * @param (Node\Arg|Node\VariadicPlaceholder|Node\ArgPlaceholder)[] $args Arguments
      * @param Node\Name|null $extends Name of extended class
      * @param Node\Name[] $implements Names of implemented interfaces
      * @param Node\Stmt[] $stmts Statements
@@ -47,19 +47,19 @@ class PrintableNewAnonClassNode extends Expr
         $this->implements = $implements;
         $this->stmts = $stmts;
     }
-    public static function fromNewNode(Expr\New_ $newNode) : self
+    public static function fromNewNode(Expr\New_ $newNode): self
     {
         $class = $newNode->class;
-        \assert($class instanceof Node\Stmt\Class_);
+        assert($class instanceof Node\Stmt\Class_);
         // We don't assert that $class->name is null here, to allow consumers to assign unique names
         // to anonymous classes for their own purposes. We simplify ignore the name here.
         return new self($class->attrGroups, $class->flags, $newNode->args, $class->extends, $class->implements, $class->stmts, $newNode->getAttributes());
     }
-    public function getType() : string
+    public function getType(): string
     {
         return 'Expr_PrintableNewAnonClass';
     }
-    public function getSubNodeNames() : array
+    public function getSubNodeNames(): array
     {
         return ['attrGroups', 'flags', 'args', 'extends', 'implements', 'stmts'];
     }

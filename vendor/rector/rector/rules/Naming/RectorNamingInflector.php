@@ -3,8 +3,8 @@
 declare (strict_types=1);
 namespace Rector\Naming;
 
-use RectorPrefix202502\Doctrine\Inflector\Inflector;
-use RectorPrefix202502\Nette\Utils\Strings;
+use RectorPrefix202609\Doctrine\Inflector\Inflector;
+use RectorPrefix202609\Nette\Utils\Strings;
 final class RectorNamingInflector
 {
     /**
@@ -12,21 +12,21 @@ final class RectorNamingInflector
      */
     private Inflector $inflector;
     /**
-     * @var string
      * @see https://regex101.com/r/VqVvke/3
+     * @var string
      */
     private const DATA_INFO_SUFFIX_REGEX = '#^(?<prefix>.+)(?<suffix>Data|Info)$#';
     public function __construct(Inflector $inflector)
     {
         $this->inflector = $inflector;
     }
-    public function singularize(string $name) : string
+    public function singularize(string $name): string
     {
         $matches = Strings::match($name, self::DATA_INFO_SUFFIX_REGEX);
         if ($matches === null) {
             return $this->inflector->singularize($name);
         }
-        $singularized = $this->inflector->singularize($matches['prefix']);
+        $singularized = $this->inflector->singularize((string) $matches['prefix']);
         $uninflectable = $matches['suffix'];
         return $singularized . $uninflectable;
     }

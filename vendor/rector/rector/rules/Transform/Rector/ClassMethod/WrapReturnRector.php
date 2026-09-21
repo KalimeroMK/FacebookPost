@@ -15,7 +15,7 @@ use Rector\Rector\AbstractRector;
 use Rector\Transform\ValueObject\WrapReturn;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\ConfiguredCodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
-use RectorPrefix202502\Webmozart\Assert\Assert;
+use RectorPrefix202609\Webmozart\Assert\Assert;
 /**
  * @see \Rector\Tests\Transform\Rector\ClassMethod\WrapReturnRector\WrapReturnRectorTest
  */
@@ -25,7 +25,7 @@ final class WrapReturnRector extends AbstractRector implements ConfigurableRecto
      * @var WrapReturn[]
      */
     private array $typeMethodWraps = [];
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Wrap return value of specific method', [new ConfiguredCodeSample(<<<'CODE_SAMPLE'
 final class SomeClass
@@ -50,14 +50,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         $hasChanged = \false;
         foreach ($this->typeMethodWraps as $typeMethodWrap) {
@@ -71,8 +71,9 @@ CODE_SAMPLE
                 if ($node->stmts === null) {
                     continue;
                 }
-                $this->wrap($classMethod, $typeMethodWrap->isArrayWrap());
-                $hasChanged = \true;
+                if ($typeMethodWrap->isArrayWrap() && $this->wrap($classMethod)) {
+                    $hasChanged = \true;
+                }
             }
         }
         if ($hasChanged) {
@@ -83,24 +84,23 @@ CODE_SAMPLE
     /**
      * @param mixed[] $configuration
      */
-    public function configure(array $configuration) : void
+    public function configure(array $configuration): void
     {
         Assert::allIsAOf($configuration, WrapReturn::class);
         $this->typeMethodWraps = $configuration;
     }
-    private function wrap(ClassMethod $classMethod, bool $isArrayWrap) : ?ClassMethod
+    private function wrap(ClassMethod $classMethod): bool
     {
-        if (!\is_iterable($classMethod->stmts)) {
-            return null;
+        if (!is_iterable($classMethod->stmts)) {
+            return \false;
         }
-        foreach ($classMethod->stmts as $key => $stmt) {
-            if ($stmt instanceof Return_ && $stmt->expr instanceof Expr) {
-                if ($isArrayWrap && !$stmt->expr instanceof Array_) {
-                    $stmt->expr = new Array_([new ArrayItem($stmt->expr)]);
-                }
-                $classMethod->stmts[$key] = $stmt;
+        $hasChanged = \false;
+        foreach ($classMethod->stmts as $stmt) {
+            if ($stmt instanceof Return_ && $stmt->expr instanceof Expr && !$stmt->expr instanceof Array_) {
+                $stmt->expr = new Array_([new ArrayItem($stmt->expr)]);
+                $hasChanged = \true;
             }
         }
-        return $classMethod;
+        return $hasChanged;
     }
 }

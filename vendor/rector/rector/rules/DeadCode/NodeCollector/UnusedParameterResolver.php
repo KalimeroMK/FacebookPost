@@ -19,16 +19,11 @@ final class UnusedParameterResolver
     /**
      * @return array<int, Param>
      */
-    public function resolve(ClassMethod $classMethod) : array
+    public function resolve(ClassMethod $classMethod): array
     {
         /** @var array<int, Param> $unusedParameters */
         $unusedParameters = [];
         foreach ($classMethod->params as $i => $param) {
-            // skip property promotion
-            /** @var Param $param */
-            if ($param->isPromoted()) {
-                continue;
-            }
             if ($this->paramAnalyzer->isParamUsedInClassMethod($classMethod, $param)) {
                 continue;
             }

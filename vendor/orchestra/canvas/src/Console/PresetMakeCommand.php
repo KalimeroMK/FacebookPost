@@ -13,8 +13,8 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
-use function Illuminate\Filesystem\join_paths;
 use function Laravel\Prompts\select;
+use function Orchestra\Sidekick\Filesystem\join_paths;
 use function Orchestra\Testbench\package_path;
 
 /**
@@ -34,11 +34,9 @@ class PresetMakeCommand extends GeneratorCommand
 
     /**
      * Interact with the user before validating the input.
-     *
-     * @return void
      */
     #[\Override]
-    protected function interact(InputInterface $input, OutputInterface $output)
+    protected function interact(InputInterface $input, OutputInterface $output): void
     {
         if (\is_null($input->getArgument('name'))) {
             $input->setArgument('name', select(

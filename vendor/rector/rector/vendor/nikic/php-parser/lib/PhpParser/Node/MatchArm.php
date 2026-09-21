@@ -9,7 +9,6 @@ class MatchArm extends NodeAbstract
 {
     /** @var null|list<Node\Expr> */
     public ?array $conds;
-    /** @var Node\Expr */
     public \PhpParser\Node\Expr $body;
     /**
      * @param null|list<Node\Expr> $conds
@@ -20,11 +19,11 @@ class MatchArm extends NodeAbstract
         $this->body = $body;
         $this->attributes = $attributes;
     }
-    public function getSubNodeNames() : array
+    public function getSubNodeNames(): array
     {
         return ['conds', 'body'];
     }
-    public function getType() : string
+    public function getType(): string
     {
         return 'MatchArm';
     }

@@ -10,13 +10,15 @@ use PhpParser\Node\Expr\MethodCall;
 use PHPStan\Type\ObjectType;
 use Rector\PhpParser\Node\Value\ValueResolver;
 use Rector\Rector\AbstractRector;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
  * @changelog https://github.com/symfony/symfony/blob/5.x/UPGRADE-5.2.md#dependencyinjection
  * @see \Rector\Symfony\Tests\Symfony52\Rector\MethodCall\DefinitionAliasSetPrivateToSetPublicRector\DefinitionAliasSetPrivateToSetPublicRectorTest
  */
-final class DefinitionAliasSetPrivateToSetPublicRector extends AbstractRector
+final class DefinitionAliasSetPrivateToSetPublicRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @readonly
@@ -24,14 +26,19 @@ final class DefinitionAliasSetPrivateToSetPublicRector extends AbstractRector
     private ValueResolver $valueResolver;
     /**
      * @var ObjectType[]
+     * @readonly
      */
-    private array $definitionObjectTypes = [];
+    private array $definitionObjectTypes;
     public function __construct(ValueResolver $valueResolver)
     {
         $this->valueResolver = $valueResolver;
-        $this->definitionObjectTypes = [new ObjectType('Symfony\\Component\\DependencyInjection\\Alias'), new ObjectType('Symfony\\Component\\DependencyInjection\\Definition')];
+        $this->definitionObjectTypes = [new ObjectType('Symfony\Component\DependencyInjection\Alias'), new ObjectType('Symfony\Component\DependencyInjection\Definition')];
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('symfony/dependency-injection', '>=5.2');
+    }
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Migrates from deprecated Definition/Alias->setPrivate() to Definition/Alias->setPublic()', [new CodeSample(<<<'CODE_SAMPLE'
 use Symfony\Component\DependencyInjection\Alias;
@@ -70,14 +77,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [MethodCall::class];
     }
     /**
      * @param MethodCall $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$this->isName($node->name, 'setPrivate')) {
             return null;
@@ -89,7 +96,7 @@ CODE_SAMPLE
         $argValue = $argValue instanceof ConstFetch ? $this->createNegationConsFetch($argValue) : new BooleanNot($argValue);
         return $this->nodeFactory->createMethodCall($node->var, 'setPublic', [$argValue]);
     }
-    private function createNegationConsFetch(ConstFetch $constFetch) : ConstFetch
+    private function createNegationConsFetch(ConstFetch $constFetch): ConstFetch
     {
         if ($this->valueResolver->isFalse($constFetch)) {
             return $this->nodeFactory->createTrue();

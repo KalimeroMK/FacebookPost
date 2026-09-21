@@ -32,20 +32,22 @@ final class DynamicSourceLocatorDecorator
     }
     /**
      * @param string[] $paths
+     * @return string[]
      */
-    public function addPaths(array $paths) : void
+    public function addPaths(array $paths): array
     {
         if ($paths === []) {
-            return;
+            return [];
         }
         $paths = $this->filesystemTweaker->resolveWithFnmatch($paths);
         $files = $this->fileAndDirectoryFilter->filterFiles($paths);
         $this->dynamicSourceLocatorProvider->addFiles($files);
         $directories = $this->fileAndDirectoryFilter->filterDirectories($paths);
         $this->dynamicSourceLocatorProvider->addDirectories($directories);
+        return array_merge($files, $directories);
     }
-    public function isPathsEmpty() : bool
+    public function arePathsEmpty(): bool
     {
-        return $this->dynamicSourceLocatorProvider->isPathsEmpty();
+        return $this->dynamicSourceLocatorProvider->arePathsEmpty();
     }
 }

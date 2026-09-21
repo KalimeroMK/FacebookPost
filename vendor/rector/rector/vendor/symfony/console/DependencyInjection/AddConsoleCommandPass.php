@@ -8,18 +8,18 @@
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\Symfony\Component\Console\DependencyInjection;
+namespace RectorPrefix202609\Symfony\Component\Console\DependencyInjection;
 
-use RectorPrefix202502\Symfony\Component\Console\Command\Command;
-use RectorPrefix202502\Symfony\Component\Console\Command\LazyCommand;
-use RectorPrefix202502\Symfony\Component\Console\CommandLoader\ContainerCommandLoader;
-use RectorPrefix202502\Symfony\Component\DependencyInjection\Argument\ServiceClosureArgument;
-use RectorPrefix202502\Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
-use RectorPrefix202502\Symfony\Component\DependencyInjection\Compiler\ServiceLocatorTagPass;
-use RectorPrefix202502\Symfony\Component\DependencyInjection\ContainerBuilder;
-use RectorPrefix202502\Symfony\Component\DependencyInjection\Exception\InvalidArgumentException;
-use RectorPrefix202502\Symfony\Component\DependencyInjection\Reference;
-use RectorPrefix202502\Symfony\Component\DependencyInjection\TypedReference;
+use RectorPrefix202609\Symfony\Component\Console\Command\Command;
+use RectorPrefix202609\Symfony\Component\Console\Command\LazyCommand;
+use RectorPrefix202609\Symfony\Component\Console\CommandLoader\ContainerCommandLoader;
+use RectorPrefix202609\Symfony\Component\DependencyInjection\Argument\ServiceClosureArgument;
+use RectorPrefix202609\Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
+use RectorPrefix202609\Symfony\Component\DependencyInjection\Compiler\ServiceLocatorTagPass;
+use RectorPrefix202609\Symfony\Component\DependencyInjection\ContainerBuilder;
+use RectorPrefix202609\Symfony\Component\DependencyInjection\Exception\InvalidArgumentException;
+use RectorPrefix202609\Symfony\Component\DependencyInjection\Reference;
+use RectorPrefix202609\Symfony\Component\DependencyInjection\TypedReference;
 /**
  * Registers console commands.
  *
@@ -43,18 +43,18 @@ class AddConsoleCommandPass implements CompilerPassInterface
             if (isset($tags[0]['command'])) {
                 $aliases = $tags[0]['command'];
             } else {
-                if (!($r = $container->getReflectionClass($class))) {
+                if (!$r = $container->getReflectionClass($class)) {
                     throw new InvalidArgumentException(\sprintf('Class "%s" used for service "%s" cannot be found.', $class, $id));
                 }
                 if (!$r->isSubclassOf(Command::class)) {
                     throw new InvalidArgumentException(\sprintf('The service "%s" tagged "%s" must be a subclass of "%s".', $id, 'console.command', Command::class));
                 }
-                $aliases = \str_replace('%', '%%', $class::getDefaultName() ?? '');
+                $aliases = str_replace('%', '%%', $class::getDefaultName() ?? '');
             }
-            $aliases = \explode('|', $aliases ?? '');
-            $commandName = \array_shift($aliases);
+            $aliases = explode('|', $aliases ?? '');
+            $commandName = array_shift($aliases);
             if ($isHidden = '' === $commandName) {
-                $commandName = \array_shift($aliases);
+                $commandName = array_shift($aliases);
             }
             if (null === $commandName) {
                 if (!$definition->isPublic() || $definition->isPrivate() || $definition->hasTag('container.private')) {
@@ -87,13 +87,13 @@ class AddConsoleCommandPass implements CompilerPassInterface
                 $definition->addMethodCall('setHidden', [\true]);
             }
             if (!$description) {
-                if (!($r = $container->getReflectionClass($class))) {
+                if (!$r = $container->getReflectionClass($class)) {
                     throw new InvalidArgumentException(\sprintf('Class "%s" used for service "%s" cannot be found.', $class, $id));
                 }
                 if (!$r->isSubclassOf(Command::class)) {
                     throw new InvalidArgumentException(\sprintf('The service "%s" tagged "%s" must be a subclass of "%s".', $id, 'console.command', Command::class));
                 }
-                $description = \str_replace('%', '%%', $class::getDefaultDescription() ?? '');
+                $description = str_replace('%', '%%', $class::getDefaultDescription() ?? '');
             }
             if ($description) {
                 $definition->addMethodCall('setDescription', [$description]);

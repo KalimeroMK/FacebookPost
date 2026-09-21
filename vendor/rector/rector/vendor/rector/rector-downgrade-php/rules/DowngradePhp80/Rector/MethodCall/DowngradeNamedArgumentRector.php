@@ -11,6 +11,7 @@ use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\StaticCall;
 use PHPStan\Reflection\FunctionReflection;
 use PHPStan\Reflection\MethodReflection;
+use PHPStan\Type\MixedType;
 use Rector\DowngradePhp80\NodeAnalyzer\UnnamedArgumentResolver;
 use Rector\NodeAnalyzer\ArgsAnalyzer;
 use Rector\Rector\AbstractRector;
@@ -43,11 +44,11 @@ final class DowngradeNamedArgumentRector extends AbstractRector
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [MethodCall::class, StaticCall::class, New_::class, FuncCall::class];
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Remove named argument', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
@@ -80,10 +81,10 @@ CODE_SAMPLE
     /**
      * @param MethodCall|StaticCall|New_|FuncCall $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         $args = $node->getArgs();
-        if ($this->shouldSkip($args)) {
+        if (!$this->argsAnalyzer->hasNamedArg($args)) {
             return null;
         }
         return $this->removeNamedArguments($node, $args);
@@ -92,7 +93,7 @@ CODE_SAMPLE
      * @param Arg[] $args
      * @param \PhpParser\Node\Expr\MethodCall|\PhpParser\Node\Expr\StaticCall|\PhpParser\Node\Expr\New_|\PhpParser\Node\Expr\FuncCall $node
      */
-    private function removeNamedArguments($node, array $args) : ?Node
+    private function removeNamedArguments($node, array $args): ?Node
     {
         if ($node instanceof New_) {
             $functionLikeReflection = $this->reflectionResolver->resolveMethodReflectionFromNew($node);
@@ -100,16 +101,21 @@ CODE_SAMPLE
             $functionLikeReflection = $this->reflectionResolver->resolveFunctionLikeReflectionFromCall($node);
         }
         if (!$functionLikeReflection instanceof MethodReflection && !$functionLikeReflection instanceof FunctionReflection) {
+            // remove leftovers in case of unknown type, to avoid crashing on unknown syntax
+            if ($node instanceof MethodCall) {
+                $callerType = $this->getType($node->var);
+                if ($callerType instanceof MixedType) {
+                    foreach ($node->getArgs() as $arg) {
+                        if ($arg->name instanceof Node) {
+                            $arg->name = null;
+                        }
+                    }
+                    return $node;
+                }
+            }
             return null;
         }
         $node->args = $this->unnamedArgumentResolver->resolveFromReflection($functionLikeReflection, $args);
         return $node;
-    }
-    /**
-     * @param mixed[]|Arg[] $args
-     */
-    private function shouldSkip(array $args) : bool
-    {
-        return !$this->argsAnalyzer->hasNamedArg($args);
     }
 }

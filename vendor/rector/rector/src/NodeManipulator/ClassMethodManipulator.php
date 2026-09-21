@@ -24,7 +24,7 @@ final class ClassMethodManipulator
         $this->nodeNameResolver = $nodeNameResolver;
         $this->reflectionResolver = $reflectionResolver;
     }
-    public function isNamedConstructor(ClassMethod $classMethod) : bool
+    public function isNamedConstructor(ClassMethod $classMethod): bool
     {
         if (!$this->nodeNameResolver->isName($classMethod, MethodName::CONSTRUCT)) {
             return \false;
@@ -41,7 +41,7 @@ final class ClassMethodManipulator
         }
         return $classMethod->isProtected();
     }
-    public function hasParentMethodOrInterfaceMethod(Class_ $class, string $methodName) : bool
+    public function hasParentMethodOrInterfaceMethod(Class_ $class, string $methodName): bool
     {
         $classReflection = $this->reflectionResolver->resolveClassReflection($class);
         if (!$classReflection instanceof ClassReflection) {
@@ -55,11 +55,13 @@ final class ClassMethodManipulator
                 return \true;
             }
         }
-        foreach ($classReflection->getInterfaces() as $interfaceReflection) {
-            if ($interfaceReflection->hasMethod($methodName)) {
-                return \true;
+        $found = \false;
+        foreach ($classReflection->getInterfaces() as $classReflection) {
+            if ($classReflection->hasMethod($methodName)) {
+                $found = \true;
+                break;
             }
         }
-        return \false;
+        return $found;
     }
 }

@@ -84,7 +84,7 @@ final class TypedPropertyFromStrictConstructorRector extends AbstractRector impl
         $this->phpDocInfoFactory = $phpDocInfoFactory;
         $this->staticTypeMapper = $staticTypeMapper;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Add typed properties based only on strict constructor types', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeObject
@@ -113,17 +113,25 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
+        // skip Doctrine static function mapping, properties are mapped in loadMetadata() method
+        // @see https://www.doctrine-project.org/projects/doctrine-orm/en/3.6/reference/php-mapping.html#static-function
+        if ($node->getMethod('loadMetadata') instanceof ClassMethod) {
+            return null;
+        }
         $constructClassMethod = $node->getMethod(MethodName::CONSTRUCT);
-        if (!$constructClassMethod instanceof ClassMethod || $node->getProperties() === []) {
+        if (!$constructClassMethod instanceof ClassMethod) {
+            return null;
+        }
+        if (!$this->hasSomeUntypedProperties($node)) {
             return null;
         }
         $classReflection = $this->reflectionResolver->resolveClassReflection($node);
@@ -154,7 +162,7 @@ CODE_SAMPLE
                 continue;
             }
             $propertyProperty = $property->props[0];
-            $propertyName = $this->nodeNameResolver->getName($property);
+            $propertyName = $this->getName($property);
             if ($this->constructorAssignDetector->isPropertyAssigned($node, $propertyName)) {
                 $propertyProperty->default = null;
                 $hasChanged = \true;
@@ -171,15 +179,25 @@ CODE_SAMPLE
         }
         return null;
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::TYPED_PROPERTIES;
     }
-    private function shouldSkipPropertyType(Type $propertyType) : bool
+    private function shouldSkipPropertyType(Type $propertyType): bool
     {
         if ($propertyType instanceof MixedType) {
             return \true;
         }
         return $this->doctrineTypeAnalyzer->isInstanceOfCollectionType($propertyType);
+    }
+    private function hasSomeUntypedProperties(Class_ $class): bool
+    {
+        foreach ($class->getProperties() as $property) {
+            if ($property->type instanceof Node) {
+                continue;
+            }
+            return \true;
+        }
+        return \false;
     }
 }

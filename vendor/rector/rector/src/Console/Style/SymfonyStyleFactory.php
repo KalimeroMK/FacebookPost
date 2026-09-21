@@ -3,11 +3,12 @@
 declare (strict_types=1);
 namespace Rector\Console\Style;
 
+use Rector\Agentic\TerminalDetector;
 use Rector\Util\Reflection\PrivatesAccessor;
-use RectorPrefix202502\Symfony\Component\Console\Application;
-use RectorPrefix202502\Symfony\Component\Console\Input\ArgvInput;
-use RectorPrefix202502\Symfony\Component\Console\Output\ConsoleOutput;
-use RectorPrefix202502\Symfony\Component\Console\Output\OutputInterface;
+use RectorPrefix202609\Symfony\Component\Console\Application;
+use RectorPrefix202609\Symfony\Component\Console\Input\ArgvInput;
+use RectorPrefix202609\Symfony\Component\Console\Output\ConsoleOutput;
+use RectorPrefix202609\Symfony\Component\Console\Output\OutputInterface;
 final class SymfonyStyleFactory
 {
     /**
@@ -21,12 +22,9 @@ final class SymfonyStyleFactory
     /**
      * @api
      */
-    public function create() : \Rector\Console\Style\RectorStyle
+    public function create(): \Rector\Console\Style\RectorStyle
     {
-        // to prevent missing argv indexes
-        if (!isset($_SERVER['argv'])) {
-            $_SERVER['argv'] = [];
-        }
+        $_SERVER['argv'] ??= [];
         $argvInput = new ArgvInput();
         $consoleOutput = new ConsoleOutput();
         // to configure all -v, -vv, -vvv options without memory-lock to Application run() arguments
@@ -39,13 +37,17 @@ final class SymfonyStyleFactory
         if ($this->isPHPUnitRun()) {
             $consoleOutput->setVerbosity(OutputInterface::VERBOSITY_QUIET);
         }
+        // no interactive terminal, e.g. piped output, CI or an agent - never emit ANSI, even if forced via --ansi
+        if (!TerminalDetector::isOutputTty()) {
+            $consoleOutput->setDecorated(\false);
+        }
         return new \Rector\Console\Style\RectorStyle($argvInput, $consoleOutput);
     }
     /**
-     * Never ever used static methods if not neccesary, this is just handy for tests + src to prevent duplication.
+     * Never ever used static methods if not necessary, this is just handy for tests + src to prevent duplication.
      */
-    private function isPHPUnitRun() : bool
+    private function isPHPUnitRun(): bool
     {
-        return \defined('PHPUNIT_COMPOSER_INSTALL') || \defined('__PHPUNIT_PHAR__');
+        return defined('PHPUNIT_COMPOSER_INSTALL') || defined('__PHPUNIT_PHAR__');
     }
 }

@@ -3,20 +3,20 @@
 declare (strict_types=1);
 namespace Rector\Testing\Fixture;
 
-use RectorPrefix202502\Nette\Utils\FileSystem;
+use RectorPrefix202609\Nette\Utils\FileSystem;
 /**
  * @api
  */
 final class FixtureSplitter
 {
-    public static function containsSplit(string $fixtureFileContent) : bool
+    public static function containsSplit(string $fixtureFileContent): bool
     {
-        return \strpos($fixtureFileContent, "-----\n") !== \false || \strpos($fixtureFileContent, "-----\r\n") !== \false;
+        return strpos($fixtureFileContent, "-----\n") !== \false || strpos($fixtureFileContent, "-----\r\n") !== \false;
     }
     /**
      * @return array<int, string>
      */
-    public static function split(string $filePath) : array
+    public static function split(string $filePath): array
     {
         $fixtureFileContents = FileSystem::read($filePath);
         return self::splitFixtureFileContents($fixtureFileContents);
@@ -24,9 +24,9 @@ final class FixtureSplitter
     /**
      * @return array<int, string>
      */
-    public static function splitFixtureFileContents(string $fixtureFileContents) : array
+    public static function splitFixtureFileContents(string $fixtureFileContents): array
     {
-        $fixtureFileContents = \str_replace("\r\n", "\n", $fixtureFileContents);
-        return \explode("-----\n", $fixtureFileContents);
+        $fixtureFileContents = str_replace("\r\n", "\n", $fixtureFileContents);
+        return explode("-----\n", $fixtureFileContents);
     }
 }

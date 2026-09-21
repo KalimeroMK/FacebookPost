@@ -10,7 +10,6 @@ use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\NullsafeMethodCall;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\Variable;
-use PhpParser\Node\Stmt\If_;
 use PHPStan\Analyser\Scope;
 use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Type\ObjectType;
@@ -29,7 +28,7 @@ final class CallAnalyzer
     {
         $this->reflectionProvider = $reflectionProvider;
     }
-    public function isObjectCall(Expr $expr) : bool
+    public function isObjectCall(Expr $expr): bool
     {
         if ($expr instanceof BooleanNot) {
             $expr = $expr->expr;
@@ -39,26 +38,16 @@ final class CallAnalyzer
             $isObjectCallRight = $this->isObjectCall($expr->right);
             return $isObjectCallLeft || $isObjectCallRight;
         }
+        $found = \false;
         foreach (self::OBJECT_CALL_TYPES as $objectCallType) {
             if ($expr instanceof $objectCallType) {
-                return \true;
+                $found = \true;
+                break;
             }
         }
-        return \false;
+        return $found;
     }
-    /**
-     * @param If_[] $ifs
-     */
-    public function doesIfHasObjectCall(array $ifs) : bool
-    {
-        foreach ($ifs as $if) {
-            if ($this->isObjectCall($if->cond)) {
-                return \true;
-            }
-        }
-        return \false;
-    }
-    public function isNewInstance(Variable $variable) : bool
+    public function isNewInstance(Variable $variable): bool
     {
         $scope = $variable->getAttribute(AttributeKey::SCOPE);
         if (!$scope instanceof Scope) {

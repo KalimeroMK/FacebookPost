@@ -12,6 +12,8 @@ use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Identifier;
 use PHPStan\Type\ObjectType;
 use Rector\Rector\AbstractRector;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -19,9 +21,13 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  *
  * @see \Rector\Symfony\Tests\Symfony25\Rector\MethodCall\AddViolationToBuildViolationRector\AddViolationToBuildViolationRectorTest
  */
-final class AddViolationToBuildViolationRector extends AbstractRector
+final class AddViolationToBuildViolationRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('symfony/validator', '>=2.5');
+    }
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Change `$context->addViolationAt` to `$context->buildViolation` on Validator ExecutionContext', [new CodeSample(<<<'CODE_SAMPLE'
 $context->addViolationAt('property', 'The value {{ value }} is invalid.', array(
@@ -39,24 +45,24 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [MethodCall::class];
     }
     /**
      * @param MethodCall $node
      */
-    public function refactor(Node $node) : ?MethodCall
+    public function refactor(Node $node): ?MethodCall
     {
+        if (!$this->isName($node->name, 'addViolationAt')) {
+            return null;
+        }
         $objectType = $this->nodeTypeResolver->getType($node->var);
         if (!$objectType instanceof ObjectType) {
             return null;
         }
-        $executionContext = new ObjectType('Symfony\\Component\\Validator\\Context\\ExecutionContextInterface');
+        $executionContext = new ObjectType('Symfony\Component\Validator\Context\ExecutionContextInterface');
         if (!$executionContext->isSuperTypeOf($objectType)->yes()) {
-            return null;
-        }
-        if (!$this->nodeNameResolver->isName($node->name, 'addViolationAt')) {
             return null;
         }
         $args = $node->getArgs();
@@ -75,7 +81,7 @@ CODE_SAMPLE
     /**
      * @param Arg[] $args
      */
-    private function buildFluentWithParameters(MethodCall $methodCall, array $args) : MethodCall
+    private function buildFluentWithParameters(MethodCall $methodCall, array $args): MethodCall
     {
         if (isset($args[2]) && $args[2]->value instanceof Array_) {
             foreach ($args[2]->value->items as $item) {
@@ -89,30 +95,30 @@ CODE_SAMPLE
     /**
      * @param Arg[] $args
      */
-    private function buildFluentWithInvalidValue(MethodCall $methodCall, array $args) : MethodCall
+    private function buildFluentWithInvalidValue(MethodCall $methodCall, array $args): MethodCall
     {
         if (isset($args[3])) {
-            $methodCall = new MethodCall($methodCall, 'setInvalidValue', [new Arg($args[3]->value)]);
+            return new MethodCall($methodCall, 'setInvalidValue', [new Arg($args[3]->value)]);
         }
         return $methodCall;
     }
     /**
      * @param Arg[] $args
      */
-    private function buildFluentWithPlural(MethodCall $methodCall, array $args) : MethodCall
+    private function buildFluentWithPlural(MethodCall $methodCall, array $args): MethodCall
     {
         if (isset($args[4])) {
-            $methodCall = new MethodCall($methodCall, 'setPlural', [new Arg($args[4]->value)]);
+            return new MethodCall($methodCall, 'setPlural', [new Arg($args[4]->value)]);
         }
         return $methodCall;
     }
     /**
      * @param Arg[] $args
      */
-    private function buildFluentWithCode(MethodCall $methodCall, array $args) : MethodCall
+    private function buildFluentWithCode(MethodCall $methodCall, array $args): MethodCall
     {
         if (isset($args[5])) {
-            $methodCall = new MethodCall($methodCall, 'setCode', [new Arg($args[5]->value)]);
+            return new MethodCall($methodCall, 'setCode', [new Arg($args[5]->value)]);
         }
         return $methodCall;
     }

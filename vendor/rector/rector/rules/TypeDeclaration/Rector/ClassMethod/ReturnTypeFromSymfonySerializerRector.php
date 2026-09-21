@@ -41,7 +41,7 @@ final class ReturnTypeFromSymfonySerializerRector extends AbstractRector impleme
         $this->valueResolver = $valueResolver;
         $this->argsAnalyzer = $argsAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Add return type from symfony serializer', [new CodeSample(<<<'CODE_SAMPLE'
 final class SomeClass
@@ -70,55 +70,54 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [ClassMethod::class];
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::HAS_RETURN_TYPE;
     }
     /**
      * @param ClassMethod $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
-        $scope = ScopeFetcher::fetch($node);
         if ($node->stmts === null) {
             return null;
         }
         if ($node->returnType instanceof Node) {
             return null;
         }
+        $scope = ScopeFetcher::fetch($node);
         if ($this->classMethodReturnTypeOverrideGuard->shouldSkipClassMethod($node, $scope)) {
             return null;
         }
-        if (\count($node->stmts) !== 1) {
+        if (count($node->stmts) !== 1) {
             return null;
         }
         if (!$node->stmts[0] instanceof Return_ || !$node->stmts[0]->expr instanceof MethodCall) {
             return null;
         }
-        /** @var MethodCall $returnExpr */
         $returnExpr = $node->stmts[0]->expr;
-        if (!$this->nodeNameResolver->isName($returnExpr->name, 'deserialize')) {
+        if (!$this->isName($returnExpr->name, 'deserialize')) {
             return null;
         }
         if ($returnExpr->isFirstClassCallable()) {
             return null;
         }
-        if (!$this->isObjectType($returnExpr->var, new ObjectType('Symfony\\Component\\Serializer\\Serializer'))) {
+        if (!$this->isObjectType($returnExpr->var, new ObjectType('Symfony\Component\Serializer\Serializer'))) {
             return null;
         }
         $args = $returnExpr->getArgs();
         if ($this->argsAnalyzer->hasNamedArg($args)) {
             return null;
         }
-        if (\count($args) !== 3) {
+        if (count($args) !== 3) {
             return null;
         }
         $type = $this->valueResolver->getValue($args[1]->value);
-        if (!\is_string($type)) {
+        if (!is_string($type)) {
             return null;
         }
         $node->returnType = new FullyQualified($type);

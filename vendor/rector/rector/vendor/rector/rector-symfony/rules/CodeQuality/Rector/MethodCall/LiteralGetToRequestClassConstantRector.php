@@ -6,32 +6,17 @@ namespace Rector\Symfony\CodeQuality\Rector\MethodCall;
 use PhpParser\Node;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\StaticCall;
-use PHPStan\Reflection\ReflectionProvider;
-use PHPStan\Type\ObjectType;
+use Rector\Configuration\Deprecation\Contract\DeprecatedInterface;
+use Rector\Exception\ShouldNotHappenException;
 use Rector\Rector\AbstractRector;
-use Rector\Symfony\NodeAnalyzer\LiteralCallLikeConstFetchReplacer;
-use Rector\Symfony\ValueObject\ConstantMap\SymfonyRequestConstantMap;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
- * @see \Rector\Symfony\Tests\CodeQuality\Rector\MethodCall\LiteralGetToRequestClassConstantRector\LiteralGetToRequestClassConstantRectorTest
+ * @deprecated Scans every method and static call across the codebase to swap a bare "GET" string for a class constant - a very wide match for a tiny cosmetic gain, with real risk of false positives on unrelated setMethod()/create()/request() calls.
  */
-final class LiteralGetToRequestClassConstantRector extends AbstractRector
+final class LiteralGetToRequestClassConstantRector extends AbstractRector implements DeprecatedInterface
 {
-    /**
-     * @readonly
-     */
-    private LiteralCallLikeConstFetchReplacer $literalCallLikeConstFetchReplacer;
-    /**
-     * @readonly
-     */
-    private ReflectionProvider $reflectionProvider;
-    public function __construct(LiteralCallLikeConstFetchReplacer $literalCallLikeConstFetchReplacer, ReflectionProvider $reflectionProvider)
-    {
-        $this->literalCallLikeConstFetchReplacer = $literalCallLikeConstFetchReplacer;
-        $this->reflectionProvider = $reflectionProvider;
-    }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Replace "GET" string by Symfony Request object class constants', [new CodeSample(<<<'CODE_SAMPLE'
 use Symfony\Component\Form\FormBuilderInterface;
@@ -60,46 +45,15 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [MethodCall::class, StaticCall::class];
     }
     /**
      * @param MethodCall|StaticCall $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
-        if ($node instanceof StaticCall) {
-            return $this->refactorStaticCall($node);
-        }
-        // for client, the transitional dependency to browser-kit might be missing and cause fatal error on PHPStan reflection
-        // in most cases that should be skipped, @changelog https://github.com/rectorphp/rector/issues/7135
-        if ($this->reflectionProvider->hasClass('Symfony\\Component\\BrowserKit\\AbstractBrowser') && ($this->isObjectType($node->var, new ObjectType('Symfony\\Component\\HttpKernel\\Client')) || $this->isObjectType($node->var, new ObjectType('Symfony\\Bundle\\FrameworkBundle\\KernelBrowser')))) {
-            return $this->refactorClientMethodCall($node);
-        }
-        if (!$this->isName($node->name, 'setMethod')) {
-            return null;
-        }
-        if (!$this->isObjectType($node->var, new ObjectType('Symfony\\Component\\Form\\FormBuilderInterface'))) {
-            return null;
-        }
-        return $this->literalCallLikeConstFetchReplacer->replaceArgOnPosition($node, 0, 'Symfony\\Component\\HttpFoundation\\Request', SymfonyRequestConstantMap::METHOD_TO_CONST);
-    }
-    private function refactorStaticCall(StaticCall $staticCall) : ?\PhpParser\Node\Expr\StaticCall
-    {
-        if (!$this->isName($staticCall->name, 'create')) {
-            return null;
-        }
-        if (!$this->isObjectType($staticCall->class, new ObjectType('Symfony\\Component\\HttpFoundation\\Request'))) {
-            return null;
-        }
-        return $this->literalCallLikeConstFetchReplacer->replaceArgOnPosition($staticCall, 1, 'Symfony\\Component\\HttpFoundation\\Request', SymfonyRequestConstantMap::METHOD_TO_CONST);
-    }
-    private function refactorClientMethodCall(MethodCall $methodCall) : ?\PhpParser\Node\Expr\MethodCall
-    {
-        if (!$this->isName($methodCall->name, 'request')) {
-            return null;
-        }
-        return $this->literalCallLikeConstFetchReplacer->replaceArgOnPosition($methodCall, 0, 'Symfony\\Component\\HttpFoundation\\Request', SymfonyRequestConstantMap::METHOD_TO_CONST);
+        throw new ShouldNotHappenException(sprintf('"%s" is deprecated, as it matches a bare "GET" string across every method and static call for a tiny cosmetic gain.', self::class));
     }
 }

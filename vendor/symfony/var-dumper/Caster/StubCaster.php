@@ -19,6 +19,8 @@ use Symfony\Component\VarDumper\Cloner\Stub;
  * @author Nicolas Grekas <p@tchwork.com>
  *
  * @final
+ *
+ * @internal
  */
 class StubCaster
 {
@@ -57,6 +59,19 @@ class StubCaster
         }
 
         return $a;
+    }
+
+    public static function castClassDump(ClassDumpStub $c, array $a, Stub $stub, bool $isNested): array
+    {
+        if (!$isNested) {
+            return $a;
+        }
+
+        $stub->class = $c->class;
+        $stub->attr = $c->attr;
+        $stub->handle = 0;
+
+        return \is_array($c->value) ? $c->value : [];
     }
 
     public static function castEnum(EnumStub $c, array $a, Stub $stub, bool $isNested): array

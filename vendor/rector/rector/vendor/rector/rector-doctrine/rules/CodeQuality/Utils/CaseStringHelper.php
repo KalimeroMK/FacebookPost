@@ -3,15 +3,19 @@
 declare (strict_types=1);
 namespace Rector\Doctrine\CodeQuality\Utils;
 
-use RectorPrefix202502\Nette\Utils\Strings;
+use RectorPrefix202609\Nette\Utils\Strings;
+/**
+ * @api used by rector-drupal
+ * @see \Rector\Doctrine\Tests\CodeQuality\Utils\CaseStringHelperTest
+ */
 final class CaseStringHelper
 {
-    public static function camelCase(string $value) : string
+    public static function camelCase(string $value): string
     {
-        $spacedValue = \str_replace('_', ' ', $value);
-        $uppercasedWords = \ucwords($spacedValue);
-        $spacelessWords = \str_replace(' ', '', $uppercasedWords);
-        $lowercasedValue = \lcfirst($spacelessWords);
-        return Strings::replace($lowercasedValue, '#\\W#', '');
+        $spacedValue = str_replace('_', ' ', $value);
+        $uppercasedWords = ucwords($spacedValue);
+        $spacelessWords = str_replace(' ', '', $uppercasedWords);
+        $lowercasedValue = lcfirst($spacelessWords);
+        return Strings::replace($lowercasedValue, '#\W#', '');
     }
 }

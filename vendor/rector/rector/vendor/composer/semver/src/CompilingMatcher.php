@@ -8,10 +8,10 @@
  * For the full copyright and license information, please view
  * the LICENSE file that was distributed with this source code.
  */
-namespace RectorPrefix202502\Composer\Semver;
+namespace RectorPrefix202609\Composer\Semver;
 
-use RectorPrefix202502\Composer\Semver\Constraint\Constraint;
-use RectorPrefix202502\Composer\Semver\Constraint\ConstraintInterface;
+use RectorPrefix202609\Composer\Semver\Constraint\Constraint;
+use RectorPrefix202609\Composer\Semver\Constraint\ConstraintInterface;
 /**
  * Helper class to evaluate constraint by compiling and reusing the code to evaluate
  */
@@ -60,7 +60,7 @@ class CompilingMatcher
             return self::$resultCache[$resultCacheKey];
         }
         if (self::$enabled === null) {
-            self::$enabled = !\in_array('eval', \explode(',', (string) \ini_get('disable_functions')), \true);
+            self::$enabled = !\in_array('eval', explode(',', (string) ini_get('disable_functions')), \true);
         }
         if (!self::$enabled) {
             return self::$resultCache[$resultCacheKey] = $constraint->matches(new Constraint(self::$transOpInt[$operator], $version));
@@ -72,6 +72,6 @@ class CompilingMatcher
         } else {
             $function = self::$compiledCheckerCache[$cacheKey];
         }
-        return self::$resultCache[$resultCacheKey] = $function($version, \strpos($version, 'dev-') === 0);
+        return self::$resultCache[$resultCacheKey] = $function($version, strpos($version, 'dev-') === 0);
     }
 }

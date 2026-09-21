@@ -9,12 +9,16 @@ use PhpParser\Node\Expr\ClassConstFetch;
 use PhpParser\Node\Expr\MethodCall;
 use Rector\Rector\AbstractRector;
 use Rector\Symfony\TypeAnalyzer\ControllerAnalyzer;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
+ * @changelog https://github.com/symfony/symfony/blob/2.6/src/Symfony/Bundle/FrameworkBundle/CHANGELOG.md
+ *
  * @see \Rector\Symfony\Tests\Symfony26\Rector\MethodCall\RedirectToRouteRector\RedirectToRouteRectorTest
  */
-final class RedirectToRouteRector extends AbstractRector
+final class RedirectToRouteRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @readonly
@@ -24,21 +28,25 @@ final class RedirectToRouteRector extends AbstractRector
     {
         $this->controllerAnalyzer = $controllerAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('symfony/framework-bundle', '>=2.6');
+    }
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Turns redirect to route to short helper method in Controller in Symfony', [new CodeSample('$this->redirect($this->generateUrl("homepage"));', '$this->redirectToRoute("homepage");')]);
     }
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [MethodCall::class];
     }
     /**
      * @param MethodCall $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$this->controllerAnalyzer->isInsideController($node)) {
             return null;
@@ -68,7 +76,7 @@ final class RedirectToRouteRector extends AbstractRector
         }
         return $this->nodeFactory->createMethodCall('this', 'redirectToRoute', $this->resolveArguments($node));
     }
-    private function isDefaultReferenceType(MethodCall $methodCall) : bool
+    private function isDefaultReferenceType(MethodCall $methodCall): bool
     {
         if (!isset($methodCall->args[2])) {
             return \true;
@@ -80,7 +88,7 @@ final class RedirectToRouteRector extends AbstractRector
         if (!$refTypeArg->value instanceof ClassConstFetch) {
             return \false;
         }
-        if (!$this->isName($refTypeArg->value->class, 'Symfony\\Component\\Routing\\Generator\\UrlGeneratorInterface')) {
+        if (!$this->isName($refTypeArg->value->class, 'Symfony\Component\Routing\Generator\UrlGeneratorInterface')) {
             return \false;
         }
         return $this->isName($refTypeArg->value->name, 'ABSOLUTE_PATH');
@@ -88,7 +96,7 @@ final class RedirectToRouteRector extends AbstractRector
     /**
      * @return mixed[]
      */
-    private function resolveArguments(MethodCall $methodCall) : array
+    private function resolveArguments(MethodCall $methodCall): array
     {
         $firstArg = $methodCall->args[0];
         if (!$firstArg instanceof Arg) {

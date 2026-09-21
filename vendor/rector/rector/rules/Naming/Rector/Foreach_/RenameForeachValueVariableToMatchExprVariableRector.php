@@ -6,11 +6,12 @@ namespace Rector\Naming\Rector\Foreach_;
 use PhpParser\Node;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Stmt\Foreach_;
-use Rector\Contract\PhpParser\Node\StmtsAwareInterface;
 use Rector\Naming\ExpectedNameResolver\InflectorSingularResolver;
 use Rector\NodeAnalyzer\PropertyFetchAnalyzer;
 use Rector\NodeManipulator\StmtsManipulator;
+use Rector\PhpParser\Enum\NodeGroup;
 use Rector\PhpParser\Node\BetterNodeFinder;
+use Rector\PHPStan\ScopeFetcher;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
@@ -42,9 +43,9 @@ final class RenameForeachValueVariableToMatchExprVariableRector extends Abstract
         $this->stmtsManipulator = $stmtsManipulator;
         $this->betterNodeFinder = $betterNodeFinder;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
-        return new RuleDefinition('Renames value variable name in foreach loop to match expression variable', [new CodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Rename value variable name in foreach loop to match expression variable', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
 {
     public function run()
@@ -73,14 +74,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
-        return [StmtsAwareInterface::class];
+        return NodeGroup::STMTS_AWARE;
     }
     /**
-     * @param StmtsAwareInterface $node
+     * @param StmtsAware $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($node->stmts === null) {
             return null;
@@ -122,6 +123,10 @@ CODE_SAMPLE
             if ($this->stmtsManipulator->isVariableUsedInNextStmt($node, $key + 1, $valueVarName)) {
                 continue;
             }
+            $scope = ScopeFetcher::fetch($stmt);
+            if ($scope->hasVariableType($singularValueVarName)->yes()) {
+                continue;
+            }
             $this->processRename($stmt, $valueVarName, $singularValueVarName);
             $hasChanged = \true;
         }
@@ -130,10 +135,10 @@ CODE_SAMPLE
         }
         return null;
     }
-    private function processRename(Foreach_ $foreach, string $valueVarName, string $singularValueVarName) : void
+    private function processRename(Foreach_ $foreach, string $valueVarName, string $singularValueVarName): void
     {
         $foreach->valueVar = new Variable($singularValueVarName);
-        $this->traverseNodesWithCallable($foreach->stmts, function (Node $node) use($singularValueVarName, $valueVarName) : ?Variable {
+        $this->traverseNodesWithCallable($foreach->stmts, function (Node $node) use ($singularValueVarName, $valueVarName): ?Variable {
             if (!$node instanceof Variable) {
                 return null;
             }

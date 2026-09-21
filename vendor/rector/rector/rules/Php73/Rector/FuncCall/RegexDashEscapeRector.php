@@ -3,7 +3,7 @@
 declare (strict_types=1);
 namespace Rector\Php73\Rector\FuncCall;
 
-use RectorPrefix202502\Nette\Utils\Strings;
+use RectorPrefix202609\Nette\Utils\Strings;
 use PhpParser\Node;
 use PhpParser\Node\Scalar\String_;
 use Rector\NodeTypeResolver\Node\AttributeKey;
@@ -19,27 +19,27 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 final class RegexDashEscapeRector extends AbstractRector implements MinPhpVersionInterface
 {
     /**
-     * @var string
      * @see https://regex101.com/r/iQbGgZ/1
      *
      * Use {2} as detected only 2 after $this->regexPatternArgumentManipulator->matchCallArgumentWithRegexPattern() call
+     * @var string
      */
     private const THREE_BACKSLASH_FOR_ESCAPE_NEXT_REGEX = '#(?<=[^\\\\])\\\\{2}(?=[^\\\\])#';
     /**
-     * @var string
      * @see https://regex101.com/r/YgVJFp/1
-     */
-    private const LEFT_HAND_UNESCAPED_DASH_REGEX = '#(\\[.*?\\\\(w|s|d))-(?!\\])#i';
-    /**
      * @var string
-     * @see https://regex101.com/r/TBVme9/9
      */
-    private const RIGHT_HAND_UNESCAPED_DASH_REGEX = '#(?<!\\[)(?<!\\\\)-(\\\\(w|s|d)[.*]?)\\]#i';
-    public function provideMinPhpVersion() : int
+    private const LEFT_HAND_UNESCAPED_DASH_REGEX = '#(\[.*?\\\\(w|s|d))-(?!\])#i';
+    /**
+     * @see https://regex101.com/r/TBVme9/9
+     * @var string
+     */
+    private const RIGHT_HAND_UNESCAPED_DASH_REGEX = '#(?<!\[)(?<!\\\\)-(\\\\(w|s|d)[.*]?)\]#i';
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::ESCAPE_DASH_IN_REGEX;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Escape - in some cases', [new CodeSample(<<<'CODE_SAMPLE'
 preg_match("#[\w-()]#", 'some text');
@@ -52,35 +52,50 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [String_::class];
     }
     /**
      * @param String_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         $stringKind = $node->getAttribute(AttributeKey::KIND);
-        if (\in_array($stringKind, [String_::KIND_HEREDOC, String_::KIND_NOWDOC], \true)) {
+        if (in_array($stringKind, [String_::KIND_HEREDOC, String_::KIND_NOWDOC], \true)) {
             return null;
         }
         if (StringUtils::isMatch($node->value, self::THREE_BACKSLASH_FOR_ESCAPE_NEXT_REGEX)) {
             return null;
         }
-        $stringValue = $node->value;
+        if ($node->getAttribute(AttributeKey::RAW_VALUE) !== null) {
+            $stringValue = (string) substr($node->getAttribute(AttributeKey::RAW_VALUE), 1, -1);
+        } else {
+            $stringValue = $node->value;
+        }
         if (StringUtils::isMatch($stringValue, self::LEFT_HAND_UNESCAPED_DASH_REGEX)) {
-            $node->value = Strings::replace($stringValue, self::LEFT_HAND_UNESCAPED_DASH_REGEX, '$1\\-');
+            $node->value = Strings::replace($stringValue, self::LEFT_HAND_UNESCAPED_DASH_REGEX, '$1\-');
+            $this->setRawValue($node);
             // helped needed to skip re-escaping regular expression
             $node->setAttribute(AttributeKey::IS_REGULAR_PATTERN, \true);
             return $node;
         }
         if (StringUtils::isMatch($stringValue, self::RIGHT_HAND_UNESCAPED_DASH_REGEX)) {
-            $node->value = Strings::replace($stringValue, self::RIGHT_HAND_UNESCAPED_DASH_REGEX, '\\-$1]');
+            $node->value = Strings::replace($stringValue, self::RIGHT_HAND_UNESCAPED_DASH_REGEX, '\-$1]');
+            $this->setRawValue($node);
             // helped needed to skip re-escaping regular expression
             $node->setAttribute(AttributeKey::IS_REGULAR_PATTERN, \true);
             return $node;
         }
         return null;
+    }
+    private function setRawValue(String_ $string): void
+    {
+        $rawValue = $string->getAttribute(AttributeKey::RAW_VALUE);
+        if ($rawValue === null) {
+            return;
+        }
+        $rawValue = strncmp($rawValue, '"', strlen('"')) === 0 ? '"' . $string->value . '"' : "'" . $string->value . "'";
+        $string->setAttribute(AttributeKey::RAW_VALUE, $rawValue);
     }
 }

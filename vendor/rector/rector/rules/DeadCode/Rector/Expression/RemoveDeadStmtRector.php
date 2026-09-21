@@ -3,17 +3,16 @@
 declare (strict_types=1);
 namespace Rector\DeadCode\Rector\Expression;
 
+use PhpParser\Comment\Doc;
 use PhpParser\Node;
-use PhpParser\Node\Expr\PropertyFetch;
-use PhpParser\Node\Expr\StaticPropertyFetch;
+use PhpParser\Node\Expr\Cast\Void_;
 use PhpParser\Node\Stmt\Expression;
 use PhpParser\Node\Stmt\Nop;
 use PhpParser\NodeVisitor;
 use PHPStan\Reflection\Php\PhpPropertyReflection;
-use Rector\BetterPhpDocParser\PhpDocInfo\PhpDocInfoFactory;
+use Rector\DeadCode\NodeAnalyzer\NoDiscardCallAnalyzer;
 use Rector\DeadCode\NodeManipulator\LivingCodeManipulator;
 use Rector\NodeAnalyzer\PropertyFetchAnalyzer;
-use Rector\NodeTypeResolver\Node\AttributeKey;
 use Rector\Rector\AbstractRector;
 use Rector\Reflection\ReflectionResolver;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
@@ -30,25 +29,25 @@ final class RemoveDeadStmtRector extends AbstractRector
     /**
      * @readonly
      */
+    private NoDiscardCallAnalyzer $noDiscardCallAnalyzer;
+    /**
+     * @readonly
+     */
     private PropertyFetchAnalyzer $propertyFetchAnalyzer;
     /**
      * @readonly
      */
     private ReflectionResolver $reflectionResolver;
-    /**
-     * @readonly
-     */
-    private PhpDocInfoFactory $phpDocInfoFactory;
-    public function __construct(LivingCodeManipulator $livingCodeManipulator, PropertyFetchAnalyzer $propertyFetchAnalyzer, ReflectionResolver $reflectionResolver, PhpDocInfoFactory $phpDocInfoFactory)
+    public function __construct(LivingCodeManipulator $livingCodeManipulator, NoDiscardCallAnalyzer $noDiscardCallAnalyzer, PropertyFetchAnalyzer $propertyFetchAnalyzer, ReflectionResolver $reflectionResolver)
     {
         $this->livingCodeManipulator = $livingCodeManipulator;
+        $this->noDiscardCallAnalyzer = $noDiscardCallAnalyzer;
         $this->propertyFetchAnalyzer = $propertyFetchAnalyzer;
         $this->reflectionResolver = $reflectionResolver;
-        $this->phpDocInfoFactory = $phpDocInfoFactory;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
-        return new RuleDefinition('Removes dead code statements', [new CodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Remove dead code statements', [new CodeSample(<<<'CODE_SAMPLE'
 $value = 5;
 $value;
 CODE_SAMPLE
@@ -60,17 +59,20 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Expression::class];
     }
     /**
      * @param Expression $node
-     * @return Node[]|Node|null|int
+     * @return Node[]|Node|null|NodeVisitor::REMOVE_NODE
      */
     public function refactor(Node $node)
     {
         if ($this->hasGetMagic($node)) {
+            return null;
+        }
+        if ($this->isVoidCastNoDiscardCall($node)) {
             return null;
         }
         $livingCode = $this->livingCodeManipulator->keepLivingCodeFromExpr($node->expr);
@@ -81,7 +83,7 @@ CODE_SAMPLE
             return null;
         }
         $newNode = clone $node;
-        $newNode->expr = \array_shift($livingCode);
+        $newNode->expr = array_shift($livingCode);
         $newNodes = [];
         foreach ($livingCode as $singleLivingCode) {
             $newNodes[] = new Expression($singleLivingCode);
@@ -89,12 +91,11 @@ CODE_SAMPLE
         $newNodes[] = $newNode;
         return $newNodes;
     }
-    private function hasGetMagic(Expression $expression) : bool
+    private function hasGetMagic(Expression $expression): bool
     {
         if (!$this->propertyFetchAnalyzer->isPropertyFetch($expression->expr)) {
             return \false;
         }
-        /** @var PropertyFetch|StaticPropertyFetch $propertyFetch */
         $propertyFetch = $expression->expr;
         $phpPropertyReflection = $this->reflectionResolver->resolvePropertyReflectionFromPropertyFetch($propertyFetch);
         /**
@@ -103,15 +104,21 @@ CODE_SAMPLE
          */
         return !$phpPropertyReflection instanceof PhpPropertyReflection;
     }
+    private function isVoidCastNoDiscardCall(Expression $expression): bool
+    {
+        if (!$expression->expr instanceof Void_) {
+            return \false;
+        }
+        return $this->noDiscardCallAnalyzer->isNoDiscardCall($expression->expr->expr);
+    }
     /**
-     * @return int|\PhpParser\Node
+     * @return NodeVisitor::REMOVE_NODE|Node
      */
     private function removeNodeAndKeepComments(Expression $expression)
     {
-        $phpDocInfo = $this->phpDocInfoFactory->createFromNodeOrEmpty($expression);
-        if ($expression->getComments() !== []) {
+        if ($expression->getDocComment() instanceof Doc) {
             $nop = new Nop();
-            $nop->setAttribute(AttributeKey::PHP_DOC_INFO, $phpDocInfo);
+            $nop->setDocComment($expression->getDocComment());
             return $nop;
         }
         return NodeVisitor::REMOVE_NODE;

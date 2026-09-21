@@ -294,6 +294,8 @@ abstract class Assert
     /**
      * Asserts that a haystack contains only values of type array.
      *
+     * @phpstan-assert iterable<array<mixed>> $haystack
+     *
      * @param iterable<mixed> $haystack
      *
      * @throws ExpectationFailedException
@@ -311,6 +313,8 @@ abstract class Assert
 
     /**
      * Asserts that a haystack contains only values of type bool.
+     *
+     * @phpstan-assert iterable<bool> $haystack
      *
      * @param iterable<mixed> $haystack
      *
@@ -330,6 +334,8 @@ abstract class Assert
     /**
      * Asserts that a haystack contains only values of type callable.
      *
+     * @phpstan-assert iterable<callable> $haystack
+     *
      * @param iterable<mixed> $haystack
      *
      * @throws ExpectationFailedException
@@ -347,6 +353,8 @@ abstract class Assert
 
     /**
      * Asserts that a haystack contains only values of type float.
+     *
+     * @phpstan-assert iterable<float> $haystack
      *
      * @param iterable<mixed> $haystack
      *
@@ -366,6 +374,8 @@ abstract class Assert
     /**
      * Asserts that a haystack contains only values of type int.
      *
+     * @phpstan-assert iterable<int> $haystack
+     *
      * @param iterable<mixed> $haystack
      *
      * @throws ExpectationFailedException
@@ -383,6 +393,8 @@ abstract class Assert
 
     /**
      * Asserts that a haystack contains only values of type iterable.
+     *
+     * @phpstan-assert iterable<iterable<mixed>> $haystack
      *
      * @param iterable<mixed> $haystack
      *
@@ -402,6 +414,8 @@ abstract class Assert
     /**
      * Asserts that a haystack contains only values of type null.
      *
+     * @phpstan-assert iterable<null> $haystack
+     *
      * @param iterable<mixed> $haystack
      *
      * @throws ExpectationFailedException
@@ -419,6 +433,8 @@ abstract class Assert
 
     /**
      * Asserts that a haystack contains only values of type numeric.
+     *
+     * @phpstan-assert iterable<numeric> $haystack
      *
      * @param iterable<mixed> $haystack
      *
@@ -438,6 +454,8 @@ abstract class Assert
     /**
      * Asserts that a haystack contains only values of type object.
      *
+     * @phpstan-assert iterable<object> $haystack
+     *
      * @param iterable<mixed> $haystack
      *
      * @throws ExpectationFailedException
@@ -455,6 +473,8 @@ abstract class Assert
 
     /**
      * Asserts that a haystack contains only values of type resource.
+     *
+     * @phpstan-assert iterable<resource> $haystack
      *
      * @param iterable<mixed> $haystack
      *
@@ -474,6 +494,8 @@ abstract class Assert
     /**
      * Asserts that a haystack contains only values of type closed resource.
      *
+     * @phpstan-assert iterable<resource> $haystack
+     *
      * @param iterable<mixed> $haystack
      *
      * @throws ExpectationFailedException
@@ -491,6 +513,8 @@ abstract class Assert
 
     /**
      * Asserts that a haystack contains only values of type scalar.
+     *
+     * @phpstan-assert iterable<scalar> $haystack
      *
      * @param iterable<mixed> $haystack
      *
@@ -510,6 +534,8 @@ abstract class Assert
     /**
      * Asserts that a haystack contains only values of type string.
      *
+     * @phpstan-assert iterable<string> $haystack
+     *
      * @param iterable<mixed> $haystack
      *
      * @throws ExpectationFailedException
@@ -528,7 +554,11 @@ abstract class Assert
     /**
      * Asserts that a haystack contains only instances of a specified interface or class name.
      *
-     * @param class-string    $className
+     * @template T
+     *
+     * @phpstan-assert iterable<T> $haystack
+     *
+     * @param class-string<T> $className
      * @param iterable<mixed> $haystack
      *
      * @throws Exception
@@ -905,6 +935,8 @@ abstract class Assert
     /**
      * Asserts that two variables are equal.
      *
+     * Comparison is performed using the == operator (loose comparison) and may be performed by a type-specific comparator which may apply type coercion.
+     *
      * @throws ExpectationFailedException
      */
     final public static function assertEquals(mixed $expected, mixed $actual, string $message = ''): void
@@ -916,6 +948,8 @@ abstract class Assert
 
     /**
      * Asserts that two variables are equal (canonicalizing).
+     *
+     * Comparison is performed using the == operator (loose comparison) and may be performed by a type-specific comparator which may apply type coercion.
      *
      * @throws ExpectationFailedException
      */
@@ -929,6 +963,8 @@ abstract class Assert
     /**
      * Asserts that two variables are equal (ignoring case).
      *
+     * Comparison is performed using the == operator (loose comparison) and may be performed by a type-specific comparator which may apply type coercion.
+     *
      * @throws ExpectationFailedException
      */
     final public static function assertEqualsIgnoringCase(mixed $expected, mixed $actual, string $message = ''): void
@@ -940,6 +976,8 @@ abstract class Assert
 
     /**
      * Asserts that two variables are equal (with delta).
+     *
+     * Comparison is performed using the == operator (loose comparison) and may be performed by a type-specific comparator which may apply type coercion.
      *
      * @throws ExpectationFailedException
      */
@@ -956,6 +994,8 @@ abstract class Assert
     /**
      * Asserts that two variables are not equal.
      *
+     * Comparison is performed using the == operator (loose comparison) and may be performed by a type-specific comparator which may apply type coercion.
+     *
      * @throws ExpectationFailedException
      */
     final public static function assertNotEquals(mixed $expected, mixed $actual, string $message = ''): void
@@ -969,6 +1009,8 @@ abstract class Assert
 
     /**
      * Asserts that two variables are not equal (canonicalizing).
+     *
+     * Comparison is performed using the == operator (loose comparison) and may be performed by a type-specific comparator which may apply type coercion.
      *
      * @throws ExpectationFailedException
      */
@@ -984,6 +1026,8 @@ abstract class Assert
     /**
      * Asserts that two variables are not equal (ignoring case).
      *
+     * Comparison is performed using the == operator (loose comparison) and may be performed by a type-specific comparator which may apply type coercion.
+     *
      * @throws ExpectationFailedException
      */
     final public static function assertNotEqualsIgnoringCase(mixed $expected, mixed $actual, string $message = ''): void
@@ -997,6 +1041,8 @@ abstract class Assert
 
     /**
      * Asserts that two variables are not equal (with delta).
+     *
+     * Comparison is performed using the == operator (loose comparison) and may be performed by a type-specific comparator which may apply type coercion.
      *
      * @throws ExpectationFailedException
      */
@@ -1043,8 +1089,6 @@ abstract class Assert
      *
      * @throws ExpectationFailedException
      * @throws GeneratorNotSupportedException
-     *
-     * @phpstan-assert empty $actual
      */
     final public static function assertEmpty(mixed $actual, string $message = ''): void
     {
@@ -1060,8 +1104,6 @@ abstract class Assert
      *
      * @throws ExpectationFailedException
      * @throws GeneratorNotSupportedException
-     *
-     * @phpstan-assert !empty $actual
      */
     final public static function assertNotEmpty(mixed $actual, string $message = ''): void
     {
@@ -1621,6 +1663,8 @@ abstract class Assert
      * Used on objects, it asserts that two variables reference
      * the same object.
      *
+     * Comparison is performed using the === operator.
+     *
      * @template ExpectedType
      *
      * @param ExpectedType $expected
@@ -1642,6 +1686,8 @@ abstract class Assert
      * Asserts that two variables do not have the same type and value.
      * Used on objects, it asserts that two variables do not reference
      * the same object.
+     *
+     * Comparison is performed using the === operator.
      *
      * @throws ExpectationFailedException
      */
@@ -2676,7 +2722,7 @@ abstract class Assert
         self::assertIsString($actualJson);
         self::assertJson($actualJson, $message);
 
-        self::assertThat($actualJson, LogicalNot(new JsonMatches($expectedJson)), $message);
+        self::assertThat($actualJson, self::logicalNot(new JsonMatches($expectedJson)), $message);
     }
 
     /**
@@ -3119,7 +3165,7 @@ abstract class Assert
     {
         return match ($type) {
             'numeric', 'integer', 'int', 'iterable', 'float', 'string', 'boolean', 'bool', 'null', 'array', 'object', 'resource', 'scalar' => true,
-            default => false,
+            default                                                                                                                        => false,
         };
     }
 }

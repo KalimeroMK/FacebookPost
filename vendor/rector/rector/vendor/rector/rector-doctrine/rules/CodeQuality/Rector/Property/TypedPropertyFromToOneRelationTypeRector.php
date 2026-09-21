@@ -8,28 +8,28 @@ use PhpParser\Node\ComplexType;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\Property;
+use PHPStan\Reflection\ClassReflection;
 use PHPStan\Type\MixedType;
 use PHPStan\Type\Type;
 use PHPStan\Type\UnionType;
 use Rector\BetterPhpDocParser\PhpDocInfo\PhpDocInfoFactory;
 use Rector\BetterPhpDocParser\PhpDocManipulator\PhpDocTypeChanger;
-use Rector\Contract\Rector\ConfigurableRectorInterface;
 use Rector\Doctrine\NodeManipulator\ToOneRelationPropertyTypeResolver;
 use Rector\Php\PhpVersionProvider;
 use Rector\PHPStanStaticTypeMapper\Enum\TypeKind;
 use Rector\Rector\AbstractRector;
+use Rector\Reflection\ReflectionResolver;
 use Rector\StaticTypeMapper\StaticTypeMapper;
 use Rector\TypeDeclaration\NodeTypeAnalyzer\PropertyTypeDecorator;
 use Rector\ValueObject\PhpVersion;
 use Rector\ValueObject\PhpVersionFeature;
 use Rector\VersionBonding\Contract\MinPhpVersionInterface;
-use Symplify\RuleDocGenerator\ValueObject\CodeSample\ConfiguredCodeSample;
+use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
-use RectorPrefix202502\Webmozart\Assert\Assert;
 /**
  * @see \Rector\Doctrine\Tests\CodeQuality\Rector\Property\TypedPropertyFromToOneRelationTypeRector\TypedPropertyFromToOneRelationTypeRectorTest
  */
-final class TypedPropertyFromToOneRelationTypeRector extends AbstractRector implements MinPhpVersionInterface, ConfigurableRectorInterface
+final class TypedPropertyFromToOneRelationTypeRector extends AbstractRector implements MinPhpVersionInterface
 {
     /**
      * @readonly
@@ -55,9 +55,11 @@ final class TypedPropertyFromToOneRelationTypeRector extends AbstractRector impl
      * @readonly
      */
     private StaticTypeMapper $staticTypeMapper;
-    public const FORCE_NULLABLE = 'force_nullable';
-    private bool $forceNullable = \true;
-    public function __construct(PropertyTypeDecorator $propertyTypeDecorator, PhpDocTypeChanger $phpDocTypeChanger, ToOneRelationPropertyTypeResolver $toOneRelationPropertyTypeResolver, PhpVersionProvider $phpVersionProvider, PhpDocInfoFactory $phpDocInfoFactory, StaticTypeMapper $staticTypeMapper)
+    /**
+     * @readonly
+     */
+    private ReflectionResolver $reflectionResolver;
+    public function __construct(PropertyTypeDecorator $propertyTypeDecorator, PhpDocTypeChanger $phpDocTypeChanger, ToOneRelationPropertyTypeResolver $toOneRelationPropertyTypeResolver, PhpVersionProvider $phpVersionProvider, PhpDocInfoFactory $phpDocInfoFactory, StaticTypeMapper $staticTypeMapper, ReflectionResolver $reflectionResolver)
     {
         $this->propertyTypeDecorator = $propertyTypeDecorator;
         $this->phpDocTypeChanger = $phpDocTypeChanger;
@@ -65,10 +67,11 @@ final class TypedPropertyFromToOneRelationTypeRector extends AbstractRector impl
         $this->phpVersionProvider = $phpVersionProvider;
         $this->phpDocInfoFactory = $phpDocInfoFactory;
         $this->staticTypeMapper = $staticTypeMapper;
+        $this->reflectionResolver = $reflectionResolver;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
-        return new RuleDefinition('Complete @var annotations or types based on @ORM\\*toOne annotations or attributes', [new ConfiguredCodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Complete @var annotations or types based on @ORM\*toOne annotations or attributes', [new CodeSample(<<<'CODE_SAMPLE'
 use Doctrine\ORM\Mapping as ORM;
 
 class SimpleColumn
@@ -92,58 +95,29 @@ class SimpleColumn
     private ?\App\Company\Entity\Company $company = null;
 }
 CODE_SAMPLE
-, ['force_nullable' => \true]), new ConfiguredCodeSample(<<<'CODE_SAMPLE'
-use Doctrine\ORM\Mapping as ORM;
-
-class SimpleColumn
-{
-    /**
-     * @ORM\OneToOne(targetEntity="App\Company\Entity\Company")
-     * @ORM\JoinColumn(nullable=false)
-     */
-    private $company;
-}
-CODE_SAMPLE
-, <<<'CODE_SAMPLE'
-use Doctrine\ORM\Mapping as ORM;
-
-class SimpleColumn
-{
-    /**
-     * @ORM\OneToOne(targetEntity="App\Company\Entity\Company")
-     * @ORM\JoinColumn(nullable=false)
-     */
-    private \App\Company\Entity\Company $company;
-}
-CODE_SAMPLE
-, ['force_nullable' => \false])]);
-    }
-    /**
-     * @param array<string, bool> $configuration
-     */
-    public function configure(array $configuration) : void
-    {
-        if (isset($configuration[self::FORCE_NULLABLE])) {
-            Assert::boolean($configuration[self::FORCE_NULLABLE]);
-            $this->forceNullable = $configuration[self::FORCE_NULLABLE];
-        }
+)]);
     }
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Property::class];
     }
     /**
      * @param Property $node
      */
-    public function refactor(Node $node) : ?\PhpParser\Node\Stmt\Property
+    public function refactor(Node $node): ?\PhpParser\Node\Stmt\Property
     {
         if ($node->type !== null) {
             return null;
         }
-        $propertyType = $this->toOneRelationPropertyTypeResolver->resolve($node, $this->forceNullable);
+        // avoid untyped parent property override, e.g. from a trait used in a parent class
+        $classReflection = $this->reflectionResolver->resolveClassReflection($node);
+        if ($classReflection instanceof ClassReflection && $this->hasUntypedParentProperty($classReflection, $node)) {
+            return null;
+        }
+        $propertyType = $this->toOneRelationPropertyTypeResolver->resolve($node);
         if (!$propertyType instanceof Type) {
             return null;
         }
@@ -157,14 +131,27 @@ CODE_SAMPLE
         $this->completePropertyTypeOrVarDoc($propertyType, $typeNode, $node);
         return $node;
     }
-    public function provideMinPhpVersion() : int
+    private function hasUntypedParentProperty(ClassReflection $classReflection, Property $property): bool
+    {
+        $propertyName = $this->getName($property);
+        foreach ($classReflection->getParents() as $parentClassReflection) {
+            $nativeReflectionClass = $parentClassReflection->getNativeReflection();
+            if (!$nativeReflectionClass->hasProperty($propertyName)) {
+                continue;
+            }
+            // typing the child while the parent property stays untyped is a fatal error
+            return $nativeReflectionClass->getProperty($propertyName)->getType() === null;
+        }
+        return \false;
+    }
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::TYPED_PROPERTIES;
     }
     /**
      * @param \PhpParser\Node\Name|\PhpParser\Node\ComplexType|\PhpParser\Node\Identifier $typeNode
      */
-    private function completePropertyTypeOrVarDoc(Type $propertyType, $typeNode, Property $property) : void
+    private function completePropertyTypeOrVarDoc(Type $propertyType, $typeNode, Property $property): void
     {
         $phpDocInfo = $this->phpDocInfoFactory->createFromNodeOrEmpty($property);
         if ($this->phpVersionProvider->isAtLeastPhpVersion(PhpVersion::PHP_74)) {

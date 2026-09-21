@@ -24,7 +24,7 @@ final class DowngradeReflectionGetTypeRector extends AbstractRector
      * @var string
      */
     private const SKIP_NODE = 'skip_node';
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Downgrade reflection $reflection->getType() method call', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
@@ -57,20 +57,22 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [MethodCall::class, Ternary::class, Instanceof_::class];
     }
     /**
      * @param MethodCall|Ternary|Instanceof_ $node
      */
-    public function refactor(Node $node) : ?\PhpParser\Node
+    public function refactor(Node $node): ?\PhpParser\Node
     {
         if ($node instanceof Instanceof_) {
-            return $this->refactorInstanceof($node);
+            $this->markSkipInstanceof($node);
+            return null;
         }
         if ($node instanceof Ternary) {
-            return $this->refactorTernary($node);
+            $this->markSkipTernary($node);
+            return null;
         }
         if ($node->getAttribute(self::SKIP_NODE) === \true) {
             return null;
@@ -84,30 +86,28 @@ CODE_SAMPLE
         $args = [new Arg($node->var), new Arg(new String_('getType'))];
         return new Ternary($this->nodeFactory->createFuncCall('method_exists', $args), $node, $this->nodeFactory->createNull());
     }
-    private function refactorInstanceof(Instanceof_ $instanceof) : ?Instanceof_
+    private function markSkipInstanceof(Instanceof_ $instanceof): void
     {
         if (!$this->isName($instanceof->class, 'ReflectionNamedType')) {
-            return null;
+            return;
         }
         if (!$instanceof->expr instanceof MethodCall) {
-            return null;
+            return;
         }
         // checked typed → safe
         $instanceof->expr->setAttribute(self::SKIP_NODE, \true);
-        return $instanceof;
     }
-    private function refactorTernary(Ternary $ternary) : ?Ternary
+    private function markSkipTernary(Ternary $ternary): void
     {
         if (!$ternary->if instanceof Expr) {
-            return null;
+            return;
         }
         if (!$ternary->cond instanceof FuncCall) {
-            return null;
+            return;
         }
         if (!$this->isName($ternary->cond, 'method_exists')) {
-            return null;
+            return;
         }
         $ternary->if->setAttribute(self::SKIP_NODE, \true);
-        return $ternary;
     }
 }

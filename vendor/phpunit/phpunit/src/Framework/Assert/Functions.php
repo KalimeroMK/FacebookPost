@@ -303,6 +303,8 @@ if (!function_exists('PHPUnit\Framework\assertContainsOnlyArray')) {
     /**
      * Asserts that a haystack contains only values of type array.
      *
+     * @phpstan-assert iterable<array<mixed>> $haystack
+     *
      * @param iterable<mixed> $haystack
      *
      * @throws ExpectationFailedException
@@ -320,6 +322,8 @@ if (!function_exists('PHPUnit\Framework\assertContainsOnlyArray')) {
 if (!function_exists('PHPUnit\Framework\assertContainsOnlyBool')) {
     /**
      * Asserts that a haystack contains only values of type bool.
+     *
+     * @phpstan-assert iterable<bool> $haystack
      *
      * @param iterable<mixed> $haystack
      *
@@ -339,6 +343,8 @@ if (!function_exists('PHPUnit\Framework\assertContainsOnlyCallable')) {
     /**
      * Asserts that a haystack contains only values of type callable.
      *
+     * @phpstan-assert iterable<callable> $haystack
+     *
      * @param iterable<mixed> $haystack
      *
      * @throws ExpectationFailedException
@@ -356,6 +362,8 @@ if (!function_exists('PHPUnit\Framework\assertContainsOnlyCallable')) {
 if (!function_exists('PHPUnit\Framework\assertContainsOnlyFloat')) {
     /**
      * Asserts that a haystack contains only values of type float.
+     *
+     * @phpstan-assert iterable<float> $haystack
      *
      * @param iterable<mixed> $haystack
      *
@@ -375,6 +383,8 @@ if (!function_exists('PHPUnit\Framework\assertContainsOnlyInt')) {
     /**
      * Asserts that a haystack contains only values of type int.
      *
+     * @phpstan-assert iterable<int> $haystack
+     *
      * @param iterable<mixed> $haystack
      *
      * @throws ExpectationFailedException
@@ -392,6 +402,8 @@ if (!function_exists('PHPUnit\Framework\assertContainsOnlyInt')) {
 if (!function_exists('PHPUnit\Framework\assertContainsOnlyIterable')) {
     /**
      * Asserts that a haystack contains only values of type iterable.
+     *
+     * @phpstan-assert iterable<iterable<mixed>> $haystack
      *
      * @param iterable<mixed> $haystack
      *
@@ -411,6 +423,8 @@ if (!function_exists('PHPUnit\Framework\assertContainsOnlyNull')) {
     /**
      * Asserts that a haystack contains only values of type null.
      *
+     * @phpstan-assert iterable<null> $haystack
+     *
      * @param iterable<mixed> $haystack
      *
      * @throws ExpectationFailedException
@@ -428,6 +442,8 @@ if (!function_exists('PHPUnit\Framework\assertContainsOnlyNull')) {
 if (!function_exists('PHPUnit\Framework\assertContainsOnlyNumeric')) {
     /**
      * Asserts that a haystack contains only values of type numeric.
+     *
+     * @phpstan-assert iterable<numeric> $haystack
      *
      * @param iterable<mixed> $haystack
      *
@@ -447,6 +463,8 @@ if (!function_exists('PHPUnit\Framework\assertContainsOnlyObject')) {
     /**
      * Asserts that a haystack contains only values of type object.
      *
+     * @phpstan-assert iterable<object> $haystack
+     *
      * @param iterable<mixed> $haystack
      *
      * @throws ExpectationFailedException
@@ -464,6 +482,8 @@ if (!function_exists('PHPUnit\Framework\assertContainsOnlyObject')) {
 if (!function_exists('PHPUnit\Framework\assertContainsOnlyResource')) {
     /**
      * Asserts that a haystack contains only values of type resource.
+     *
+     * @phpstan-assert iterable<resource> $haystack
      *
      * @param iterable<mixed> $haystack
      *
@@ -483,6 +503,8 @@ if (!function_exists('PHPUnit\Framework\assertContainsOnlyClosedResource')) {
     /**
      * Asserts that a haystack contains only values of type closed resource.
      *
+     * @phpstan-assert iterable<resource> $haystack
+     *
      * @param iterable<mixed> $haystack
      *
      * @throws ExpectationFailedException
@@ -500,6 +522,8 @@ if (!function_exists('PHPUnit\Framework\assertContainsOnlyClosedResource')) {
 if (!function_exists('PHPUnit\Framework\assertContainsOnlyScalar')) {
     /**
      * Asserts that a haystack contains only values of type scalar.
+     *
+     * @phpstan-assert iterable<scalar> $haystack
      *
      * @param iterable<mixed> $haystack
      *
@@ -519,6 +543,8 @@ if (!function_exists('PHPUnit\Framework\assertContainsOnlyString')) {
     /**
      * Asserts that a haystack contains only values of type string.
      *
+     * @phpstan-assert iterable<string> $haystack
+     *
      * @param iterable<mixed> $haystack
      *
      * @throws ExpectationFailedException
@@ -537,7 +563,11 @@ if (!function_exists('PHPUnit\Framework\assertContainsOnlyInstancesOf')) {
     /**
      * Asserts that a haystack contains only instances of a specified interface or class name.
      *
-     * @param class-string    $className
+     * @template T
+     *
+     * @phpstan-assert iterable<T> $haystack
+     *
+     * @param class-string<T> $className
      * @param iterable<mixed> $haystack
      *
      * @throws Exception
@@ -873,6 +903,8 @@ if (!function_exists('PHPUnit\Framework\assertEquals')) {
     /**
      * Asserts that two variables are equal.
      *
+     * Comparison is performed using the == operator (loose comparison) and may be performed by a type-specific comparator which may apply type coercion.
+     *
      * @throws ExpectationFailedException
      *
      * @no-named-arguments Parameter names are not covered by the backward compatibility promise for PHPUnit
@@ -888,6 +920,8 @@ if (!function_exists('PHPUnit\Framework\assertEquals')) {
 if (!function_exists('PHPUnit\Framework\assertEqualsCanonicalizing')) {
     /**
      * Asserts that two variables are equal (canonicalizing).
+     *
+     * Comparison is performed using the == operator (loose comparison) and may be performed by a type-specific comparator which may apply type coercion.
      *
      * @throws ExpectationFailedException
      *
@@ -905,6 +939,8 @@ if (!function_exists('PHPUnit\Framework\assertEqualsIgnoringCase')) {
     /**
      * Asserts that two variables are equal (ignoring case).
      *
+     * Comparison is performed using the == operator (loose comparison) and may be performed by a type-specific comparator which may apply type coercion.
+     *
      * @throws ExpectationFailedException
      *
      * @no-named-arguments Parameter names are not covered by the backward compatibility promise for PHPUnit
@@ -920,6 +956,8 @@ if (!function_exists('PHPUnit\Framework\assertEqualsIgnoringCase')) {
 if (!function_exists('PHPUnit\Framework\assertEqualsWithDelta')) {
     /**
      * Asserts that two variables are equal (with delta).
+     *
+     * Comparison is performed using the == operator (loose comparison) and may be performed by a type-specific comparator which may apply type coercion.
      *
      * @throws ExpectationFailedException
      *
@@ -937,6 +975,8 @@ if (!function_exists('PHPUnit\Framework\assertNotEquals')) {
     /**
      * Asserts that two variables are not equal.
      *
+     * Comparison is performed using the == operator (loose comparison) and may be performed by a type-specific comparator which may apply type coercion.
+     *
      * @throws ExpectationFailedException
      *
      * @no-named-arguments Parameter names are not covered by the backward compatibility promise for PHPUnit
@@ -952,6 +992,8 @@ if (!function_exists('PHPUnit\Framework\assertNotEquals')) {
 if (!function_exists('PHPUnit\Framework\assertNotEqualsCanonicalizing')) {
     /**
      * Asserts that two variables are not equal (canonicalizing).
+     *
+     * Comparison is performed using the == operator (loose comparison) and may be performed by a type-specific comparator which may apply type coercion.
      *
      * @throws ExpectationFailedException
      *
@@ -969,6 +1011,8 @@ if (!function_exists('PHPUnit\Framework\assertNotEqualsIgnoringCase')) {
     /**
      * Asserts that two variables are not equal (ignoring case).
      *
+     * Comparison is performed using the == operator (loose comparison) and may be performed by a type-specific comparator which may apply type coercion.
+     *
      * @throws ExpectationFailedException
      *
      * @no-named-arguments Parameter names are not covered by the backward compatibility promise for PHPUnit
@@ -984,6 +1028,8 @@ if (!function_exists('PHPUnit\Framework\assertNotEqualsIgnoringCase')) {
 if (!function_exists('PHPUnit\Framework\assertNotEqualsWithDelta')) {
     /**
      * Asserts that two variables are not equal (with delta).
+     *
+     * Comparison is performed using the == operator (loose comparison) and may be performed by a type-specific comparator which may apply type coercion.
      *
      * @throws ExpectationFailedException
      *
@@ -1032,8 +1078,6 @@ if (!function_exists('PHPUnit\Framework\assertEmpty')) {
      * @throws ExpectationFailedException
      * @throws GeneratorNotSupportedException
      *
-     * @phpstan-assert empty $actual
-     *
      * @no-named-arguments Parameter names are not covered by the backward compatibility promise for PHPUnit
      *
      * @see Assert::assertEmpty
@@ -1050,8 +1094,6 @@ if (!function_exists('PHPUnit\Framework\assertNotEmpty')) {
      *
      * @throws ExpectationFailedException
      * @throws GeneratorNotSupportedException
-     *
-     * @phpstan-assert !empty $actual
      *
      * @no-named-arguments Parameter names are not covered by the backward compatibility promise for PHPUnit
      *
@@ -1781,6 +1823,8 @@ if (!function_exists('PHPUnit\Framework\assertSame')) {
      * Used on objects, it asserts that two variables reference
      * the same object.
      *
+     * Comparison is performed using the === operator.
+     *
      * @template ExpectedType
      *
      * @param ExpectedType $expected
@@ -1804,6 +1848,8 @@ if (!function_exists('PHPUnit\Framework\assertNotSame')) {
      * Asserts that two variables do not have the same type and value.
      * Used on objects, it asserts that two variables do not reference
      * the same object.
+     *
+     * Comparison is performed using the === operator.
      *
      * @throws ExpectationFailedException
      *

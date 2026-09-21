@@ -15,6 +15,8 @@ use PhpParser\Node\Stmt\Expression;
 use PhpParser\Node\Stmt\Return_;
 use Rector\PHPUnit\NodeAnalyzer\TestsNodeAnalyzer;
 use Rector\Rector\AbstractRector;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -22,17 +24,24 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  * @see https://github.com/sebastianbergmann/phpunit/pull/5225
  * @see \Rector\PHPUnit\Tests\PHPUnit100\Rector\Class_\StaticDataProviderClassMethodRector\StaticDataProviderClassMethodRectorTest
  */
-final class NamedArgumentForDataProviderRector extends AbstractRector
+final class NamedArgumentForDataProviderRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @readonly
      */
     private TestsNodeAnalyzer $testsNodeAnalyzer;
+    /**
+     * inherited from the PHPUnit 11.0 set
+     */
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('phpunit/phpunit', '>=11.0');
+    }
     public function __construct(TestsNodeAnalyzer $testsNodeAnalyzer)
     {
         $this->testsNodeAnalyzer = $testsNodeAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Change the array-index names to the argument name of the dataProvider', [new CodeSample(<<<'CODE_SAMPLE'
 use PHPUnit\Framework\TestCase;
@@ -81,14 +90,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Class_::class];
     }
     /**
      * @param Class_ $node
      */
-    public function refactor(Node $node) : ?\PhpParser\Node
+    public function refactor(Node $node): ?\PhpParser\Node
     {
         if (!$this->testsNodeAnalyzer->isInTestClass($node)) {
             return null;
@@ -123,7 +132,7 @@ CODE_SAMPLE
     /**
      * @return list<string>
      */
-    public function getNamedArguments(ClassMethod $classMethod) : array
+    public function getNamedArguments(ClassMethod $classMethod): array
     {
         $dataProviderNameMapping = [];
         foreach ($classMethod->getParams() as $param) {
@@ -131,13 +140,13 @@ CODE_SAMPLE
                 $dataProviderNameMapping[] = $this->getName($param->var);
             }
         }
-        return \array_values(\array_filter($dataProviderNameMapping));
+        return array_values(array_filter($dataProviderNameMapping));
     }
     /**
-     * @param list<Node\Stmt> $stmts
+     * @param array<Node\Stmt> $stmts
      * @return array<string, Array_>
      */
-    public function getResolvedVariables(array $stmts) : array
+    public function getResolvedVariables(array $stmts): array
     {
         $variables = [];
         foreach ($stmts as $stmt) {
@@ -160,10 +169,10 @@ CODE_SAMPLE
     /**
      * @return list<string>
      */
-    private function getDataProviderMethodNames(ClassMethod $classMethod) : array
+    private function getDataProviderMethodNames(ClassMethod $classMethod): array
     {
         $dataProviderMethodNames = [];
-        $attributeClassName = 'PHPUnit\\Framework\\Attributes\\DataProvider';
+        $attributeClassName = 'PHPUnit\Framework\Attributes\DataProvider';
         foreach ($classMethod->attrGroups as $attributeGroup) {
             foreach ($attributeGroup->attrs as $attribute) {
                 if (!$this->isName($attribute->name, $attributeClassName)) {
@@ -181,7 +190,7 @@ CODE_SAMPLE
     /**
      * @param list<string> $dataProviderNameMapping
      */
-    private function refactorArrayKey(Array_ $array, array $dataProviderNameMapping) : bool
+    private function refactorArrayKey(Array_ $array, array $dataProviderNameMapping): bool
     {
         $hasChanged = \false;
         $needToSetAllKeyNames = \false;
@@ -193,7 +202,7 @@ CODE_SAMPLE
             }
         }
         // Skip already modified keys because they could be in a different order
-        if (\array_intersect($dataProviderNameMapping, $allArrayKeyNames) === $dataProviderNameMapping) {
+        if (array_intersect($dataProviderNameMapping, $allArrayKeyNames) === $dataProviderNameMapping) {
             return \false;
         }
         foreach ($array->items as $arrayIndex => $arrayItem) {
@@ -213,7 +222,7 @@ CODE_SAMPLE
     /**
      * @return iterable<Array_>
      */
-    private function extractDataProviderArrayItem(ClassMethod $classMethod) : iterable
+    private function extractDataProviderArrayItem(ClassMethod $classMethod): iterable
     {
         $stmts = $classMethod->getStmts() ?? [];
         $resolvedVariables = $this->getResolvedVariables($stmts);
@@ -221,7 +230,7 @@ CODE_SAMPLE
             if ($stmt instanceof Expression && $stmt->expr instanceof Yield_) {
                 $arrayItem = $stmt->expr->value;
                 if ($arrayItem instanceof Array_) {
-                    (yield $arrayItem);
+                    yield $arrayItem;
                 }
             }
             if ($stmt instanceof Return_ && $stmt->expr instanceof Array_) {
@@ -229,14 +238,14 @@ CODE_SAMPLE
                 foreach ($dataProviderTestCases->items as $dataProviderTestCase) {
                     $arrayItem = $dataProviderTestCase->value;
                     if ($arrayItem instanceof Array_) {
-                        (yield $arrayItem);
+                        yield $arrayItem;
                     }
                     $variableName = $this->getName($arrayItem);
                     if ($arrayItem instanceof Variable && $variableName !== null && isset($resolvedVariables[$variableName])) {
                         $dataProviderList = $resolvedVariables[$variableName];
                         foreach ($dataProviderList->items as $dataProviderItem) {
                             if ($dataProviderItem->value instanceof Array_) {
-                                (yield $dataProviderItem->value);
+                                yield $dataProviderItem->value;
                             }
                         }
                     }

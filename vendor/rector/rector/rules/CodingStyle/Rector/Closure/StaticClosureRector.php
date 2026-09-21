@@ -5,24 +5,17 @@ namespace Rector\CodingStyle\Rector\Closure;
 
 use PhpParser\Node;
 use PhpParser\Node\Expr\Closure;
-use Rector\CodingStyle\Guard\StaticGuard;
+use Rector\Configuration\Deprecation\Contract\DeprecatedInterface;
+use Rector\Exception\ShouldNotHappenException;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
- * @see \Rector\Tests\CodingStyle\Rector\Closure\StaticClosureRector\StaticClosureRectorTest
+ * @deprecated as noisy change with little value. Use manually or custom rule where needed instead.
  */
-final class StaticClosureRector extends AbstractRector
+final class StaticClosureRector extends AbstractRector implements DeprecatedInterface
 {
-    /**
-     * @readonly
-     */
-    private StaticGuard $staticGuard;
-    public function __construct(StaticGuard $staticGuard)
-    {
-        $this->staticGuard = $staticGuard;
-    }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Changes Closure to be static when possible', [new CodeSample(<<<'CODE_SAMPLE'
 function () {
@@ -47,19 +40,15 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Closure::class];
     }
     /**
      * @param Closure $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
-        if (!$this->staticGuard->isLegal($node)) {
-            return null;
-        }
-        $node->static = \true;
-        return $node;
+        throw new ShouldNotHappenException(sprintf('"%s" is deprecated as noisy change with little value. Use manually or custom rule where needed instead', self::class));
     }
 }

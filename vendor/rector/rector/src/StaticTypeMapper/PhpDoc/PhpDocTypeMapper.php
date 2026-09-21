@@ -9,7 +9,7 @@ use PHPStan\PhpDoc\TypeNodeResolver;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use PHPStan\Type\Type;
 use Rector\StaticTypeMapper\Contract\PhpDocParser\PhpDocTypeMapperInterface;
-use RectorPrefix202502\Webmozart\Assert\Assert;
+use RectorPrefix202609\Webmozart\Assert\Assert;
 /**
  * @see \Rector\Tests\StaticTypeMapper\PhpDoc\PhpDocTypeMapperTest
  */
@@ -33,10 +33,10 @@ final class PhpDocTypeMapper
         $this->typeNodeResolver = $typeNodeResolver;
         Assert::notEmpty($phpDocTypeMappers);
     }
-    public function mapToPHPStanType(TypeNode $typeNode, Node $node, NameScope $nameScope) : Type
+    public function mapToPHPStanType(TypeNode $typeNode, Node $node, NameScope $nameScope): Type
     {
         foreach ($this->phpDocTypeMappers as $phpDocTypeMapper) {
-            if (!\is_a($typeNode, $phpDocTypeMapper->getNodeType())) {
+            if (!is_a($typeNode, $phpDocTypeMapper->getNodeType())) {
                 continue;
             }
             return $phpDocTypeMapper->mapToPHPStanType($typeNode, $node, $nameScope);

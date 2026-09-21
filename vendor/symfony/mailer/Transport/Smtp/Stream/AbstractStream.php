@@ -88,13 +88,32 @@ abstract class AbstractStream
                 throw new TransportException(\sprintf('Connection to "%s" has been closed unexpectedly.', $this->getReadConnectionDescription()));
             }
             if (false === $line) {
-                throw new TransportException(\sprintf('Unable to read from connection to "%s": ', $this->getReadConnectionDescription()).error_get_last()['message']);
+                throw new TransportException(\sprintf('Unable to read from connection to "%s": ', $this->getReadConnectionDescription().error_get_last()['message'] ?? ''));
             }
         }
 
         $this->debug .= \sprintf('[%s] < %s', (new \DateTimeImmutable())->format('Y-m-d\TH:i:s.up'), $line);
 
         return $line;
+    }
+
+    /**
+     * Tells whether the server sent data that has not been read yet.
+     */
+    public function hasPendingData(): bool
+    {
+        if (!\is_resource($this->out)) {
+            return false;
+        }
+
+        if (0 < stream_get_meta_data($this->out)['unread_bytes']) {
+            return true;
+        }
+
+        $read = [$this->out];
+        $write = $except = [];
+
+        return 0 < @stream_select($read, $write, $except, 0);
     }
 
     public function getDebug(): string

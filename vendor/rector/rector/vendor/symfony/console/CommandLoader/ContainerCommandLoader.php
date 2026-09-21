@@ -8,11 +8,11 @@
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\Symfony\Component\Console\CommandLoader;
+namespace RectorPrefix202609\Symfony\Component\Console\CommandLoader;
 
-use RectorPrefix202502\Psr\Container\ContainerInterface;
-use RectorPrefix202502\Symfony\Component\Console\Command\Command;
-use RectorPrefix202502\Symfony\Component\Console\Exception\CommandNotFoundException;
+use RectorPrefix202609\Psr\Container\ContainerInterface;
+use RectorPrefix202609\Symfony\Component\Console\Command\Command;
+use RectorPrefix202609\Symfony\Component\Console\Exception\CommandNotFoundException;
 /**
  * Loads commands from a PSR-11 container.
  *
@@ -30,19 +30,19 @@ class ContainerCommandLoader implements CommandLoaderInterface
         $this->container = $container;
         $this->commandMap = $commandMap;
     }
-    public function get(string $name) : Command
+    public function get(string $name): Command
     {
         if (!$this->has($name)) {
             throw new CommandNotFoundException(\sprintf('Command "%s" does not exist.', $name));
         }
         return $this->container->get($this->commandMap[$name]);
     }
-    public function has(string $name) : bool
+    public function has(string $name): bool
     {
         return isset($this->commandMap[$name]) && $this->container->has($this->commandMap[$name]);
     }
-    public function getNames() : array
+    public function getNames(): array
     {
-        return \array_keys($this->commandMap);
+        return array_keys($this->commandMap);
     }
 }

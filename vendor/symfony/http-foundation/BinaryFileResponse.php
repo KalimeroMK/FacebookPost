@@ -12,6 +12,7 @@
 namespace Symfony\Component\HttpFoundation;
 
 use Symfony\Component\HttpFoundation\File\Exception\FileException;
+use Symfony\Component\HttpFoundation\File\Exception\FileNotFoundException;
 use Symfony\Component\HttpFoundation\File\File;
 
 /**
@@ -25,6 +26,13 @@ use Symfony\Component\HttpFoundation\File\File;
  */
 class BinaryFileResponse extends Response
 {
+    // Values accepted for the "X-Sendfile-Type" header, mapped to the response header to send
+    private const SENDFILE_TYPES = [
+        'x-sendfile' => 'X-Sendfile',
+        'x-accel-redirect' => 'X-Accel-Redirect',
+        'x-lighttpd-send-file' => 'X-LIGHTTPD-send-file',
+    ];
+
     protected static bool $trustXSendfileTypeHeader = false;
 
     protected File $file;
@@ -42,6 +50,9 @@ class BinaryFileResponse extends Response
      * @param string|null         $contentDisposition The type of Content-Disposition to set automatically with the filename
      * @param bool                $autoEtag           Whether the ETag header should be automatically set
      * @param bool                $autoLastModified   Whether the Last-Modified header should be automatically set
+     *
+     * @throws FileNotFoundException If the given path is not a file
+     * @throws FileException         If the file is not readable
      */
     public function __construct(\SplFileInfo|string $file, int $status = 200, array $headers = [], bool $public = true, ?string $contentDisposition = null, bool $autoEtag = false, bool $autoLastModified = true)
     {
@@ -59,7 +70,8 @@ class BinaryFileResponse extends Response
      *
      * @return $this
      *
-     * @throws FileException
+     * @throws FileNotFoundException If the given path is not a file
+     * @throws FileException         If the file is not readable
      */
     public function setFile(\SplFileInfo|string $file, ?string $contentDisposition = null, bool $autoEtag = false, bool $autoLastModified = true): static
     {
@@ -164,7 +176,7 @@ class BinaryFileResponse extends Response
             for ($i = 0, $filenameLength = mb_strlen($filename, $encoding); $i < $filenameLength; ++$i) {
                 $char = mb_substr($filename, $i, 1, $encoding);
 
-                if ('%' === $char || \ord($char) < 32 || \ord($char) > 126) {
+                if ('%' === $char || \ord($char[0]) < 32 || \ord($char[0]) > 126) {
                     $filenameFallback .= '_';
                 } else {
                     $filenameFallback .= $char;
@@ -215,15 +227,17 @@ class BinaryFileResponse extends Response
             $this->headers->set('Accept-Ranges', $request->isMethodSafe() ? 'bytes' : 'none');
         }
 
-        if (self::$trustXSendfileTypeHeader && $request->headers->has('X-Sendfile-Type')) {
+        $sendfileType = self::$trustXSendfileTypeHeader ? $request->headers->get('X-Sendfile-Type') : null;
+        $type = self::SENDFILE_TYPES[strtolower($sendfileType ?? '')] ?? null;
+
+        if (null !== $type) {
             // Use X-Sendfile, do not send any content.
-            $type = $request->headers->get('X-Sendfile-Type');
             $path = $this->file->getRealPath();
             // Fall back to scheme://path for stream wrapped locations.
             if (false === $path) {
                 $path = $this->file->getPathname();
             }
-            if ('x-accel-redirect' === strtolower($type)) {
+            if ('X-Accel-Redirect' === $type) {
                 // Do X-Accel-Mapping substitutions.
                 // @link https://github.com/rack/rack/blob/main/lib/rack/sendfile.rb
                 // @link https://mattbrictson.com/blog/accelerated-rails-downloads
@@ -237,7 +251,7 @@ class BinaryFileResponse extends Response
                         $path = $location.substr($path, \strlen($pathPrefix));
                         // Only set X-Accel-Redirect header if a valid URI can be produced
                         // as nginx does not serve arbitrary file paths.
-                        $this->headers->set($type, $path);
+                        $this->headers->set($type, rawurlencode($path));
                         $this->maxlen = 0;
                         break;
                     }
@@ -268,7 +282,7 @@ class BinaryFileResponse extends Response
                         if ($start < 0 || $start > $end) {
                             $this->setStatusCode(416);
                             $this->headers->set('Content-Range', \sprintf('bytes */%s', $fileSize));
-                        } elseif ($end - $start < $fileSize - 1) {
+                        } else {
                             $this->maxlen = $end < $fileSize ? $end - $start + 1 : -1;
                             $this->offset = $start;
 
@@ -392,5 +406,13 @@ class BinaryFileResponse extends Response
         $this->deleteFileAfterSend = $shouldDelete;
 
         return $this;
+    }
+
+    /**
+     * Returns whether the file will be unlinked after the request is sent.
+     */
+    public function shouldDeleteFileAfterSend(): bool
+    {
+        return $this->deleteFileAfterSend;
     }
 }

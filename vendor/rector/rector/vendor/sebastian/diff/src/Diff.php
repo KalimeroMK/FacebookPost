@@ -9,7 +9,7 @@ declare (strict_types=1);
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\SebastianBergmann\Diff;
+namespace RectorPrefix202609\SebastianBergmann\Diff;
 
 use ArrayIterator;
 use IteratorAggregate;
@@ -45,32 +45,32 @@ final class Diff implements IteratorAggregate
     /**
      * @return non-empty-string
      */
-    public function from() : string
+    public function from(): string
     {
         return $this->from;
     }
     /**
      * @return non-empty-string
      */
-    public function to() : string
+    public function to(): string
     {
         return $this->to;
     }
     /**
      * @return list<Chunk>
      */
-    public function chunks() : array
+    public function chunks(): array
     {
         return $this->chunks;
     }
     /**
      * @param list<Chunk> $chunks
      */
-    public function setChunks(array $chunks) : void
+    public function setChunks(array $chunks): void
     {
         $this->chunks = $chunks;
     }
-    public function getIterator() : Traversable
+    public function getIterator(): Traversable
     {
         return new ArrayIterator($this->chunks);
     }

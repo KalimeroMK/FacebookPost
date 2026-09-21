@@ -31,9 +31,9 @@ final class EmptyOnNullableObjectToInstanceOfRector extends AbstractRector
     {
         $this->staticTypeMapper = $staticTypeMapper;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
-        return new RuleDefinition('Change empty() on nullable object to instanceof check', [new CodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Change `empty()` on nullable object to instanceof check', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
 {
     public function run(?AnotherObject $anotherObject)
@@ -64,7 +64,7 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Empty_::class, BooleanNot::class];
     }

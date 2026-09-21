@@ -27,13 +27,13 @@ final class CacheItem
         $this->data = $data;
     }
     /**
-     * @param mixed[] $properties
+     * @param array<string, mixed> $properties
      */
-    public static function __set_state(array $properties) : self
+    public static function __set_state(array $properties): self
     {
         return new self($properties['variableKey'], $properties['data']);
     }
-    public function isVariableKeyValid(string $variableKey) : bool
+    public function isVariableKeyValid(string $variableKey): bool
     {
         return $this->variableKey === $variableKey;
     }

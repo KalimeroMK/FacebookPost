@@ -6,7 +6,7 @@ use Illuminate\Database\RecordNotFoundException;
 use Illuminate\Database\RecordsNotFoundException;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Http\Exceptions\HttpResponseException;
-use Illuminate\Support\Str;
+use Illuminate\Support\Stringable;
 use Illuminate\View\Compilers\CompilerInterface;
 use Illuminate\View\ViewException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -40,7 +40,6 @@ class CompilerEngine extends PhpEngine
      *
      * @param  \Illuminate\View\Compilers\CompilerInterface  $compiler
      * @param  \Illuminate\Filesystem\Filesystem|null  $files
-     * @return void
      */
     public function __construct(CompilerInterface $compiler, ?Filesystem $files = null)
     {
@@ -55,6 +54,8 @@ class CompilerEngine extends PhpEngine
      * @param  string  $path
      * @param  array  $data
      * @return string
+     *
+     * @throws \Illuminate\View\ViewException
      */
     public function get($path, array $data = [])
     {
@@ -74,7 +75,7 @@ class CompilerEngine extends PhpEngine
         try {
             $results = $this->evaluatePath($this->compiler->getCompiledPath($path), $data);
         } catch (ViewException $e) {
-            if (! Str::of($e->getMessage())->contains(['No such file or directory', 'File does not exist at path'])) {
+            if ((new Stringable($e->getMessage()))->doesntContain(['No such file or directory', 'File does not exist at path'])) {
                 throw $e;
             }
 

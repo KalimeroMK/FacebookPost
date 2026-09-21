@@ -28,26 +28,29 @@ final class ObjectWithoutClassTypeMapper implements TypeMapperInterface
     {
         $this->phpVersionProvider = $phpVersionProvider;
     }
-    public function getNodeClass() : string
+    /**
+     * @return array<class-string<Type>>
+     */
+    public function getNodeClasses(): array
     {
-        return ObjectWithoutClassType::class;
+        return [ObjectWithoutClassType::class];
     }
     /**
      * @param ObjectWithoutClassType $type
      */
-    public function mapToPHPStanPhpDocTypeNode(Type $type) : TypeNode
+    public function mapToPHPStanPhpDocTypeNode(Type $type): TypeNode
     {
         return $type->toPhpDocNode();
     }
     /**
      * @param ObjectWithoutClassType|HasMethodType|HasPropertyType $type
      */
-    public function mapToPhpParserNode(Type $type, string $typeKind) : ?Node
+    public function mapToPhpParserNode(Type $type, string $typeKind): ?Node
     {
         // special case for anonymous classes that implement another type
         if ($type instanceof ObjectWithoutClassTypeWithParentTypes) {
             $parentTypes = $type->getParentTypes();
-            if (\count($parentTypes) === 1) {
+            if (count($parentTypes) === 1) {
                 $parentType = $parentTypes[0];
                 return new FullyQualified($parentType->getClassName());
             }

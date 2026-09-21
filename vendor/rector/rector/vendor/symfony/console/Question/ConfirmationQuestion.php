@@ -8,7 +8,7 @@
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\Symfony\Component\Console\Question;
+namespace RectorPrefix202609\Symfony\Component\Console\Question;
 
 /**
  * Represents a yes/no question.
@@ -32,15 +32,15 @@ class ConfirmationQuestion extends Question
     /**
      * Returns the default answer normalizer.
      */
-    private function getDefaultNormalizer() : callable
+    private function getDefaultNormalizer(): callable
     {
         $default = $this->getDefault();
         $regex = $this->trueAnswerRegex;
-        return function ($answer) use($default, $regex) {
+        return static function ($answer) use ($default, $regex) {
             if (\is_bool($answer)) {
                 return $answer;
             }
-            $answerIsTrue = (bool) \preg_match($regex, $answer);
+            $answerIsTrue = (bool) preg_match($regex, $answer);
             if (\false === $default) {
                 return $answer && $answerIsTrue;
             }

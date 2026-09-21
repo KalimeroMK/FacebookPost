@@ -9,6 +9,8 @@ use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
 use PhpParser\Node\Expr\BinaryOp\BooleanOr;
 use PhpParser\Node\Expr\BooleanNot;
 use PhpParser\Node\Expr\FuncCall;
+use PhpParser\Node\Expr\MethodCall;
+use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Stmt\Expression;
 use PhpParser\Node\Stmt\If_;
 use Rector\NodeManipulator\BinaryOpManipulator;
@@ -28,7 +30,7 @@ final class InlineIfToExplicitIfRector extends AbstractRector
     {
         $this->binaryOpManipulator = $binaryOpManipulator;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Change inline if to explicit if', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
@@ -59,14 +61,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Expression::class];
     }
     /**
      * @param Expression $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($node->expr instanceof BooleanAnd) {
             return $this->processExplicitIf($node);
@@ -76,16 +78,19 @@ CODE_SAMPLE
         }
         return null;
     }
-    private function processExplicitIf(Expression $expression) : ?Node
+    private function processExplicitIf(Expression $expression): ?Node
     {
         /** @var BooleanAnd|BooleanOr $booleanExpr */
         $booleanExpr = $expression->expr;
-        $leftStaticType = $this->getType($booleanExpr->left);
-        if (!$leftStaticType->isBoolean()->yes()) {
-            return null;
-        }
         $exprLeft = $booleanExpr->left instanceof BooleanNot ? $booleanExpr->left->expr : $booleanExpr->left;
         if ($exprLeft instanceof FuncCall && $this->isName($exprLeft, 'defined')) {
+            return null;
+        }
+        if ($this->isSameLocalMethodCallChain($booleanExpr)) {
+            return null;
+        }
+        $leftStaticType = $this->getType($booleanExpr->left);
+        if (!$leftStaticType->isBoolean()->yes()) {
             return null;
         }
         /** @var Expr $expr */
@@ -94,5 +99,42 @@ CODE_SAMPLE
         $if->stmts[] = new Expression($booleanExpr->right);
         $this->mirrorComments($if, $expression);
         return $if;
+    }
+    /**
+     * @param \PhpParser\Node\Expr\BinaryOp\BooleanAnd|\PhpParser\Node\Expr\BinaryOp\BooleanOr $booleanExpr
+     */
+    private function isSameLocalMethodCallChain($booleanExpr): bool
+    {
+        $leaves = [];
+        $this->collectOperands($booleanExpr, $leaves);
+        $firstMethodCall = null;
+        foreach ($leaves as $leaf) {
+            if (!$leaf instanceof MethodCall) {
+                return \false;
+            }
+            if (!$leaf->var instanceof Variable || !$this->isName($leaf->var, 'this')) {
+                return \false;
+            }
+            if (!$firstMethodCall instanceof MethodCall) {
+                $firstMethodCall = $leaf;
+                continue;
+            }
+            if (!$this->nodeNameResolver->areNamesEqual($firstMethodCall->name, $leaf->name)) {
+                return \false;
+            }
+        }
+        return $firstMethodCall instanceof MethodCall;
+    }
+    /**
+     * @param Expr[] $leaves
+     */
+    private function collectOperands(Expr $expr, array &$leaves): void
+    {
+        if ($expr instanceof BooleanAnd || $expr instanceof BooleanOr) {
+            $this->collectOperands($expr->left, $leaves);
+            $this->collectOperands($expr->right, $leaves);
+            return;
+        }
+        $leaves[] = $expr;
     }
 }

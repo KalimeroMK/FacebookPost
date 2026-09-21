@@ -5,24 +5,16 @@ namespace Rector\NodeManipulator;
 
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Assign;
-use PhpParser\Node\Expr\BinaryOp\BooleanOr;
 use PhpParser\Node\Expr\BinaryOp\NotIdentical;
-use PhpParser\Node\Expr\Exit_;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\Else_;
-use PhpParser\Node\Stmt\Foreach_;
 use PhpParser\Node\Stmt\If_;
 use PhpParser\Node\Stmt\Return_;
 use Rector\PhpParser\Comparing\NodeComparator;
-use Rector\PhpParser\Node\BetterNodeFinder;
 use Rector\PhpParser\Node\Value\ValueResolver;
 final class IfManipulator
 {
-    /**
-     * @readonly
-     */
-    private BetterNodeFinder $betterNodeFinder;
     /**
      * @readonly
      */
@@ -35,9 +27,8 @@ final class IfManipulator
      * @readonly
      */
     private NodeComparator $nodeComparator;
-    public function __construct(BetterNodeFinder $betterNodeFinder, \Rector\NodeManipulator\StmtsManipulator $stmtsManipulator, ValueResolver $valueResolver, NodeComparator $nodeComparator)
+    public function __construct(\Rector\NodeManipulator\StmtsManipulator $stmtsManipulator, ValueResolver $valueResolver, NodeComparator $nodeComparator)
     {
-        $this->betterNodeFinder = $betterNodeFinder;
         $this->stmtsManipulator = $stmtsManipulator;
         $this->valueResolver = $valueResolver;
         $this->nodeComparator = $nodeComparator;
@@ -49,9 +40,9 @@ final class IfManipulator
      *     return $value;
      * }
      */
-    public function matchIfNotNullReturnValue(If_ $if) : ?Expr
+    public function matchIfNotNullReturnValue(If_ $if): ?Expr
     {
-        if (\count($if->stmts) !== 1) {
+        if (count($if->stmts) !== 1) {
             return null;
         }
         $insideIfNode = $if->stmts[0];
@@ -63,29 +54,7 @@ final class IfManipulator
         }
         return $this->matchComparedAndReturnedNode($if->cond, $insideIfNode);
     }
-    /**
-     * @return If_[]
-     */
-    public function collectNestedIfsWithOnlyReturn(If_ $if) : array
-    {
-        $ifs = [];
-        $currentIf = $if;
-        while ($this->isIfWithOnlyStmtIf($currentIf)) {
-            $ifs[] = $currentIf;
-            /** @var If_ $currentIf */
-            $currentIf = $currentIf->stmts[0];
-        }
-        if ($ifs === []) {
-            return [];
-        }
-        if (!$this->hasOnlyStmtOfType($currentIf, Return_::class)) {
-            return [];
-        }
-        // last if is with the return value
-        $ifs[] = $currentIf;
-        return $ifs;
-    }
-    public function isIfAndElseWithSameVariableAssignAsLastStmts(If_ $if, Expr $desiredExpr) : bool
+    public function isIfAndElseWithSameVariableAssignAsLastStmts(If_ $if, Expr $desiredExpr): bool
     {
         if (!$if->else instanceof Else_) {
             return \false;
@@ -110,61 +79,23 @@ final class IfManipulator
         return $this->nodeComparator->areNodesEqual($desiredExpr, $lastElseNode->var);
     }
     /**
-     * @return If_[]
-     */
-    public function collectNestedIfsWithNonBreaking(Foreach_ $foreach) : array
-    {
-        if (\count($foreach->stmts) !== 1) {
-            return [];
-        }
-        $onlyForeachStmt = $foreach->stmts[0];
-        if (!$onlyForeachStmt instanceof If_) {
-            return [];
-        }
-        if ($onlyForeachStmt->cond instanceof BooleanOr) {
-            return [];
-        }
-        $ifs = [];
-        $currentIf = $onlyForeachStmt;
-        while ($this->isIfWithOnlyStmtIf($currentIf)) {
-            $ifs[] = $currentIf;
-            /** @var If_ $currentIf */
-            $currentIf = $currentIf->stmts[0];
-        }
-        // IfManipulator is not build to handle elseif and else
-        if (!$this->isIfWithoutElseAndElseIfs($currentIf)) {
-            return [];
-        }
-        $return = $this->betterNodeFinder->findFirstInstanceOf($currentIf->stmts, Return_::class);
-        if ($return instanceof Return_) {
-            return [];
-        }
-        $exit = $this->betterNodeFinder->findFirstInstanceOf($currentIf->stmts, Exit_::class);
-        if ($exit instanceof Exit_) {
-            return [];
-        }
-        // last if is with the expression
-        $ifs[] = $currentIf;
-        return $ifs;
-    }
-    /**
      * @param class-string<Stmt> $stmtClass
      */
-    public function isIfWithOnly(If_ $if, string $stmtClass) : bool
+    public function isIfWithOnly(If_ $if, string $stmtClass): bool
     {
         if (!$this->isIfWithoutElseAndElseIfs($if)) {
             return \false;
         }
         return $this->hasOnlyStmtOfType($if, $stmtClass);
     }
-    public function isIfWithoutElseAndElseIfs(If_ $if) : bool
+    public function isIfWithoutElseAndElseIfs(If_ $if): bool
     {
         if ($if->else instanceof Else_) {
             return \false;
         }
         return $if->elseifs === [];
     }
-    private function matchComparedAndReturnedNode(NotIdentical $notIdentical, Return_ $return) : ?Expr
+    private function matchComparedAndReturnedNode(NotIdentical $notIdentical, Return_ $return): ?Expr
     {
         if ($this->nodeComparator->areNodesEqual($notIdentical->left, $return->expr) && $this->valueResolver->isNull($notIdentical->right)) {
             return $notIdentical->left;
@@ -177,20 +108,13 @@ final class IfManipulator
         }
         return null;
     }
-    private function isIfWithOnlyStmtIf(If_ $if) : bool
-    {
-        if (!$this->isIfWithoutElseAndElseIfs($if)) {
-            return \false;
-        }
-        return $this->hasOnlyStmtOfType($if, If_::class);
-    }
     /**
      * @param class-string<Stmt> $stmtClass
      */
-    private function hasOnlyStmtOfType(If_ $if, string $stmtClass) : bool
+    private function hasOnlyStmtOfType(If_ $if, string $stmtClass): bool
     {
         $stmts = $if->stmts;
-        if (\count($stmts) !== 1) {
+        if (count($stmts) !== 1) {
             return \false;
         }
         return $stmts[0] instanceof $stmtClass;

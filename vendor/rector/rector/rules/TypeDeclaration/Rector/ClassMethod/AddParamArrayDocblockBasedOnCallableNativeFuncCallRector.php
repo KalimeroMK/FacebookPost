@@ -4,6 +4,7 @@ declare (strict_types=1);
 namespace Rector\TypeDeclaration\Rector\ClassMethod;
 
 use PhpParser\Node;
+use PhpParser\Node\Arg;
 use PhpParser\Node\Expr\ArrowFunction;
 use PhpParser\Node\Expr\Closure;
 use PhpParser\Node\Expr\FuncCall;
@@ -21,9 +22,9 @@ use PHPStan\Type\TypeCombinator;
 use Rector\BetterPhpDocParser\PhpDocInfo\PhpDocInfo;
 use Rector\BetterPhpDocParser\PhpDocInfo\PhpDocInfoFactory;
 use Rector\BetterPhpDocParser\PhpDocManipulator\PhpDocTypeChanger;
-use Rector\NodeAnalyzer\ArgsAnalyzer;
 use Rector\Rector\AbstractRector;
 use Rector\StaticTypeMapper\StaticTypeMapper;
+use Rector\TypeDeclaration\Enum\NativeFuncCallPositions;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -38,33 +39,24 @@ final class AddParamArrayDocblockBasedOnCallableNativeFuncCallRector extends Abs
     /**
      * @readonly
      */
-    private ArgsAnalyzer $argsAnalyzer;
-    /**
-     * @readonly
-     */
     private PhpDocTypeChanger $phpDocTypeChanger;
     /**
      * @readonly
      */
     private StaticTypeMapper $staticTypeMapper;
-    /**
-     * @var array<string, array<string, int>>
-     */
-    private const NATIVE_FUNC_CALLS_WITH_POSITION = ['array_walk' => ['array' => 0, 'callback' => 1], 'array_map' => ['array' => 1, 'callback' => 0], 'usort' => ['array' => 0, 'callback' => 1], 'array_filter' => ['array' => 0, 'callback' => 1]];
-    public function __construct(PhpDocInfoFactory $phpDocInfoFactory, ArgsAnalyzer $argsAnalyzer, PhpDocTypeChanger $phpDocTypeChanger, StaticTypeMapper $staticTypeMapper)
+    public function __construct(PhpDocInfoFactory $phpDocInfoFactory, PhpDocTypeChanger $phpDocTypeChanger, StaticTypeMapper $staticTypeMapper)
     {
         $this->phpDocInfoFactory = $phpDocInfoFactory;
-        $this->argsAnalyzer = $argsAnalyzer;
         $this->phpDocTypeChanger = $phpDocTypeChanger;
         $this->staticTypeMapper = $staticTypeMapper;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Add param array docblock based on callable native function call', [new CodeSample(<<<'CODE_SAMPLE'
 function process(array $items): void
 {
-	array_walk($items, function (stdClass $item) {
-		echo $item->value;
+    array_walk($items, function (stdClass $item) {
+        echo $item->value;
     });
 }
 CODE_SAMPLE
@@ -74,8 +66,8 @@ CODE_SAMPLE
  */
 function process(array $items): void
 {
-	array_walk($items, function (stdClass $item) {
-		echo $item->value;
+    array_walk($items, function (stdClass $item) {
+        echo $item->value;
     });
 }
 CODE_SAMPLE
@@ -84,7 +76,7 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [ClassMethod::class, Function_::class];
     }
@@ -106,28 +98,29 @@ CODE_SAMPLE
             return null;
         }
         $paramsWithType = [];
-        $this->traverseNodesWithCallable($node->stmts, function (Node $subNode) use($variableNamesWithArrayType, $node, &$paramsWithType) : ?int {
+        $this->traverseNodesWithCallable($node->stmts, function (Node $subNode) use ($variableNamesWithArrayType, $node, &$paramsWithType): ?int {
             if ($subNode instanceof Class_ || $subNode instanceof Function_) {
                 return NodeVisitor::DONT_TRAVERSE_CURRENT_AND_CHILDREN;
             }
             if (!$subNode instanceof FuncCall) {
                 return null;
             }
-            if (!$this->isNames($subNode, \array_keys(self::NATIVE_FUNC_CALLS_WITH_POSITION))) {
+            if (!$this->isNames($subNode, array_keys(NativeFuncCallPositions::ARRAY_AND_CALLBACK_POSITIONS))) {
                 return null;
             }
             if ($subNode->isFirstClassCallable()) {
                 return null;
             }
             $args = $subNode->getArgs();
-            if ($this->argsAnalyzer->hasNamedArg($args)) {
-                return null;
-            }
-            if (\count($args) < 2) {
+            if (count($args) < 2) {
                 return null;
             }
             $funcCallName = (string) $this->getName($subNode);
-            $arrayArgValue = $args[self::NATIVE_FUNC_CALLS_WITH_POSITION[$funcCallName]['array']]->value;
+            $arrayArg = $subNode->getArg('array', NativeFuncCallPositions::ARRAY_AND_CALLBACK_POSITIONS[$funcCallName]['array']);
+            if (!$arrayArg instanceof Arg) {
+                return null;
+            }
+            $arrayArgValue = $arrayArg->value;
             if (!$arrayArgValue instanceof Variable) {
                 return null;
             }
@@ -140,12 +133,16 @@ CODE_SAMPLE
             if (!$arrayArgValueType->isArray()->yes()) {
                 return null;
             }
-            $callbackArgValue = $args[self::NATIVE_FUNC_CALLS_WITH_POSITION[$funcCallName]['callback']]->value;
+            $callbackArg = $subNode->getArg('callback', NativeFuncCallPositions::ARRAY_AND_CALLBACK_POSITIONS[$funcCallName]['callback']);
+            if (!$callbackArg instanceof Arg) {
+                return null;
+            }
+            $callbackArgValue = $callbackArg->value;
             if (!$callbackArgValue instanceof ArrowFunction && !$callbackArgValue instanceof Closure) {
                 return null;
             }
             // no params or more than 2 params
-            if ($callbackArgValue->params === [] || \count($callbackArgValue->params) > 2) {
+            if ($callbackArgValue->params === [] || count($callbackArgValue->params) > 2) {
                 return null;
             }
             foreach ($callbackArgValue->params as $callbackArgValueParam) {
@@ -169,12 +166,12 @@ CODE_SAMPLE
             if ($paramType instanceof MixedType) {
                 return null;
             }
-            $paramsWithType[$this->getName($paramToUpdate)] = \array_unique(\array_merge($paramsWithType[$this->getName($paramToUpdate)] ?? [], [$paramType]), \SORT_REGULAR);
+            $paramsWithType[$this->getName($paramToUpdate)] = array_unique(array_merge($paramsWithType[$this->getName($paramToUpdate)] ?? [], [$paramType]), \SORT_REGULAR);
             return null;
         });
         $hasChanged = \false;
         foreach ($paramsWithType as $paramName => $type) {
-            $type = \count($type) > 1 ? TypeCombinator::union(...$type) : \current($type);
+            $type = count($type) > 1 ? TypeCombinator::union(...$type) : current($type);
             /** @var Param $paramByName */
             $paramByName = $this->getParamByName($node, $paramName);
             $this->phpDocTypeChanger->changeParamType($node, $phpDocInfo, new ArrayType(new MixedType(), $type), $paramByName, $paramName);
@@ -188,7 +185,7 @@ CODE_SAMPLE
     /**
      * @param \PhpParser\Node\Stmt\ClassMethod|\PhpParser\Node\Stmt\Function_ $node
      */
-    private function getParamByName($node, string $paramName) : ?Param
+    private function getParamByName($node, string $paramName): ?Param
     {
         foreach ($node->params as $param) {
             if ($this->isName($param, $paramName)) {
@@ -201,7 +198,7 @@ CODE_SAMPLE
      * @return string[]
      * @param \PhpParser\Node\Stmt\ClassMethod|\PhpParser\Node\Stmt\Function_ $node
      */
-    private function collectVariableNamesWithArrayType($node, PhpDocInfo $phpDocInfo) : array
+    private function collectVariableNamesWithArrayType($node, PhpDocInfo $phpDocInfo): array
     {
         $variableNamesWithArrayType = [];
         foreach ($node->params as $param) {

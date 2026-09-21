@@ -11,11 +11,21 @@ use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\StaticCall;
+use PhpParser\Node\Identifier;
+use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\ClassMethod;
+use PHPStan\Reflection\ClassReflection;
+use PHPStan\Reflection\FunctionReflection;
+use PHPStan\Reflection\MethodReflection;
+use PHPStan\Reflection\ParametersAcceptorSelector;
 use Rector\Arguments\Contract\ReplaceArgumentDefaultValueInterface;
 use Rector\Arguments\ValueObject\ReplaceArgumentDefaultValue;
+use Rector\NodeAnalyzer\ArgsAnalyzer;
+use Rector\NodeTypeResolver\NodeTypeResolver;
 use Rector\PhpParser\Node\NodeFactory;
 use Rector\PhpParser\Node\Value\ValueResolver;
+use Rector\Reflection\ReflectionResolver;
+use Rector\StaticTypeMapper\ValueObject\Type\FullyQualifiedObjectType;
 final class ArgumentDefaultValueReplacer
 {
     /**
@@ -26,10 +36,25 @@ final class ArgumentDefaultValueReplacer
      * @readonly
      */
     private ValueResolver $valueResolver;
-    public function __construct(NodeFactory $nodeFactory, ValueResolver $valueResolver)
+    /**
+     * @readonly
+     */
+    private ArgsAnalyzer $argsAnalyzer;
+    /**
+     * @readonly
+     */
+    private NodeTypeResolver $nodeTypeResolver;
+    /**
+     * @readonly
+     */
+    private ReflectionResolver $reflectionResolver;
+    public function __construct(NodeFactory $nodeFactory, ValueResolver $valueResolver, ArgsAnalyzer $argsAnalyzer, NodeTypeResolver $nodeTypeResolver, ReflectionResolver $reflectionResolver)
     {
         $this->nodeFactory = $nodeFactory;
         $this->valueResolver = $valueResolver;
+        $this->argsAnalyzer = $argsAnalyzer;
+        $this->nodeTypeResolver = $nodeTypeResolver;
+        $this->reflectionResolver = $reflectionResolver;
     }
     /**
      * @template TCall as (MethodCall|StaticCall|ClassMethod|FuncCall|New_)
@@ -45,15 +70,12 @@ final class ArgumentDefaultValueReplacer
             }
             return $this->processParams($node, $replaceArgumentDefaultValue);
         }
-        if (!isset($node->args[$replaceArgumentDefaultValue->getPosition()])) {
-            return null;
-        }
         return $this->processArgs($node, $replaceArgumentDefaultValue);
     }
     /**
      * @param mixed $value
      */
-    private function isDefaultValueMatched(?Expr $expr, $value) : bool
+    private function isDefaultValueMatched(?Expr $expr, $value): bool
     {
         // allow any values before, also allow param without default value
         if ($value === ReplaceArgumentDefaultValue::ANY_VALUE_BEFORE) {
@@ -68,7 +90,7 @@ final class ArgumentDefaultValueReplacer
         // ValueResolver::isValue returns false when default value is `null`
         return $value === null && $this->valueResolver->isNull($expr);
     }
-    private function processParams(ClassMethod $classMethod, ReplaceArgumentDefaultValueInterface $replaceArgumentDefaultValue) : ?ClassMethod
+    private function processParams(ClassMethod $classMethod, ReplaceArgumentDefaultValueInterface $replaceArgumentDefaultValue): ?ClassMethod
     {
         $position = $replaceArgumentDefaultValue->getPosition();
         if (!$this->isDefaultValueMatched($classMethod->params[$position]->default, $replaceArgumentDefaultValue->getValueBefore())) {
@@ -83,31 +105,85 @@ final class ArgumentDefaultValueReplacer
      * @param \PhpParser\Node\Expr\MethodCall|\PhpParser\Node\Expr\StaticCall|\PhpParser\Node\Expr\FuncCall|\PhpParser\Node\Expr\New_ $expr
      * @return TCall|null
      */
-    private function processArgs($expr, ReplaceArgumentDefaultValueInterface $replaceArgumentDefaultValue) : ?Expr
+    private function processArgs($expr, ReplaceArgumentDefaultValueInterface $replaceArgumentDefaultValue): ?Expr
     {
         if ($expr->isFirstClassCallable()) {
             return null;
         }
         $position = $replaceArgumentDefaultValue->getPosition();
-        $particularArg = $expr->getArgs()[$position] ?? null;
+        $arguments = $expr->getArgs();
+        $firstNamedArgPosition = $this->argsAnalyzer->resolveFirstNamedArgPosition($arguments);
+        // if the call has named argyments and we want to replace an array of values
+        // we cannot replace it as we cannot really match this array of values to
+        // the existing arguments, it would be too complex
+        if ($firstNamedArgPosition !== null && is_array($replaceArgumentDefaultValue->getValueBefore())) {
+            return null;
+        }
+        // if the call has named arguments and the argument that we want to replace is not
+        // before any named argument, we need to check if it is in the list of named arguments
+        // if it is, we use the position of the named argyment as the position to replace
+        // if it is not, we cannot replace it
+        if ($firstNamedArgPosition !== null && $position >= $firstNamedArgPosition) {
+            $reflection = $this->reflectionResolver->resolveFunctionLikeReflectionFromCall($expr);
+            if (!$reflection instanceof MethodReflection && !$reflection instanceof FunctionReflection) {
+                return null;
+            }
+            $parametersAcceptor = ParametersAcceptorSelector::combineAcceptors($reflection->getVariants());
+            $parameterReflection = $parametersAcceptor->getParameters()[$position] ?? null;
+            $newPosition = -1;
+            if ($parameterReflection !== null) {
+                $newPosition = $this->argsAnalyzer->resolveArgPosition($arguments, $parameterReflection->getName(), $newPosition);
+            }
+            if ($newPosition === -1) {
+                return null;
+            }
+            $position = $newPosition;
+        }
+        if (!isset($arguments[$position])) {
+            return null;
+        }
+        $particularArg = $arguments[$position] ?? null;
         if (!$particularArg instanceof Arg) {
             return null;
         }
         $argValue = $this->valueResolver->getValue($particularArg->value);
-        if (\is_scalar($replaceArgumentDefaultValue->getValueBefore()) && $argValue === $replaceArgumentDefaultValue->getValueBefore()) {
-            $expr->args[$position] = $this->normalizeValueToArgument($replaceArgumentDefaultValue->getValueAfter());
-        } elseif (\is_array($replaceArgumentDefaultValue->getValueBefore())) {
+        if (is_scalar($replaceArgumentDefaultValue->getValueBefore()) && $argValue === $replaceArgumentDefaultValue->getValueBefore()) {
+            $normalizedValueAfter = $this->normalizeValue($replaceArgumentDefaultValue->getValueAfter());
+            if ($particularArg->value instanceof ClassConstFetch && $particularArg->value->class instanceof Name && $normalizedValueAfter instanceof ClassConstFetch && is_string($replaceArgumentDefaultValue->getValueAfter()) && strpos($replaceArgumentDefaultValue->getValueAfter(), '::') !== \false) {
+                [$targetClass, $targetConstant] = explode('::', $replaceArgumentDefaultValue->getValueAfter());
+                $type = $this->nodeTypeResolver->getType($particularArg->value->class);
+                if ($type instanceof FullyQualifiedObjectType && $type->getClassName() === $targetClass && $particularArg->value->name instanceof Identifier && $particularArg->value->name->toString() === $targetConstant) {
+                    return null;
+                }
+            }
+            // when the replacement value is a self::/static::/parent:: constant, it only
+            // resolves correctly if the class around the call actually has that constant;
+            // otherwise the produced code would reference a non-existing constant
+            if ($normalizedValueAfter instanceof ClassConstFetch && $normalizedValueAfter->class instanceof Name && $normalizedValueAfter->class->isSpecialClassName() && $normalizedValueAfter->name instanceof Identifier) {
+                $classReflection = $this->reflectionResolver->resolveClassReflection($expr);
+                if (!$classReflection instanceof ClassReflection) {
+                    return null;
+                }
+                if (!$classReflection->hasConstant($normalizedValueAfter->name->toString())) {
+                    return null;
+                }
+            }
+            $particularArg->value = $normalizedValueAfter;
+            return $expr;
+        }
+        if (is_array($replaceArgumentDefaultValue->getValueBefore())) {
             $newArgs = $this->processArrayReplacement($expr->getArgs(), $replaceArgumentDefaultValue);
-            if (\is_array($newArgs)) {
+            if (is_array($newArgs)) {
                 $expr->args = $newArgs;
+                return $expr;
             }
         }
-        return $expr;
+        return null;
     }
     /**
      * @param mixed $value
      */
-    private function normalizeValueToArgument($value) : Arg
+    private function normalizeValueToArgument($value): Arg
     {
         return new Arg($this->normalizeValue($value));
     }
@@ -118,8 +194,8 @@ final class ArgumentDefaultValueReplacer
     private function normalizeValue($value)
     {
         // class constants → turn string to composite
-        if (\is_string($value) && \strpos($value, '::') !== \false) {
-            [$class, $constant] = \explode('::', $value);
+        if (is_string($value) && strpos($value, '::') !== \false) {
+            [$class, $constant] = explode('::', $value);
             return $this->nodeFactory->createClassConstFetch($class, $constant);
         }
         return BuilderHelpers::normalizeValue($value);
@@ -128,16 +204,16 @@ final class ArgumentDefaultValueReplacer
      * @param array<int, Arg> $args
      * @return array<int, Arg>|null
      */
-    private function processArrayReplacement(array $args, ReplaceArgumentDefaultValueInterface $replaceArgumentDefaultValue) : ?array
+    private function processArrayReplacement(array $args, ReplaceArgumentDefaultValueInterface $replaceArgumentDefaultValue): ?array
     {
         $argumentValues = $this->resolveArgumentValuesToBeforeRecipe($args, $replaceArgumentDefaultValue);
         if ($argumentValues !== $replaceArgumentDefaultValue->getValueBefore()) {
             return null;
         }
-        if (\is_string($replaceArgumentDefaultValue->getValueAfter())) {
+        if (is_string($replaceArgumentDefaultValue->getValueAfter())) {
             $args[$replaceArgumentDefaultValue->getPosition()] = $this->normalizeValueToArgument($replaceArgumentDefaultValue->getValueAfter());
             // clear following arguments
-            $argumentCountToClear = \count($replaceArgumentDefaultValue->getValueBefore());
+            $argumentCountToClear = count($replaceArgumentDefaultValue->getValueBefore());
             for ($i = $replaceArgumentDefaultValue->getPosition() + 1; $i <= $replaceArgumentDefaultValue->getPosition() + $argumentCountToClear; ++$i) {
                 unset($args[$i]);
             }
@@ -148,14 +224,14 @@ final class ArgumentDefaultValueReplacer
      * @param Arg[] $argumentNodes
      * @return mixed[]
      */
-    private function resolveArgumentValuesToBeforeRecipe(array $argumentNodes, ReplaceArgumentDefaultValueInterface $replaceArgumentDefaultValue) : array
+    private function resolveArgumentValuesToBeforeRecipe(array $argumentNodes, ReplaceArgumentDefaultValueInterface $replaceArgumentDefaultValue): array
     {
         $argumentValues = [];
         $valueBefore = $replaceArgumentDefaultValue->getValueBefore();
-        if (!\is_array($valueBefore)) {
+        if (!is_array($valueBefore)) {
             return [];
         }
-        $beforeArgumentCount = \count($valueBefore);
+        $beforeArgumentCount = count($valueBefore);
         for ($i = 0; $i < $beforeArgumentCount; ++$i) {
             if (!isset($argumentNodes[$replaceArgumentDefaultValue->getPosition() + $i])) {
                 continue;

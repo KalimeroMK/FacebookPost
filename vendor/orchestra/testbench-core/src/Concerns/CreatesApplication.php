@@ -27,7 +27,7 @@ use Orchestra\Testbench\Features\TestingFeature;
 use Orchestra\Testbench\Foundation\PackageManifest;
 use PHPUnit\Framework\TestCase as PHPUnitTestCase;
 
-use function Orchestra\Testbench\after_resolving;
+use function Orchestra\Sidekick\after_resolving;
 use function Orchestra\Testbench\default_skeleton_path;
 use function Orchestra\Testbench\refresh_router_lookups;
 
@@ -124,7 +124,7 @@ trait CreatesApplication
      * @api
      *
      * @param  \Illuminate\Foundation\Application  $app
-     * @return array<string, class-string>
+     * @return array<string, class-string|false>
      */
     protected function overrideApplicationAliases($app)
     {
@@ -141,14 +141,19 @@ trait CreatesApplication
      */
     final protected function resolveApplicationAliases($app): array
     {
-        $aliases = Collection::make(
+        $aliases = (new Collection(
             $this->getApplicationAliases($app)
-        )->merge($this->getPackageAliases($app));
+        ))->merge($this->getPackageAliases($app));
 
         if (! empty($overrides = $this->overrideApplicationAliases($app))) {
-            $aliases->transform(static fn ($alias, $name) => $overrides[$name] ?? $alias);
+            $aliases->transform(static function ($alias, $name) use ($overrides) {
+                return with($overrides[$name] ?? $alias, static function ($alias) {
+                    return $alias !== false ? $alias : null;
+                });
+            });
         }
 
+        /** @var \Illuminate\Support\Collection<string, class-string> $aliases */
         return $aliases->filter()->all();
     }
 
@@ -197,7 +202,7 @@ trait CreatesApplication
      * @api
      *
      * @param  \Illuminate\Foundation\Application  $app
-     * @return array<class-string, class-string>
+     * @return array<class-string, class-string|false>
      */
     protected function overrideApplicationProviders($app)
     {
@@ -214,14 +219,20 @@ trait CreatesApplication
      */
     final protected function resolveApplicationProviders($app): array
     {
-        $providers = Collection::make(
+        /** @var \Illuminate\Support\Collection<int, class-string> $providers */
+        $providers = (new Collection(
             RegisterProviders::mergeAdditionalProvidersForTestbench($this->getApplicationProviders($app))
-        )->merge($this->getPackageProviders($app));
+        ))->merge($this->getPackageProviders($app));
 
         if (! empty($overrides = $this->overrideApplicationProviders($app))) {
-            $providers->transform(static fn ($provider) => $overrides[$provider] ?? $provider);
+            $providers->transform(static function (string $provider) use ($overrides) {
+                return with($overrides[$provider] ?? $provider, static function ($provider) {
+                    return $provider !== false ? $provider : null;
+                });
+            });
         }
 
+        /** @phpstan-ignore return.type */
         return $providers->filter()->values()->all();
     }
 
@@ -532,10 +543,6 @@ trait CreatesApplication
                 $this->defineEnvironment($app);
                 $this->getEnvironmentSetUp($app);
             },
-            annotation: function () use ($app) {
-                $this->parseTestMethodAnnotations($app, 'environment-setup'); /** @phpstan-ignore method.notFound */
-                $this->parseTestMethodAnnotations($app, 'define-env'); /** @phpstan-ignore method.notFound */
-            },
             attribute: function () use ($app) {
                 $this->parseTestMethodAttributes($app, WithImmutableDates::class); /** @phpstan-ignore method.notFound */
                 $this->parseTestMethodAttributes($app, DefineEnvironment::class); /** @phpstan-ignore method.notFound */
@@ -558,7 +565,7 @@ trait CreatesApplication
         $app->make('Illuminate\Foundation\Bootstrap\BootProviders')->bootstrap($app);
 
         foreach ($this->getPackageBootstrappers($app) as $bootstrap) {
-            $app->make($bootstrap)->bootstrap($app);
+            $app->make($bootstrap)->bootstrap($app); /** @phpstan-ignore method.notFound */
         }
 
         $app->make(ConsoleKernelContract::class)->bootstrap();

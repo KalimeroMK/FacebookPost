@@ -14,6 +14,8 @@ use Rector\Rector\AbstractRector;
 use Rector\Symfony\NodeAnalyzer\FormAddMethodCallAnalyzer;
 use Rector\Symfony\NodeAnalyzer\FormCollectionAnalyzer;
 use Rector\Symfony\NodeAnalyzer\FormOptionsArrayMatcher;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -21,7 +23,7 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  *
  * @see \Rector\Symfony\Tests\Symfony27\Rector\MethodCall\ChangeCollectionTypeOptionNameFromTypeToEntryTypeRector\ChangeCollectionTypeOptionNameFromTypeToEntryTypeRectorTest
  */
-final class ChangeCollectionTypeOptionNameFromTypeToEntryTypeRector extends AbstractRector
+final class ChangeCollectionTypeOptionNameFromTypeToEntryTypeRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @readonly
@@ -50,7 +52,11 @@ final class ChangeCollectionTypeOptionNameFromTypeToEntryTypeRector extends Abst
         $this->formCollectionAnalyzer = $formCollectionAnalyzer;
         $this->valueResolver = $valueResolver;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('symfony/form', '>=2.7');
+    }
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Rename `type` option to `entry_type` in CollectionType', [new CodeSample(<<<'CODE_SAMPLE'
 use Symfony\Component\Form\AbstractType;
@@ -91,14 +97,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [MethodCall::class];
     }
     /**
      * @param MethodCall $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$this->formAddMethodCallAnalyzer->isMatching($node)) {
             return null;
@@ -110,11 +116,15 @@ CODE_SAMPLE
         if (!$optionsArray instanceof Array_) {
             return null;
         }
-        $this->refactorOptionsArray($optionsArray);
+        $hasChanged = $this->refactorOptionsArray($optionsArray);
+        if (!$hasChanged) {
+            return null;
+        }
         return $node;
     }
-    private function refactorOptionsArray(Array_ $optionsArray) : void
+    private function refactorOptionsArray(Array_ $optionsArray): bool
     {
+        $hasChanged = \false;
         foreach ($optionsArray->items as $arrayItem) {
             if (!$arrayItem instanceof ArrayItem) {
                 continue;
@@ -127,7 +137,9 @@ CODE_SAMPLE
                     continue;
                 }
                 $arrayItem->key = new String_($newName);
+                $hasChanged = \true;
             }
         }
+        return $hasChanged;
     }
 }

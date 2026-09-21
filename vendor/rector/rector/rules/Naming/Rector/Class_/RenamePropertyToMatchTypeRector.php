@@ -4,10 +4,11 @@ declare (strict_types=1);
 namespace Rector\Naming\Rector\Class_;
 
 use PhpParser\Node;
+use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\Class_;
-use PhpParser\Node\Stmt\ClassLike;
-use PhpParser\Node\Stmt\Interface_;
 use PhpParser\Node\Stmt\Property;
+use PHPStan\Type\ObjectType;
+use Rector\Enum\ClassName;
 use Rector\Naming\ExpectedNameResolver\MatchPropertyTypeExpectedNameResolver;
 use Rector\Naming\PropertyRenamer\MatchTypePropertyRenamer;
 use Rector\Naming\PropertyRenamer\PropertyPromotionRenamer;
@@ -45,7 +46,7 @@ final class RenamePropertyToMatchTypeRector extends AbstractRector
         $this->matchPropertyTypeExpectedNameResolver = $matchPropertyTypeExpectedNameResolver;
         $this->propertyPromotionRenamer = $propertyPromotionRenamer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Rename property and method param to match its type', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
@@ -80,14 +81,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
-        return [Class_::class, Interface_::class];
+        return [Class_::class];
     }
     /**
-     * @param Class_|Interface_ $node
+     * @param Class_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         $this->hasChanged = \false;
         $this->refactorClassProperties($node);
@@ -100,15 +101,25 @@ CODE_SAMPLE
         }
         return null;
     }
-    private function refactorClassProperties(ClassLike $classLike) : void
+    private function refactorClassProperties(Class_ $class): void
     {
-        foreach ($classLike->getProperties() as $property) {
-            $expectedPropertyName = $this->matchPropertyTypeExpectedNameResolver->resolve($property, $classLike);
+        foreach ($class->getProperties() as $property) {
+            // skip public properties, as they can be used in external code
+            if ($property->isPublic()) {
+                continue;
+            }
+            if (!$class->isFinal() && $property->isProtected()) {
+                continue;
+            }
+            $expectedPropertyName = $this->matchPropertyTypeExpectedNameResolver->resolve($property, $class);
             if ($expectedPropertyName === null) {
                 continue;
             }
-            $propertyRename = $this->propertyRenameFactory->createFromExpectedName($classLike, $property, $expectedPropertyName);
+            $propertyRename = $this->propertyRenameFactory->createFromExpectedName($class, $property, $expectedPropertyName);
             if (!$propertyRename instanceof PropertyRename) {
+                continue;
+            }
+            if ($this->skipExactTypes($property)) {
                 continue;
             }
             $renameProperty = $this->matchTypePropertyRenamer->rename($propertyRename);
@@ -117,5 +128,19 @@ CODE_SAMPLE
             }
             $this->hasChanged = \true;
         }
+    }
+    /**
+     * Such properties can have "xMock" names that are not compatible with "MockObject" suffix
+     * They should be kept and handled by another naming rule that deals with mocks
+     */
+    private function skipExactTypes(Property $property): bool
+    {
+        if (!$property->type instanceof Name) {
+            return \false;
+        }
+        if ($this->isObjectType($property->type, new ObjectType(ClassName::MOCK_OBJECT))) {
+            return \true;
+        }
+        return $this->isObjectType($property->type, new ObjectType(ClassName::DATE_TIME_INTERFACE));
     }
 }

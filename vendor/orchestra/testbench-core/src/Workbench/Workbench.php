@@ -12,14 +12,14 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Str;
+use Orchestra\Sidekick\Env;
 use Orchestra\Testbench\Contracts\Config as ConfigContract;
 use Orchestra\Testbench\Foundation\Config;
-use Orchestra\Testbench\Foundation\Env;
 use ReflectionClass;
 use Symfony\Component\Finder\Finder;
 use Throwable;
 
-use function Orchestra\Sidekick\join_paths;
+use function Orchestra\Sidekick\Filesystem\join_paths;
 use function Orchestra\Testbench\after_resolving;
 use function Orchestra\Testbench\package_path;
 use function Orchestra\Testbench\workbench_path;
@@ -78,7 +78,7 @@ class Workbench
     {
         $app->singleton(ConfigContract::class, static fn () => $config);
 
-        Collection::make($providers)
+        (new Collection($providers))
             ->filter(static fn ($provider) => ! empty($provider) && class_exists($provider))
             ->each(static function ($provider) use ($app) {
                 $app->register($provider);
@@ -101,7 +101,7 @@ class Workbench
         $hasAuthentication = $config->getWorkbenchAttributes()['auth'] ?? false;
 
         static::start($app, $config, array_filter([
-            $hasAuthentication === true && class_exists('Orchestra\Workbench\AuthServiceProvider') ? 'Orchestra\Workbench\AuthServiceProvider' : null,
+            $hasAuthentication === true ? 'Orchestra\Workbench\AuthServiceProvider' : null,
             'Orchestra\Workbench\WorkbenchServiceProvider',
         ]));
     }
@@ -168,10 +168,10 @@ class Workbench
 
         after_resolving($app, 'translator', static function ($translator) {
             /** @var \Illuminate\Contracts\Translation\Loader $translator */
-            $path = Collection::make([
+            $path = (new Collection([
                 workbench_path('lang'),
                 workbench_path('resources', 'lang'),
-            ])->filter(static fn ($path) => is_dir($path))
+            ]))->filter(static fn ($path) => is_dir($path))
                 ->first();
 
             if (\is_null($path)) {
@@ -293,11 +293,7 @@ class Workbench
      */
     public static function configuration(): ConfigContract
     {
-        if (\is_null(static::$cachedConfiguration)) {
-            static::$cachedConfiguration = Config::cacheFromYaml(package_path());
-        }
-
-        return static::$cachedConfiguration;
+        return static::$cachedConfiguration ??= Config::cacheFromYaml(package_path());
     }
 
     /**
@@ -355,13 +351,16 @@ class Workbench
      */
     public static function applicationUserModel(): ?string
     {
-        if (! isset(static::$cachedUserModel)) {
-            static::$cachedUserModel = match (true) {
+        if (\is_null(static::$cachedUserModel)) {
+            /** @var class-string<\Illuminate\Foundation\Auth\User>|false $userModel */
+            $userModel = match (true) {
                 Env::has('AUTH_MODEL') => Env::get('AUTH_MODEL'),
                 is_file(workbench_path('app', 'Models', 'User.php')) => \sprintf('%sModels\User', static::detectNamespace('app')),
                 is_file(base_path(join_paths('Models', 'User.php'))) => 'App\Models\User',
                 default => false,
             };
+
+            static::$cachedUserModel = $userModel;
         }
 
         return static::$cachedUserModel != false ? static::$cachedUserModel : null;

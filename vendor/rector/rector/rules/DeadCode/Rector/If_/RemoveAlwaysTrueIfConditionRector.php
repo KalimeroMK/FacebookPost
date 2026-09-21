@@ -8,6 +8,7 @@ use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\ArrayDimFetch;
 use PhpParser\Node\Expr\Assign;
 use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
+use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\PropertyFetch;
 use PhpParser\Node\Expr\StaticCall;
@@ -17,10 +18,13 @@ use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\Else_;
 use PhpParser\Node\Stmt\If_;
 use PhpParser\NodeVisitor;
+use PHPStan\Reflection\ClassReflection;
 use PHPStan\Type\IntersectionType;
 use Rector\DeadCode\NodeAnalyzer\SafeLeftTypeBooleanAndOrAnalyzer;
 use Rector\NodeAnalyzer\ExprAnalyzer;
+use Rector\NodeTypeResolver\Node\AttributeKey;
 use Rector\PhpParser\Node\BetterNodeFinder;
+use Rector\PHPStan\ScopeFetcher;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
@@ -41,13 +45,21 @@ final class RemoveAlwaysTrueIfConditionRector extends AbstractRector
      * @readonly
      */
     private SafeLeftTypeBooleanAndOrAnalyzer $safeLeftTypeBooleanAndOrAnalyzer;
+    /**
+     * Functions that depend on runtime state (autoloading, eval(), loaded extensions).
+     * PHPStan may narrow their result to a constant true, but it can change at runtime,
+     * so the condition must not be treated as always true.
+     *
+     * @var string[]
+     */
+    private const RUNTIME_STATE_FUNCTIONS = ['class_exists', 'interface_exists', 'trait_exists', 'enum_exists', 'function_exists', 'method_exists', 'property_exists', 'defined', 'extension_loaded'];
     public function __construct(ExprAnalyzer $exprAnalyzer, BetterNodeFinder $betterNodeFinder, SafeLeftTypeBooleanAndOrAnalyzer $safeLeftTypeBooleanAndOrAnalyzer)
     {
         $this->exprAnalyzer = $exprAnalyzer;
         $this->betterNodeFinder = $betterNodeFinder;
         $this->safeLeftTypeBooleanAndOrAnalyzer = $safeLeftTypeBooleanAndOrAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Remove if condition that is always true', [new CodeSample(<<<'CODE_SAMPLE'
 final class SomeClass
@@ -78,7 +90,7 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [If_::class];
     }
@@ -112,12 +124,25 @@ CODE_SAMPLE
         if ($hasAssign) {
             return null;
         }
+        $scope = ScopeFetcher::fetch($node);
+        $type = $scope->getNativeType($node->cond);
+        if (!$type->isTrue()->yes()) {
+            return null;
+        }
+        $classReflection = $scope->getClassReflection();
+        if ($classReflection instanceof ClassReflection && $classReflection->isTrait()) {
+            return null;
+        }
         if ($node->stmts === []) {
             return NodeVisitor::REMOVE_NODE;
         }
+        // keep original comments
+        if ($node->getComments() !== []) {
+            $node->stmts[0]->setAttribute(AttributeKey::COMMENTS, array_merge($node->getComments(), $node->stmts[0]->getComments()));
+        }
         return $node->stmts;
     }
-    private function shouldSkipFromVariable(Expr $expr) : bool
+    private function shouldSkipFromVariable(Expr $expr): bool
     {
         /** @var Variable[] $variables */
         $variables = $this->betterNodeFinder->findInstancesOf($expr, [Variable::class]);
@@ -136,11 +161,22 @@ CODE_SAMPLE
         }
         return \false;
     }
-    private function shouldSkipExpr(Expr $expr) : bool
+    private function shouldSkipExpr(Expr $expr): bool
     {
-        return (bool) $this->betterNodeFinder->findInstancesOf($expr, [PropertyFetch::class, StaticPropertyFetch::class, ArrayDimFetch::class, MethodCall::class, StaticCall::class]);
+        $hasNonStaticNode = (bool) $this->betterNodeFinder->findInstancesOf($expr, [PropertyFetch::class, StaticPropertyFetch::class, ArrayDimFetch::class, MethodCall::class, StaticCall::class]);
+        if ($hasNonStaticNode) {
+            return \true;
+        }
+        /** @var FuncCall[] $funcCalls */
+        $funcCalls = $this->betterNodeFinder->findInstancesOf($expr, [FuncCall::class]);
+        foreach ($funcCalls as $funcCall) {
+            if ($this->isNames($funcCall, self::RUNTIME_STATE_FUNCTIONS)) {
+                return \true;
+            }
+        }
+        return \false;
     }
-    private function refactorIfWithBooleanAnd(If_ $if) : ?If_
+    private function refactorIfWithBooleanAnd(If_ $if): ?If_
     {
         if (!$if->cond instanceof BooleanAnd) {
             return null;

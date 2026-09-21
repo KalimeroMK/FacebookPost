@@ -6,9 +6,8 @@ use Illuminate\Contracts\Console\Kernel as ConsoleKernel;
 use Illuminate\Contracts\Events\Dispatcher as EventDispatcher;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Events\DatabaseRefreshed;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
-use Orchestra\Testbench\Foundation\Env;
+use Orchestra\Sidekick\Env;
 
 use function Orchestra\Sidekick\transform_relative_path;
 use function Orchestra\Testbench\default_migration_path;
@@ -60,11 +59,15 @@ final class LoadMigrationsFromArray
     {
         $app->make(EventDispatcher::class)
             ->listen(DatabaseRefreshed::class, function (DatabaseRefreshed $event) use ($app) {
-                if (\is_bool($this->seeders) && $this->seeders === false) {
+                if (\is_bool($this->seeders)) {
+                    if ($this->seeders === true) {
+                        $app->make(ConsoleKernel::class)->call('db:seed');
+                    }
+
                     return;
                 }
 
-                Collection::make(Arr::wrap($this->seeders))
+                Collection::wrap($this->seeders)
                     ->flatten()
                     ->filter(static fn ($seederClass) => ! \is_null($seederClass) && class_exists($seederClass))
                     ->each(static function ($seederClass) use ($app) {
@@ -83,8 +86,8 @@ final class LoadMigrationsFromArray
      */
     protected function bootstrapMigrations(Application $app): void
     {
-        $paths = Collection::make(
-            ! \is_bool($this->migrations) ? Arr::wrap($this->migrations) : []
+        $paths = Collection::wrap(
+            ! \is_bool($this->migrations) ? $this->migrations : []
         )->when(
             $this->includesDefaultMigrations($app),
             static fn ($migrations) => $migrations->push(default_migration_path()),

@@ -22,13 +22,13 @@ final class StringifyStrNeedlesRector extends AbstractRector implements MinPhpVe
      * @var string[]
      */
     private const NEEDLE_STRING_SENSITIVE_FUNCTIONS = ['strpos', 'strrpos', 'stripos', 'strstr', 'stripos', 'strripos', 'strstr', 'strchr', 'strrchr', 'stristr'];
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::DEPRECATE_INT_IN_STR_NEEDLES;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
-        return new RuleDefinition('Makes needles explicit strings', [new CodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Make needles explicit strings', [new CodeSample(<<<'CODE_SAMPLE'
 $needle = 5;
 $fivePosition = strpos('725', $needle);
 CODE_SAMPLE
@@ -41,14 +41,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [FuncCall::class];
     }
     /**
      * @param FuncCall $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$this->isNames($node, self::NEEDLE_STRING_SENSITIVE_FUNCTIONS)) {
             return null;
@@ -61,11 +61,11 @@ CODE_SAMPLE
         }
         // is argument string?
         $needleArgValue = $node->args[1]->value;
-        $needleType = $this->getType($needleArgValue);
-        if ($needleType->isString()->yes()) {
+        if ($needleArgValue instanceof InterpolatedString) {
             return null;
         }
-        if ($needleArgValue instanceof InterpolatedString) {
+        $needleType = $this->getType($needleArgValue);
+        if ($needleType->isString()->yes()) {
             return null;
         }
         $node->args[1]->value = new String_($node->args[1]->value);

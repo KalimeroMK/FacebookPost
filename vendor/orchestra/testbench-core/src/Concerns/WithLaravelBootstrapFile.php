@@ -4,7 +4,8 @@ namespace Orchestra\Testbench\Concerns;
 
 use Orchestra\Testbench\Foundation\Application as Testbench;
 
-use function Illuminate\Filesystem\join_paths;
+use function Orchestra\Sidekick\Filesystem\join_paths;
+use function Orchestra\Testbench\uses_default_skeleton;
 use function Orchestra\Testbench\workbench_path;
 
 trait WithLaravelBootstrapFile
@@ -25,7 +26,7 @@ trait WithLaravelBootstrapFile
 
         if ($this->usesTestbenchDefaultSkeleton()) {
             if (static::usesTestingConcern(WithWorkbench::class) || $this instanceof Testbench) {
-                return is_file($workbenchFile = workbench_path(join_paths('bootstrap', $filename))) ? (string) realpath($workbenchFile) : false;
+                return is_file($workbenchFile = workbench_path('bootstrap', $filename)) ? (string) realpath($workbenchFile) : false;
             }
 
             return false;
@@ -54,7 +55,7 @@ trait WithLaravelBootstrapFile
      */
     protected function usesTestbenchDefaultSkeleton(): bool
     {
-        return realpath(join_paths($this->getApplicationBasePath(), 'bootstrap', '.testbench-default-skeleton')) !== false;
+        return uses_default_skeleton($this->getApplicationBasePath());
     }
 
     /**

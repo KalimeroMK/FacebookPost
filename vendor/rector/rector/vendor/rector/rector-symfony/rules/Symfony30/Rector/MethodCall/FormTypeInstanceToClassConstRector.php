@@ -17,6 +17,8 @@ use Rector\Symfony\NodeAnalyzer\FormCollectionAnalyzer;
 use Rector\Symfony\NodeAnalyzer\FormInstanceToFormClassConstFetchConverter;
 use Rector\Symfony\NodeAnalyzer\FormOptionsArrayMatcher;
 use Rector\Symfony\TypeAnalyzer\ControllerAnalyzer;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -30,7 +32,7 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  *
  * @see \Rector\Symfony\Tests\Symfony30\Rector\MethodCall\FormTypeInstanceToClassConstRector\FormTypeInstanceToClassConstRectorTest
  */
-final class FormTypeInstanceToClassConstRector extends AbstractRector
+final class FormTypeInstanceToClassConstRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @readonly
@@ -65,7 +67,11 @@ final class FormTypeInstanceToClassConstRector extends AbstractRector
         $this->controllerAnalyzer = $controllerAnalyzer;
         $this->valueResolver = $valueResolver;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('symfony/framework-bundle', '>=3.0');
+    }
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Changes createForm(new FormType), add(new FormType) to ones with "FormType::class"', [new CodeSample(<<<'CODE_SAMPLE'
 use Symfony\Bundle\FrameworkBundle\Controller\Controller;
@@ -94,14 +100,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [MethodCall::class];
     }
     /**
      * @param MethodCall $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($this->controllerAnalyzer->isController($node->var) && $this->isName($node->name, 'createForm')) {
             return $this->formInstanceToFormClassConstFetchConverter->processNewInstance($node, 0, 2);
@@ -115,7 +121,7 @@ CODE_SAMPLE
         }
         return $this->formInstanceToFormClassConstFetchConverter->processNewInstance($node, 1, 2);
     }
-    private function refactorCollectionOptions(MethodCall $methodCall) : void
+    private function refactorCollectionOptions(MethodCall $methodCall): void
     {
         $optionsArray = $this->formOptionsArrayMatcher->match($methodCall);
         if (!$optionsArray instanceof Array_) {

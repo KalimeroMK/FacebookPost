@@ -17,6 +17,8 @@ use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException;
 /**
  * InputBag is a container for user input values such as $_GET, $_POST, $_REQUEST, and $_COOKIE.
  *
+ * @template TInput of string|int|float|bool|null
+ *
  * @author Saif Eddin Gmati <azjezz@protonmail.com>
  */
 final class InputBag extends ParameterBag
@@ -24,7 +26,13 @@ final class InputBag extends ParameterBag
     /**
      * Returns a scalar input value by name.
      *
-     * @param string|int|float|bool|null $default The default value if the input key does not exist
+     * @template TDefault of string|int|float|bool|null
+     *
+     * @param TDefault $default The default value if the input key does not exist
+     *
+     * @return TDefault|TInput
+     *
+     * @throws BadRequestException if the input contains a non-scalar value
      */
     public function get(string $key, mixed $default = null): string|int|float|bool|null
     {
@@ -75,7 +83,27 @@ final class InputBag extends ParameterBag
     }
 
     /**
-     * Returns the parameter value converted to an enum.
+     * Returns the input value converted to integer.
+     *
+     * @throws BadRequestException if the value cannot be converted to integer
+     */
+    public function getInt(string $key, int $default = 0): int
+    {
+        return $this->filter($key, $default, \FILTER_VALIDATE_INT, ['flags' => \FILTER_REQUIRE_SCALAR | \FILTER_NULL_ON_FAILURE]) ?? throw new BadRequestException(\sprintf('Input value "%s" cannot be converted to "int".', $key));
+    }
+
+    /**
+     * Returns the input value converted to boolean.
+     *
+     * @throws BadRequestException if the value cannot be converted to a boolean
+     */
+    public function getBoolean(string $key, bool $default = false): bool
+    {
+        return $this->filter($key, $default, \FILTER_VALIDATE_BOOL, ['flags' => \FILTER_REQUIRE_SCALAR | \FILTER_NULL_ON_FAILURE]) ?? throw new BadRequestException(\sprintf('Input value "%s" cannot be converted to "bool".', $key));
+    }
+
+    /**
+     * Returns the input value converted to an enum.
      *
      * @template T of \BackedEnum
      *
@@ -85,6 +113,8 @@ final class InputBag extends ParameterBag
      * @return ?T
      *
      * @psalm-return ($default is null ? T|null : T)
+     *
+     * @throws BadRequestException if the input cannot be converted to an enum
      */
     public function getEnum(string $key, string $class, ?\BackedEnum $default = null): ?\BackedEnum
     {
@@ -96,7 +126,9 @@ final class InputBag extends ParameterBag
     }
 
     /**
-     * Returns the parameter value converted to string.
+     * Returns the input value converted to string.
+     *
+     * @throws BadRequestException if the input contains a non-scalar value
      */
     public function getString(string $key, string $default = ''): string
     {
@@ -104,6 +136,10 @@ final class InputBag extends ParameterBag
         return (string) $this->get($key, $default);
     }
 
+    /**
+     * @throws BadRequestException if the input value is an array and \FILTER_REQUIRE_ARRAY or \FILTER_FORCE_ARRAY is not set
+     * @throws BadRequestException if the input value is invalid and \FILTER_NULL_ON_FAILURE is not set
+     */
     public function filter(string $key, mixed $default = null, int $filter = \FILTER_DEFAULT, mixed $options = []): mixed
     {
         $value = $this->has($key) ? $this->all()[$key] : $default;

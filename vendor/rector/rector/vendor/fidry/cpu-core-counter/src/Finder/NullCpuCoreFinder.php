@@ -9,22 +9,22 @@
  * file that was distributed with this source code.
  */
 declare (strict_types=1);
-namespace RectorPrefix202502\Fidry\CpuCoreCounter\Finder;
+namespace RectorPrefix202609\Fidry\CpuCoreCounter\Finder;
 
 /**
  * This finder returns whatever value you gave to it. This is useful for testing.
  */
 final class NullCpuCoreFinder implements CpuCoreFinder
 {
-    public function diagnose() : string
+    public function diagnose(): string
     {
         return 'Will return "null".';
     }
-    public function find() : ?int
+    public function find(): ?int
     {
         return null;
     }
-    public function toString() : string
+    public function toString(): string
     {
         return 'NullCpuCoreFinder';
     }

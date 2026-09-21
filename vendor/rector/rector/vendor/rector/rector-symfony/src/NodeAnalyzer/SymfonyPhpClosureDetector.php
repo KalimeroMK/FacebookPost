@@ -11,6 +11,7 @@ use PhpParser\NodeVisitor;
 use Rector\NodeNameResolver\NodeNameResolver;
 use Rector\PhpDocParser\NodeTraverser\SimpleCallableNodeTraverser;
 use Rector\PhpParser\Node\BetterNodeFinder;
+use Rector\Symfony\Enum\SymfonyClass;
 final class SymfonyPhpClosureDetector
 {
     /**
@@ -31,26 +32,26 @@ final class SymfonyPhpClosureDetector
         $this->betterNodeFinder = $betterNodeFinder;
         $this->simpleCallableNodeTraverser = $simpleCallableNodeTraverser;
     }
-    public function detect(Closure $closure) : bool
+    public function detect(Closure $closure): bool
     {
-        if (\count($closure->params) !== 1) {
+        if (count($closure->params) !== 1) {
             return \false;
         }
         $firstParam = $closure->params[0];
         if (!$firstParam->type instanceof FullyQualified) {
             return \false;
         }
-        return $this->nodeNameResolver->isName($firstParam->type, 'Symfony\\Component\\DependencyInjection\\Loader\\Configurator\\ContainerConfigurator');
+        return $this->nodeNameResolver->isName($firstParam->type, SymfonyClass::CONTAINER_CONFIGURATOR);
     }
-    public function hasDefaultsAutoconfigure(Closure $closure) : bool
+    public function hasDefaultsConfigured(Closure $closure, string $desiredMethodName): bool
     {
         $hasDefaultsAutoconfigure = \false;
         // has defaults autoconfigure?
-        $this->simpleCallableNodeTraverser->traverseNodesWithCallable($closure, function (Node $node) use(&$hasDefaultsAutoconfigure) : ?int {
+        $this->simpleCallableNodeTraverser->traverseNodesWithCallable($closure, function (Node $node) use (&$hasDefaultsAutoconfigure, $desiredMethodName): ?int {
             if (!$node instanceof MethodCall) {
                 return null;
             }
-            if (!$this->nodeNameResolver->isName($node->name, 'autoconfigure')) {
+            if (!$this->nodeNameResolver->isName($node->name, $desiredMethodName)) {
                 return null;
             }
             /** @var MethodCall[] $methodCalls */

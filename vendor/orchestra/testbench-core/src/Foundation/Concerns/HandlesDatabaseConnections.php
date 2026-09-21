@@ -6,7 +6,7 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
-use Orchestra\Testbench\Foundation\Env;
+use Orchestra\Sidekick\Env;
 
 trait HandlesDatabaseConnections
 {
@@ -29,16 +29,16 @@ trait HandlesDatabaseConnections
         ];
 
         $config->set(
-            Collection::make($options)
+            (new Collection($options))
                 ->when($driver === 'pgsql', static fn ($options) => $options->put('schema', ['env' => 'SCHEMA']))
                 ->mapWithKeys(static function ($options, $key) use ($driver, $keyword, $config) {
                     $name = "database.connections.{$driver}.{$key}";
 
                     /** @var mixed $configuration */
-                    $configuration = Collection::make(Arr::wrap($options['env']))
+                    $configuration = (new Collection(Arr::wrap($options['env'])))
                         ->transform(static fn ($value) => Env::get("{$keyword}_{$value}"))
                         ->first(
-                            $options['rules'] ?? static fn ($value) => ! empty($value) && $value !== false && \is_string($value) // @phpstan-ignore notIdentical.alwaysTrue
+                            $options['rules'] ?? static fn ($value) => ! empty($value) && $value !== false && \is_string($value)
                         ) ?? $config->get($name);
 
                     return [

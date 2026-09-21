@@ -6,8 +6,10 @@ namespace Rector\PHPUnit\CodeQuality\Rector\MethodCall;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr\MethodCall;
+use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Identifier;
 use PhpParser\PrettyPrinter\Standard;
+use Rector\PhpParser\Node\BetterNodeFinder;
 use Rector\PHPUnit\NodeAnalyzer\TestsNodeAnalyzer;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
@@ -21,11 +23,16 @@ final class NarrowIdenticalWithConsecutiveRector extends AbstractRector
      * @readonly
      */
     private TestsNodeAnalyzer $testsNodeAnalyzer;
-    public function __construct(TestsNodeAnalyzer $testsNodeAnalyzer)
+    /**
+     * @readonly
+     */
+    private BetterNodeFinder $betterNodeFinder;
+    public function __construct(TestsNodeAnalyzer $testsNodeAnalyzer, BetterNodeFinder $betterNodeFinder)
     {
         $this->testsNodeAnalyzer = $testsNodeAnalyzer;
+        $this->betterNodeFinder = $betterNodeFinder;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Narrow identical withConsecutive() and willReturnOnConsecutiveCalls() to single call', [new CodeSample(<<<'CODE_SAMPLE'
 use PHPUnit\Framework\TestCase;
@@ -68,14 +75,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<MethodCall>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [MethodCall::class];
     }
     /**
      * @param MethodCall $node
      */
-    public function refactor(Node $node) : ?\PhpParser\Node\Expr\MethodCall
+    public function refactor(Node $node): ?\PhpParser\Node\Expr\MethodCall
     {
         if (!$this->testsNodeAnalyzer->isInTestClass($node)) {
             return null;
@@ -91,9 +98,13 @@ CODE_SAMPLE
         if ($firstArg->unpack) {
             return null;
         }
+        // skip new object instances, as each creates a fresh instance with possible property dependency
+        if ($this->betterNodeFinder->hasInstancesOf($node->getArgs(), [New_::class])) {
+            return null;
+        }
         $uniqueArgValues = $this->resolveUniqueArgValues($node);
         // multiple unique values
-        if (\count($uniqueArgValues) !== 1) {
+        if (count($uniqueArgValues) !== 1) {
             return null;
         }
         $firstArg = $node->getArgs()[0];
@@ -109,13 +120,13 @@ CODE_SAMPLE
     /**
      * @return string[]
      */
-    private function resolveUniqueArgValues(MethodCall $methodCall) : array
+    private function resolveUniqueArgValues(MethodCall $methodCall): array
     {
         $printerStandard = new Standard();
         $printedValues = [];
         foreach ($methodCall->getArgs() as $arg) {
             $printedValues[] = $printerStandard->prettyPrintExpr($arg->value);
         }
-        return \array_unique($printedValues);
+        return array_unique($printedValues);
     }
 }

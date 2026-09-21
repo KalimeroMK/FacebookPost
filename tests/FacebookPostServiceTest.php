@@ -4,13 +4,25 @@ namespace Kalimeromk\FacebookPost\Tests;
 
 use Illuminate\Support\Facades\Http;
 use Kalimeromk\FacebookPost\Facades\FacebookPost;
+use Kalimeromk\FacebookPost\FacebookPostServiceProvider;
 use Orchestra\Testbench\TestCase;
 
 class FacebookPostServiceTest extends TestCase
 {
-    protected function setUp(): void
+    protected function getPackageProviders($app): array
     {
-        parent::setUp();
+        return [FacebookPostServiceProvider::class];
+    }
+
+    protected function getPackageAliases($app): array
+    {
+        return ['FacebookPost' => FacebookPost::class];
+    }
+
+    protected function getEnvironmentSetUp($app): void
+    {
+        $app['config']->set('facebook.default_page_id', '111222333');
+        $app['config']->set('facebook.access_token', 'test-token');
     }
 
     public function test_it_can_create_a_text_post()

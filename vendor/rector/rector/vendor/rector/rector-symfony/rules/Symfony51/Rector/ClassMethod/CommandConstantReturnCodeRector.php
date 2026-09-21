@@ -12,7 +12,10 @@ use PHPStan\Reflection\ClassReflection;
 use Rector\PhpParser\Node\BetterNodeFinder;
 use Rector\Rector\AbstractRector;
 use Rector\Reflection\ReflectionResolver;
+use Rector\Symfony\Enum\SymfonyClass;
 use Rector\Symfony\ValueObject\ConstantMap\SymfonyCommandConstantMap;
+use Rector\VersionBonding\Contract\ComposerPackageConstraintInterface;
+use Rector\VersionBonding\ValueObject\ComposerPackageConstraint;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -20,7 +23,7 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  *
  * @see \Rector\Symfony\Tests\Symfony51\Rector\ClassMethod\CommandConstantReturnCodeRector\CommandConstantReturnCodeRectorTest
  */
-final class CommandConstantReturnCodeRector extends AbstractRector
+final class CommandConstantReturnCodeRector extends AbstractRector implements ComposerPackageConstraintInterface
 {
     /**
      * @readonly
@@ -35,7 +38,11 @@ final class CommandConstantReturnCodeRector extends AbstractRector
         $this->reflectionResolver = $reflectionResolver;
         $this->betterNodeFinder = $betterNodeFinder;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function provideComposerPackageConstraint(): ComposerPackageConstraint
+    {
+        return new ComposerPackageConstraint('symfony/console', '>=5.1');
+    }
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Changes int return from execute to use Symfony Command constants.', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeCommand extends Command
@@ -62,23 +69,23 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [ClassMethod::class];
     }
     /**
      * @param ClassMethod $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         $classReflection = $this->reflectionResolver->resolveClassReflection($node);
         if (!$classReflection instanceof ClassReflection) {
             return null;
         }
-        if (!$classReflection->isSubclassOf('Symfony\\Component\\Console\\Command\\Command')) {
+        if (!$classReflection->is(SymfonyClass::COMMAND)) {
             return null;
         }
-        if (!$this->nodeNameResolver->isName($node, 'execute')) {
+        if (!$this->isName($node, 'execute')) {
             return null;
         }
         $hasChanged = \false;
@@ -100,11 +107,11 @@ CODE_SAMPLE
         }
         return null;
     }
-    private function convertNumberToConstant(Int_ $int) : ?ClassConstFetch
+    private function convertNumberToConstant(Int_ $int): ?ClassConstFetch
     {
         if (!isset(SymfonyCommandConstantMap::RETURN_TO_CONST[$int->value])) {
             return null;
         }
-        return $this->nodeFactory->createClassConstFetch('Symfony\\Component\\Console\\Command\\Command', SymfonyCommandConstantMap::RETURN_TO_CONST[$int->value]);
+        return $this->nodeFactory->createClassConstFetch(SymfonyClass::COMMAND, SymfonyCommandConstantMap::RETURN_TO_CONST[$int->value]);
     }
 }

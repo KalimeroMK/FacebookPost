@@ -53,7 +53,6 @@ class AboutCommand extends Command
      * Create a new command instance.
      *
      * @param  \Illuminate\Support\Composer  $composer
-     * @return void
      */
     public function __construct(Composer $composer)
     {
@@ -100,7 +99,7 @@ class AboutCommand extends Command
 
         $this->newLine();
 
-        return 0;
+        return self::SUCCESS;
     }
 
     /**
@@ -165,6 +164,7 @@ class AboutCommand extends Command
 
         $formatEnabledStatus = fn ($value) => $value ? '<fg=yellow;options=bold>ENABLED</>' : 'OFF';
         $formatCachedStatus = fn ($value) => $value ? '<fg=green;options=bold>CACHED</>' : '<fg=yellow;options=bold>NOT CACHED</>';
+        $formatStorageLinkedStatus = fn ($value) => $value ? '<fg=green;options=bold>LINKED</>' : '<fg=yellow;options=bold>NOT LINKED</>';
 
         static::addToSection('Environment', fn () => [
             'Application Name' => config('app.name'),
@@ -173,7 +173,7 @@ class AboutCommand extends Command
             'Composer Version' => $this->composer->getVersion() ?? '<fg=yellow;options=bold>-</>',
             'Environment' => $this->laravel->environment(),
             'Debug Mode' => static::format(config('app.debug'), console: $formatEnabledStatus),
-            'URL' => Str::of(config('app.url'))->replace(['http://', 'https://'], ''),
+            'URL' => (new Stringable(config('app.url')))->replace(['http://', 'https://'], ''),
             'Maintenance Mode' => static::format($this->laravel->isDownForMaintenance(), console: $formatEnabledStatus),
             'Timezone' => config('app.timezone'),
             'Locale' => config('app.locale'),
@@ -183,12 +183,26 @@ class AboutCommand extends Command
             'Config' => static::format($this->laravel->configurationIsCached(), console: $formatCachedStatus),
             'Events' => static::format($this->laravel->eventsAreCached(), console: $formatCachedStatus),
             'Routes' => static::format($this->laravel->routesAreCached(), console: $formatCachedStatus),
-            'Views' => static::format($this->hasPhpFiles($this->laravel->storagePath('framework/views')), console: $formatCachedStatus),
+            'Views' => static::format($this->hasPhpFiles(config('view.compiled')), console: $formatCachedStatus),
         ]);
 
         static::addToSection('Drivers', fn () => array_filter([
             'Broadcasting' => config('broadcasting.default'),
-            'Cache' => config('cache.default'),
+            'Cache' => function ($json) {
+                $cacheStore = config('cache.default');
+
+                if (config('cache.stores.'.$cacheStore.'.driver') === 'failover') {
+                    $secondary = new Collection(config('cache.stores.'.$cacheStore.'.stores'));
+
+                    return value(static::format(
+                        value: $cacheStore,
+                        console: fn ($value) => '<fg=yellow;options=bold>'.$value.'</> <fg=gray;options=bold>/</> '.$secondary->implode(', '),
+                        json: fn () => $secondary->all(),
+                    ), $json);
+                }
+
+                return $cacheStore;
+            },
             'Database' => config('database.default'),
             'Logs' => function ($json) {
                 $logChannel = config('logging.default');
@@ -207,14 +221,63 @@ class AboutCommand extends Command
 
                 return $logs;
             },
-            'Mail' => config('mail.default'),
+            'Mail' => function ($json) {
+                $mailMailer = config('mail.default');
+
+                if (in_array(config('mail.mailers.'.$mailMailer.'.transport'), ['failover', 'roundrobin'])) {
+                    $secondary = new Collection(config('mail.mailers.'.$mailMailer.'.mailers'));
+
+                    return value(static::format(
+                        value: $mailMailer,
+                        console: fn ($value) => '<fg=yellow;options=bold>'.$value.'</> <fg=gray;options=bold>/</> '.$secondary->implode(', '),
+                        json: fn () => $secondary->all(),
+                    ), $json);
+                }
+
+                return $mailMailer;
+            },
             'Octane' => config('octane.server'),
-            'Queue' => config('queue.default'),
+            'Queue' => function ($json) {
+                $queueConnection = config('queue.default');
+
+                if (config('queue.connections.'.$queueConnection.'.driver') === 'failover') {
+                    $secondary = new Collection(config('queue.connections.'.$queueConnection.'.connections'));
+
+                    return value(static::format(
+                        value: $queueConnection,
+                        console: fn ($value) => '<fg=yellow;options=bold>'.$value.'</> <fg=gray;options=bold>/</> '.$secondary->implode(', '),
+                        json: fn () => $secondary->all(),
+                    ), $json);
+                }
+
+                return $queueConnection;
+            },
             'Scout' => config('scout.driver'),
             'Session' => config('session.driver'),
         ]));
 
+        static::addToSection('Storage', fn () => [
+            ...$this->determineStoragePathLinkStatus($formatStorageLinkedStatus),
+        ]);
+
         (new Collection(static::$customDataResolvers))->each->__invoke();
+    }
+
+    /**
+     * Determine storage symbolic links status.
+     *
+     * @param  callable  $formatStorageLinkedStatus
+     * @return array<string,mixed>
+     */
+    protected function determineStoragePathLinkStatus(callable $formatStorageLinkedStatus): array
+    {
+        return (new Collection(config('filesystems.links', [])))
+            ->mapWithKeys(function ($target, $link) use ($formatStorageLinkedStatus) {
+                $path = Str::replace(public_path(), '', $link);
+
+                return [public_path($path) => static::format(file_exists($link), console: $formatStorageLinkedStatus)];
+            })
+            ->toArray();
     }
 
     /**
@@ -269,7 +332,7 @@ class AboutCommand extends Command
      */
     protected function sections()
     {
-        return (new Collection(explode(',', $this->option('only') ?? '')))
+        return (new Stringable($this->option('only') ?? ''))->explode(',')
             ->filter()
             ->map(fn ($only) => $this->toSearchKeyword($only))
             ->all();

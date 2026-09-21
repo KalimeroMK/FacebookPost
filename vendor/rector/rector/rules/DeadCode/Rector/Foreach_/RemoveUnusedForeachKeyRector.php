@@ -11,8 +11,9 @@ use PHPStan\PhpDocParser\Ast\PhpDoc\VarTagValueNode;
 use Rector\BetterPhpDocParser\PhpDocInfo\PhpDocInfo;
 use Rector\BetterPhpDocParser\PhpDocInfo\PhpDocInfoFactory;
 use Rector\Comments\NodeDocBlock\DocBlockUpdater;
-use Rector\Contract\PhpParser\Node\StmtsAwareInterface;
+use Rector\DeadCode\NodeAnalyzer\ExprUsedInNodeAnalyzer;
 use Rector\NodeManipulator\StmtsManipulator;
+use Rector\PhpParser\Enum\NodeGroup;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
@@ -37,14 +38,19 @@ final class RemoveUnusedForeachKeyRector extends AbstractRector
      * @readonly
      */
     private DocBlockUpdater $docBlockUpdater;
-    public function __construct(NodeFinder $nodeFinder, StmtsManipulator $stmtsManipulator, PhpDocInfoFactory $phpDocInfoFactory, DocBlockUpdater $docBlockUpdater)
+    /**
+     * @readonly
+     */
+    private ExprUsedInNodeAnalyzer $exprUsedInNodeAnalyzer;
+    public function __construct(NodeFinder $nodeFinder, StmtsManipulator $stmtsManipulator, PhpDocInfoFactory $phpDocInfoFactory, DocBlockUpdater $docBlockUpdater, ExprUsedInNodeAnalyzer $exprUsedInNodeAnalyzer)
     {
         $this->nodeFinder = $nodeFinder;
         $this->stmtsManipulator = $stmtsManipulator;
         $this->phpDocInfoFactory = $phpDocInfoFactory;
         $this->docBlockUpdater = $docBlockUpdater;
+        $this->exprUsedInNodeAnalyzer = $exprUsedInNodeAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Remove unused key in foreach', [new CodeSample(<<<'CODE_SAMPLE'
 $items = [];
@@ -63,14 +69,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
-        return [StmtsAwareInterface::class];
+        return NodeGroup::STMTS_AWARE;
     }
     /**
-     * @param StmtsAwareInterface $node
+     * @param StmtsAware $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($node->stmts === null) {
             return null;
@@ -84,7 +90,7 @@ CODE_SAMPLE
                 continue;
             }
             $keyVar = $stmt->keyVar;
-            $isNodeUsed = (bool) $this->nodeFinder->findFirst($stmt->stmts, fn(Node $node): bool => $this->nodeComparator->areNodesEqual($node, $keyVar));
+            $isNodeUsed = (bool) $this->nodeFinder->findFirst($stmt->stmts, fn(Node $node): bool => $this->exprUsedInNodeAnalyzer->isUsed($node, $keyVar));
             if ($isNodeUsed) {
                 continue;
             }

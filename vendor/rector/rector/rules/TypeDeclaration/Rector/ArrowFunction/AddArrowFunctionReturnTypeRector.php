@@ -4,7 +4,10 @@ declare (strict_types=1);
 namespace Rector\TypeDeclaration\Rector\ArrowFunction;
 
 use PhpParser\Node;
+use PhpParser\Node\Expr\ArrayDimFetch;
 use PhpParser\Node\Expr\ArrowFunction;
+use PHPStan\Type\MixedType;
+use PHPStan\Type\NullType;
 use Rector\PHPStanStaticTypeMapper\Enum\TypeKind;
 use Rector\Rector\AbstractRector;
 use Rector\StaticTypeMapper\StaticTypeMapper;
@@ -25,7 +28,7 @@ final class AddArrowFunctionReturnTypeRector extends AbstractRector implements M
     {
         $this->staticTypeMapper = $staticTypeMapper;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Add known return type to arrow function', [new CodeSample(<<<'CODE_SAMPLE'
 fn () => [];
@@ -38,21 +41,26 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [ArrowFunction::class];
     }
     /**
      * @param ArrowFunction $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if ($node->returnType instanceof Node) {
             return null;
         }
-        $type = $this->nodeTypeResolver->getNativeType($node->expr);
+        // to allow array shape
+        $type = $node->expr instanceof ArrayDimFetch ? $this->getType($node->expr) : $this->nodeTypeResolver->getNativeType($node->expr);
         // not valid to add explicit type in PHP
         if ($type->isVoid()->yes()) {
+            return null;
+        }
+        $docblockType = $this->getType($node->expr);
+        if ($type instanceof MixedType && $docblockType instanceof NullType) {
             return null;
         }
         $returnTypeNode = $this->staticTypeMapper->mapPHPStanTypeToPhpParserNode($type, TypeKind::RETURN);
@@ -62,7 +70,7 @@ CODE_SAMPLE
         $node->returnType = $returnTypeNode;
         return $node;
     }
-    public function provideMinPhpVersion() : int
+    public function provideMinPhpVersion(): int
     {
         return PhpVersionFeature::ARROW_FUNCTION;
     }

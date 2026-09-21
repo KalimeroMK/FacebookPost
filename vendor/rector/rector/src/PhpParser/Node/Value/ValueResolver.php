@@ -3,6 +3,7 @@
 declare (strict_types=1);
 namespace Rector\PhpParser\Node\Value;
 
+use ArithmeticError;
 use PhpParser\ConstExprEvaluationException;
 use PhpParser\ConstExprEvaluator;
 use PhpParser\Node\Arg;
@@ -13,6 +14,8 @@ use PhpParser\Node\Expr\ConstFetch;
 use PhpParser\Node\InterpolatedStringPart;
 use PhpParser\Node\Name;
 use PhpParser\Node\Scalar\MagicConst\Class_;
+use PhpParser\Node\Scalar\MagicConst\Dir;
+use PhpParser\Node\Scalar\MagicConst\File;
 use PHPStan\Analyser\Scope;
 use PHPStan\Reflection\ClassReflection;
 use PHPStan\Reflection\ReflectionProvider;
@@ -20,6 +23,7 @@ use PHPStan\Type\Constant\ConstantArrayType;
 use PHPStan\Type\Constant\ConstantStringType;
 use PHPStan\Type\ConstantScalarType;
 use PHPStan\Type\Type;
+use Rector\Application\Provider\CurrentFileProvider;
 use Rector\Enum\ObjectReference;
 use Rector\Exception\ShouldNotHappenException;
 use Rector\NodeAnalyzer\ConstFetchAnalyzer;
@@ -60,8 +64,12 @@ final class ValueResolver
      * @readonly
      */
     private ClassReflectionAnalyzer $classReflectionAnalyzer;
+    /**
+     * @readonly
+     */
+    private CurrentFileProvider $currentFileProvider;
     private ?ConstExprEvaluator $constExprEvaluator = null;
-    public function __construct(NodeNameResolver $nodeNameResolver, NodeTypeResolver $nodeTypeResolver, ConstFetchAnalyzer $constFetchAnalyzer, ReflectionProvider $reflectionProvider, ReflectionResolver $reflectionResolver, ClassReflectionAnalyzer $classReflectionAnalyzer)
+    public function __construct(NodeNameResolver $nodeNameResolver, NodeTypeResolver $nodeTypeResolver, ConstFetchAnalyzer $constFetchAnalyzer, ReflectionProvider $reflectionProvider, ReflectionResolver $reflectionResolver, ClassReflectionAnalyzer $classReflectionAnalyzer, CurrentFileProvider $currentFileProvider)
     {
         $this->nodeNameResolver = $nodeNameResolver;
         $this->nodeTypeResolver = $nodeTypeResolver;
@@ -69,11 +77,12 @@ final class ValueResolver
         $this->reflectionProvider = $reflectionProvider;
         $this->reflectionResolver = $reflectionResolver;
         $this->classReflectionAnalyzer = $classReflectionAnalyzer;
+        $this->currentFileProvider = $currentFileProvider;
     }
     /**
      * @param mixed $value
      */
-    public function isValue(Expr $expr, $value) : bool
+    public function isValue(Expr $expr, $value): bool
     {
         return $this->getValue($expr) === $value;
     }
@@ -91,7 +100,7 @@ final class ValueResolver
         }
         if ($expr instanceof ClassConstFetch && $resolvedClassReference) {
             $class = $this->nodeNameResolver->getName($expr->class);
-            if (\in_array($class, [ObjectReference::SELF, ObjectReference::STATIC], \true)) {
+            if (in_array($class, [ObjectReference::SELF, ObjectReference::STATIC], \true)) {
                 $classReflection = $this->reflectionResolver->resolveClassReflection($expr);
                 if ($classReflection instanceof ClassReflection) {
                     return $classReflection->getName();
@@ -106,6 +115,15 @@ final class ValueResolver
             return $value;
         }
         if ($expr instanceof ConstFetch) {
+            if ($this->isNull($expr)) {
+                return null;
+            }
+            if ($this->isTrue($expr)) {
+                return \true;
+            }
+            if ($this->isFalse($expr)) {
+                return \false;
+            }
             return $this->nodeNameResolver->getName($expr);
         }
         $nodeStaticType = $this->nodeTypeResolver->getType($expr);
@@ -115,28 +133,30 @@ final class ValueResolver
      * @api symfony
      * @param mixed[] $expectedValues
      */
-    public function isValues(Expr $expr, array $expectedValues) : bool
+    public function isValues(Expr $expr, array $expectedValues): bool
     {
+        $found = \false;
         foreach ($expectedValues as $expectedValue) {
             if ($this->isValue($expr, $expectedValue)) {
-                return \true;
+                $found = \true;
+                break;
             }
         }
-        return \false;
+        return $found;
     }
-    public function isFalse(Expr $expr) : bool
+    public function isFalse(Expr $expr): bool
     {
         return $this->constFetchAnalyzer->isFalse($expr);
     }
-    public function isTrueOrFalse(Expr $expr) : bool
+    public function isTrueOrFalse(Expr $expr): bool
     {
         return $this->constFetchAnalyzer->isTrueOrFalse($expr);
     }
-    public function isTrue(Expr $expr) : bool
+    public function isTrue(Expr $expr): bool
     {
         return $this->constFetchAnalyzer->isTrue($expr);
     }
-    public function isNull(Expr $expr) : bool
+    public function isNull(Expr $expr): bool
     {
         return $this->constFetchAnalyzer->isNull($expr);
     }
@@ -144,7 +164,7 @@ final class ValueResolver
      * @param Expr[]|null[] $nodes
      * @param mixed[] $expectedValues
      */
-    public function areValuesEqual(array $nodes, array $expectedValues) : bool
+    public function areValuesEqual(array $nodes, array $expectedValues): bool
     {
         foreach ($nodes as $i => $node) {
             if (!$node instanceof Expr) {
@@ -168,7 +188,7 @@ final class ValueResolver
         try {
             $constExprEvaluator = $this->getConstExprEvaluator();
             return $constExprEvaluator->evaluateDirectly($expr);
-        } catch (ConstExprEvaluationException|TypeError $exception) {
+        } catch (ConstExprEvaluationException|TypeError|ArithmeticError $exception) {
         }
         if ($expr instanceof Class_) {
             $type = $this->nodeTypeResolver->getNativeType($expr);
@@ -178,28 +198,52 @@ final class ValueResolver
         }
         return null;
     }
-    private function processConcat(Concat $concat, bool $resolvedClassReference) : string
+    private function processConcat(Concat $concat, bool $resolvedClassReference): string
     {
         return $this->getValue($concat->left, $resolvedClassReference) . $this->getValue($concat->right, $resolvedClassReference);
     }
-    private function getConstExprEvaluator() : ConstExprEvaluator
+    private function getConstExprEvaluator(): ConstExprEvaluator
     {
         if ($this->constExprEvaluator instanceof ConstExprEvaluator) {
             return $this->constExprEvaluator;
         }
         $this->constExprEvaluator = new ConstExprEvaluator(function (Expr $expr) {
+            if ($expr instanceof Dir) {
+                // __DIR__
+                return $this->resolveDirConstant();
+            }
+            if ($expr instanceof File) {
+                // __FILE__
+                return $this->resolveFileConstant($expr);
+            }
             // resolve "SomeClass::SOME_CONST"
             if ($expr instanceof ClassConstFetch && $expr->class instanceof Name) {
                 return $this->resolveClassConstFetch($expr);
             }
-            throw new ConstExprEvaluationException(\sprintf('Expression of type "%s" cannot be evaluated', $expr->getType()));
+            throw new ConstExprEvaluationException(sprintf('Expression of type "%s" cannot be evaluated', $expr->getType()));
         });
         return $this->constExprEvaluator;
+    }
+    private function resolveDirConstant(): string
+    {
+        $file = $this->currentFileProvider->getFile();
+        if (!$file instanceof \Rector\ValueObject\Application\File) {
+            throw new ShouldNotHappenException();
+        }
+        return dirname($file->getFilePath());
+    }
+    private function resolveFileConstant(File $file): string
+    {
+        $file = $this->currentFileProvider->getFile();
+        if (!$file instanceof \Rector\ValueObject\Application\File) {
+            throw new ShouldNotHappenException();
+        }
+        return $file->getFilePath();
     }
     /**
      * @return mixed[]|null
      */
-    private function extractConstantArrayTypeValue(ConstantArrayType $constantArrayType) : ?array
+    private function extractConstantArrayTypeValue(ConstantArrayType $constantArrayType): ?array
     {
         $keys = [];
         foreach ($constantArrayType->getKeyTypes() as $i => $keyType) {
@@ -233,15 +277,15 @@ final class ValueResolver
         if ($constant === null) {
             throw new ShouldNotHappenException();
         }
-        if (\in_array($class, [ObjectReference::SELF, ObjectReference::STATIC, ObjectReference::PARENT], \true)) {
+        if (in_array($class, [ObjectReference::SELF, ObjectReference::STATIC, ObjectReference::PARENT], \true)) {
             $class = $this->resolveClassFromSelfStaticParent($classConstFetch, $class);
         }
         if ($constant === 'class') {
             return $class;
         }
         $classConstantReference = $class . '::' . $constant;
-        if (\defined($classConstantReference)) {
-            return \constant($classConstantReference);
+        if (defined($classConstantReference)) {
+            return constant($classConstantReference);
         }
         if (!$this->reflectionProvider->hasClass($class)) {
             // fallback to constant reference itself, to avoid fatal error
@@ -263,7 +307,7 @@ final class ValueResolver
         }
         return $this->getValue($valueExpr);
     }
-    private function resolveClassFromSelfStaticParent(ClassConstFetch $classConstFetch, string $class) : string
+    private function resolveClassFromSelfStaticParent(ClassConstFetch $classConstFetch, string $class): string
     {
         // Scope may be loaded too late, so return empty string early
         // it will be resolved on next traverse

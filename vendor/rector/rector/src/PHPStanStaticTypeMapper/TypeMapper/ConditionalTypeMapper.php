@@ -3,7 +3,7 @@
 declare (strict_types=1);
 namespace Rector\PHPStanStaticTypeMapper\TypeMapper;
 
-use RectorPrefix202502\Nette\Utils\Strings;
+use RectorPrefix202609\Nette\Utils\Strings;
 use PhpParser\Node;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use PHPStan\Reflection\ClassReflection;
@@ -21,20 +21,23 @@ use Rector\PHPStanStaticTypeMapper\PHPStanStaticTypeMapper;
 final class ConditionalTypeMapper implements TypeMapperInterface
 {
     private PHPStanStaticTypeMapper $phpStanStaticTypeMapper;
-    public function autowire(PHPStanStaticTypeMapper $phpStanStaticTypeMapper) : void
+    public function autowire(PHPStanStaticTypeMapper $phpStanStaticTypeMapper): void
     {
         $this->phpStanStaticTypeMapper = $phpStanStaticTypeMapper;
     }
-    public function getNodeClass() : string
+    /**
+     * @return array<class-string<Type>>
+     */
+    public function getNodeClasses(): array
     {
-        return ConditionalType::class;
+        return [ConditionalType::class];
     }
     /**
      * @param ConditionalType $type
      */
-    public function mapToPHPStanPhpDocTypeNode(Type $type) : TypeNode
+    public function mapToPHPStanPhpDocTypeNode(Type $type): TypeNode
     {
-        $type = TypeTraverser::map($type, static function (Type $type, callable $traverse) : Type {
+        $type = TypeTraverser::map($type, static function (Type $type, callable $traverse): Type {
             if ($type instanceof ObjectType && !$type->getClassReflection() instanceof ClassReflection) {
                 $newClassName = (string) Strings::after($type->getClassName(), '\\', -1);
                 return $traverse(new ObjectType($newClassName));
@@ -47,7 +50,7 @@ final class ConditionalTypeMapper implements TypeMapperInterface
      * @param ConditionalType $type
      * @param TypeKind::* $typeKind
      */
-    public function mapToPhpParserNode(Type $type, string $typeKind) : ?Node
+    public function mapToPhpParserNode(Type $type, string $typeKind): ?Node
     {
         $type = TypeCombinator::union($type->getIf(), $type->getElse());
         return $this->phpStanStaticTypeMapper->mapToPhpParserNode($type, $typeKind);

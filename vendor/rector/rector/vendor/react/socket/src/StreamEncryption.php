@@ -1,9 +1,9 @@
 <?php
 
-namespace RectorPrefix202502\React\Socket;
+namespace RectorPrefix202609\React\Socket;
 
-use RectorPrefix202502\React\EventLoop\LoopInterface;
-use RectorPrefix202502\React\Promise\Deferred;
+use RectorPrefix202609\React\EventLoop\LoopInterface;
+use RectorPrefix202609\React\Promise\Deferred;
 use RuntimeException;
 use UnexpectedValueException;
 /**
@@ -71,7 +71,7 @@ class StreamEncryption
             $method = $context['ssl']['crypto_method'];
         }
         $that = $this;
-        $toggleCrypto = function () use($socket, $deferred, $toggle, $method, $that) {
+        $toggleCrypto = function () use ($socket, $deferred, $toggle, $method, $that) {
             $that->toggleCrypto($socket, $deferred, $toggle, $method);
         };
         $this->loop->addReadStream($socket, $toggleCrypto);
@@ -79,12 +79,12 @@ class StreamEncryption
             $toggleCrypto();
         }
         $loop = $this->loop;
-        return $deferred->promise()->then(function () use($stream, $socket, $loop, $toggle) {
+        return $deferred->promise()->then(function () use ($stream, $socket, $loop, $toggle) {
             $loop->removeReadStream($socket);
             $stream->encryptionEnabled = $toggle;
             $stream->resume();
             return $stream;
-        }, function ($error) use($stream, $socket, $loop) {
+        }, function ($error) use ($stream, $socket, $loop) {
             $loop->removeReadStream($socket);
             $stream->resume();
             throw $error;
@@ -101,33 +101,31 @@ class StreamEncryption
     public function toggleCrypto($socket, Deferred $deferred, $toggle, $method)
     {
         $error = null;
-        \set_error_handler(function ($_, $errstr) use(&$error) {
+        \set_error_handler(function ($_, $errstr) use (&$error) {
             $error = \str_replace(array("\r", "\n"), ' ', $errstr);
             // remove useless function name from error message
             if (($pos = \strpos($error, "): ")) !== \false) {
-                $error = \substr($error, $pos + 3);
+                $error = (string) \substr($error, $pos + 3);
             }
         });
         $result = \stream_socket_enable_crypto($socket, $toggle, $method);
         \restore_error_handler();
         if (\true === $result) {
             $deferred->resolve(null);
-        } else {
-            if (\false === $result) {
-                // overwrite callback arguments for PHP7+ only, so they do not show
-                // up in the Exception trace and do not cause a possible cyclic reference.
-                $d = $deferred;
-                $deferred = null;
-                if (\feof($socket) || $error === null) {
-                    // EOF or failed without error => connection closed during handshake
-                    $d->reject(new \UnexpectedValueException('Connection lost during TLS handshake (ECONNRESET)', \defined('SOCKET_ECONNRESET') ? \SOCKET_ECONNRESET : 104));
-                } else {
-                    // handshake failed with error message
-                    $d->reject(new \UnexpectedValueException($error));
-                }
+        } else if (\false === $result) {
+            // overwrite callback arguments for PHP7+ only, so they do not show
+            // up in the Exception trace and do not cause a possible cyclic reference.
+            $d = $deferred;
+            $deferred = null;
+            if (\feof($socket) || $error === null) {
+                // EOF or failed without error => connection closed during handshake
+                $d->reject(new \UnexpectedValueException('Connection lost during TLS handshake (ECONNRESET)', \defined('SOCKET_ECONNRESET') ? \SOCKET_ECONNRESET : 104));
             } else {
-                // need more data, will retry
+                // handshake failed with error message
+                $d->reject(new \UnexpectedValueException($error));
             }
+        } else {
+            // need more data, will retry
         }
     }
 }

@@ -4,43 +4,20 @@ declare (strict_types=1);
 namespace Rector\Symfony\CodeQuality\Rector\Trait_;
 
 use PhpParser\Node;
-use PhpParser\Node\Expr\Assign;
-use PhpParser\Node\Expr\PropertyFetch;
-use PhpParser\Node\Stmt\ClassMethod;
-use PhpParser\Node\Stmt\Expression;
-use PhpParser\Node\Stmt\Return_;
 use PhpParser\Node\Stmt\Trait_;
-use Rector\BetterPhpDocParser\PhpDocInfo\PhpDocInfo;
-use Rector\BetterPhpDocParser\PhpDocInfo\PhpDocInfoFactory;
-use Rector\Php80\NodeAnalyzer\PhpAttributeAnalyzer;
+use Rector\Configuration\Deprecation\Contract\DeprecatedInterface;
+use Rector\Exception\ShouldNotHappenException;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
- * @see \Rector\Symfony\Tests\CodeQuality\Rector\Trait_\AddTraitGetterReturnTypeBasedOnSetterRequiredRector\AddTraitGetterReturnTypeBasedOnSetterRequiredRectorTest
+ * @deprecated Matches a very narrow trait shape - exactly one property and one required setter/getter pair - to infer a return type. The match is too fragile and risky for the tiny gain, and PHPStan already reports the missing return type.
  */
-final class AddTraitGetterReturnTypeBasedOnSetterRequiredRector extends AbstractRector
+final class AddTraitGetterReturnTypeBasedOnSetterRequiredRector extends AbstractRector implements DeprecatedInterface
 {
-    /**
-     * @readonly
-     */
-    private PhpDocInfoFactory $phpDocInfoFactory;
-    /**
-     * @readonly
-     */
-    private PhpAttributeAnalyzer $phpAttributeAnalyzer;
-    /**
-     * @var string
-     */
-    private const REQUIRED_ATTRIBUTE = 'Symfony\\Contracts\\Service\\Attribute\\Required';
-    public function __construct(PhpDocInfoFactory $phpDocInfoFactory, PhpAttributeAnalyzer $phpAttributeAnalyzer)
+    public function getRuleDefinition(): RuleDefinition
     {
-        $this->phpDocInfoFactory = $phpDocInfoFactory;
-        $this->phpAttributeAnalyzer = $phpAttributeAnalyzer;
-    }
-    public function getRuleDefinition() : RuleDefinition
-    {
-        return new RuleDefinition('Add trait getter return type based on setter with @required annotation or #[\\Symfony\\Contracts\\Service\\Attribute\\Required] attribute', [new CodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Add trait getter return type based on setter with @required annotation or #[\Symfony\Contracts\Service\Attribute\Required] attribute', [new CodeSample(<<<'CODE_SAMPLE'
 use stdClass;
 
 trait SomeTrait
@@ -87,73 +64,15 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Trait_::class];
     }
     /**
      * @param Trait_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
-        $methods = $node->getMethods();
-        if (\count($methods) !== 2) {
-            return null;
-        }
-        $props = $node->getProperties();
-        if (\count($props) !== 1) {
-            return null;
-        }
-        $getMethod = null;
-        foreach ($methods as $method) {
-            $methodName = (string) $this->getName($method);
-            if (\strncmp($methodName, 'set', \strlen('set')) !== 0) {
-                continue;
-            }
-            $getterMethod = 'get' . \ltrim($methodName, 'set');
-            $getMethod = $node->getMethod($getterMethod);
-            // getter for setter is not exists
-            if (!$getMethod instanceof ClassMethod) {
-                return null;
-            }
-            // already returned
-            if ($getMethod->returnType instanceof Node) {
-                return null;
-            }
-            if (\count((array) $method->getStmts()) !== 1) {
-                return null;
-            }
-            if (!$this->shouldProcess($method)) {
-                return null;
-            }
-            if (\count($method->params) !== 1) {
-                return null;
-            }
-            if (!$method->params[0]->type instanceof Node) {
-                return null;
-            }
-            $stmts = (array) $method->getStmts();
-            if (!$stmts[0] instanceof Expression || !$stmts[0]->expr instanceof Assign || !$stmts[0]->expr->var instanceof PropertyFetch || !$this->nodeComparator->areNodesEqual($stmts[0]->expr->expr, $method->params[0]->var)) {
-                return null;
-            }
-            $getterStmts = (array) $getMethod->getStmts();
-            if (\count($getterStmts) !== 1) {
-                return null;
-            }
-            if (!$getterStmts[0] instanceof Return_ || !$getterStmts[0]->expr instanceof PropertyFetch) {
-                return null;
-            }
-            $getMethod->returnType = $method->params[0]->type;
-            return $node;
-        }
-        return null;
-    }
-    private function shouldProcess(ClassMethod $classMethod) : bool
-    {
-        $phpDocInfo = $this->phpDocInfoFactory->createFromNode($classMethod);
-        if ($phpDocInfo instanceof PhpDocInfo && $phpDocInfo->hasByName('required')) {
-            return \true;
-        }
-        return $this->phpAttributeAnalyzer->hasPhpAttribute($classMethod, self::REQUIRED_ATTRIBUTE);
+        throw new ShouldNotHappenException(sprintf('"%s" is deprecated, as it matches a very narrow and fragile trait shape for a tiny gain.', self::class));
     }
 }

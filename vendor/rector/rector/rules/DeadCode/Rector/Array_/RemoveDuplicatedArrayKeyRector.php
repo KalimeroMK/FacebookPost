@@ -9,6 +9,8 @@ use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\PreDec;
 use PhpParser\Node\Expr\PreInc;
+use PhpParser\Node\Expr\Variable;
+use Rector\NodeAnalyzer\ExprAnalyzer;
 use Rector\PhpParser\Printer\BetterStandardPrinter;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
@@ -22,13 +24,18 @@ final class RemoveDuplicatedArrayKeyRector extends AbstractRector
      * @readonly
      */
     private BetterStandardPrinter $betterStandardPrinter;
-    public function __construct(BetterStandardPrinter $betterStandardPrinter)
+    /**
+     * @readonly
+     */
+    private ExprAnalyzer $exprAnalyzer;
+    public function __construct(BetterStandardPrinter $betterStandardPrinter, ExprAnalyzer $exprAnalyzer)
     {
         $this->betterStandardPrinter = $betterStandardPrinter;
+        $this->exprAnalyzer = $exprAnalyzer;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
-        return new RuleDefinition('Remove duplicated key in defined arrays.', [new CodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Remove duplicated key in defined arrays', [new CodeSample(<<<'CODE_SAMPLE'
 $item = [
     1 => 'A',
     1 => 'B'
@@ -44,14 +51,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Array_::class];
     }
     /**
      * @param Array_ $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         $duplicatedKeysArrayItems = $this->resolveDuplicateKeysArrayItems($node);
         if ($duplicatedKeysArrayItems === []) {
@@ -71,7 +78,7 @@ CODE_SAMPLE
     /**
      * @return ArrayItem[]
      */
-    private function resolveDuplicateKeysArrayItems(Array_ $array) : array
+    private function resolveDuplicateKeysArrayItems(Array_ $array): array
     {
         $arrayItemsByKeys = [];
         foreach ($array->items as $arrayItem) {
@@ -79,6 +86,10 @@ CODE_SAMPLE
                 continue;
             }
             if (!$arrayItem->key instanceof Expr) {
+                continue;
+            }
+            // local variable is mostly fine, other dynamic, just skip
+            if (!$arrayItem->key instanceof Variable && $this->exprAnalyzer->isDynamicExpr($arrayItem->key)) {
                 continue;
             }
             $keyValue = $this->betterStandardPrinter->print($arrayItem->key);
@@ -90,14 +101,14 @@ CODE_SAMPLE
      * @param array<mixed, ArrayItem[]> $arrayItemsByKeys
      * @return array<ArrayItem>
      */
-    private function filterItemsWithSameKey(array $arrayItemsByKeys) : array
+    private function filterItemsWithSameKey(array $arrayItemsByKeys): array
     {
         $duplicatedArrayItems = [];
         foreach ($arrayItemsByKeys as $arrayItems) {
-            if (\count($arrayItems) <= 1) {
+            if (count($arrayItems) <= 1) {
                 continue;
             }
-            $currentArrayItem = \current($arrayItems);
+            $currentArrayItem = current($arrayItems);
             /** @var Expr $currentArrayItemKey */
             $currentArrayItemKey = $currentArrayItem->key;
             if ($currentArrayItemKey instanceof PreInc) {
@@ -107,16 +118,16 @@ CODE_SAMPLE
                 continue;
             }
             // keep last one
-            \array_pop($arrayItems);
-            $duplicatedArrayItems = \array_merge($duplicatedArrayItems, $arrayItems);
+            array_pop($arrayItems);
+            $duplicatedArrayItems = array_merge($duplicatedArrayItems, $arrayItems);
         }
         return $duplicatedArrayItems;
     }
     /**
      * @param ArrayItem[] $duplicatedKeysArrayItems
      */
-    private function isArrayItemDuplicated(array $duplicatedKeysArrayItems, ArrayItem $arrayItem) : bool
+    private function isArrayItemDuplicated(array $duplicatedKeysArrayItems, ArrayItem $arrayItem): bool
     {
-        return \in_array($arrayItem, $duplicatedKeysArrayItems, \true);
+        return in_array($arrayItem, $duplicatedKeysArrayItems, \true);
     }
 }

@@ -15,7 +15,7 @@ use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Type\Type;
 use PHPStan\Type\UnionType;
 use Rector\Php80\ValueObject\AnnotationToAttribute;
-use RectorPrefix202502\Webmozart\Assert\Assert;
+use RectorPrefix202609\Webmozart\Assert\Assert;
 final class AnnotationToAttributeIntegerValueCaster
 {
     /**
@@ -29,7 +29,7 @@ final class AnnotationToAttributeIntegerValueCaster
     /**
      * @param Arg[] $args
      */
-    public function castAttributeTypes(AnnotationToAttribute $annotationToAttribute, array $args) : void
+    public function castAttributeTypes(AnnotationToAttribute $annotationToAttribute, array $args): void
     {
         Assert::allIsInstanceOf($args, Arg::class);
         if (!$this->reflectionProvider->hasClass($annotationToAttribute->getAttributeClass())) {
@@ -45,7 +45,7 @@ final class AnnotationToAttributeIntegerValueCaster
                 if (!$arg->value instanceof Array_) {
                     continue;
                 }
-                $arrayItem = \current($arg->value->items) ?: null;
+                $arrayItem = current($arg->value->items) ?: null;
                 if (!$arrayItem instanceof ArrayItem) {
                     continue;
                 }
@@ -64,14 +64,14 @@ final class AnnotationToAttributeIntegerValueCaster
                     continue;
                 }
                 $valueString = $arrayItem->value;
-                if (!\is_numeric($valueString->value)) {
+                if (!is_numeric($valueString->value)) {
                     continue;
                 }
                 $arrayItem->value = new Int_((int) $valueString->value);
             }
         }
     }
-    private function containsInteger(Type $type) : bool
+    private function containsInteger(Type $type): bool
     {
         if ($type->isInteger()->yes()) {
             return \true;
@@ -79,17 +79,19 @@ final class AnnotationToAttributeIntegerValueCaster
         if (!$type instanceof UnionType) {
             return \false;
         }
+        $found = \false;
         foreach ($type->getTypes() as $unionedType) {
             if ($unionedType->isInteger()->yes()) {
-                return \true;
+                $found = \true;
+                break;
             }
         }
-        return \false;
+        return $found;
     }
     /**
      * @return ParameterReflection[]
      */
-    private function resolveConstructorParameterReflections(ClassReflection $classReflection) : array
+    private function resolveConstructorParameterReflections(ClassReflection $classReflection): array
     {
         $extendedMethodReflection = $classReflection->getConstructor();
         $extendedParametersAcceptor = ParametersAcceptorSelector::combineAcceptors($extendedMethodReflection->getVariants());

@@ -3,13 +3,14 @@
 declare (strict_types=1);
 namespace Rector\PostRector\Rector;
 
-use RectorPrefix202502\Nette\Utils\Strings;
+use RectorPrefix202609\Nette\Utils\Strings;
 use PhpParser\Comment;
 use PhpParser\Comment\Doc;
 use PhpParser\Node;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
+use PhpParser\Node\Stmt\Declare_;
 use PhpParser\Node\Stmt\Namespace_;
 use PhpParser\Node\Stmt\Nop;
 use PhpParser\Node\Stmt\Use_;
@@ -18,7 +19,7 @@ use PhpParser\NodeVisitor;
 use Rector\BetterPhpDocParser\PhpDocInfo\PhpDocInfoFactory;
 use Rector\NodeTypeResolver\Node\AttributeKey;
 use Rector\PhpDocParser\NodeTraverser\SimpleCallableNodeTraverser;
-use Rector\PhpParser\Node\CustomNode\FileWithoutNamespace;
+use Rector\PhpParser\Node\FileNode;
 final class UnusedImportRemovingPostRector extends \Rector\PostRector\Rector\AbstractPostRector
 {
     /**
@@ -34,16 +35,20 @@ final class UnusedImportRemovingPostRector extends \Rector\PostRector\Rector\Abs
         $this->simpleCallableNodeTraverser = $simpleCallableNodeTraverser;
         $this->phpDocInfoFactory = $phpDocInfoFactory;
     }
-    public function enterNode(Node $node) : ?Node
+    public function enterNode(Node $node): ?Node
     {
-        if (!$node instanceof Namespace_ && !$node instanceof FileWithoutNamespace) {
+        if (!$node instanceof Namespace_ && !$node instanceof FileNode) {
             return null;
         }
         $hasChanged = \false;
         $namespaceOriginalCase = $node instanceof Namespace_ && $node->name instanceof Name ? $node->name->toString() : null;
         $namesInOriginalCase = $this->resolveUsedPhpAndDocNames($node);
-        $namesInLowerCase = \array_map(\Closure::fromCallable('strtolower'), $namesInOriginalCase);
+        $namesInLowerCase = array_map(\Closure::fromCallable('strtolower'), $namesInOriginalCase);
+        $firstStmtKey = 0;
         foreach ($node->stmts as $key => $stmt) {
+            if ($stmt instanceof Declare_ && $key === 0) {
+                ++$firstStmtKey;
+            }
             if (!$stmt instanceof Use_) {
                 continue;
             }
@@ -54,7 +59,7 @@ final class UnusedImportRemovingPostRector extends \Rector\PostRector\Rector\Abs
             }
             $isCaseSensitive = $stmt->type === Use_::TYPE_CONSTANT;
             $names = $isCaseSensitive ? $namesInOriginalCase : $namesInLowerCase;
-            $namespaceName = $namespaceOriginalCase === null ? null : ($isCaseSensitive ? $namespaceOriginalCase : \strtolower($namespaceOriginalCase));
+            $namespaceName = $namespaceOriginalCase === null ? null : ($isCaseSensitive ? $namespaceOriginalCase : strtolower($namespaceOriginalCase));
             foreach ($stmt->uses as $useUseKey => $useUse) {
                 if ($this->isUseImportUsed($useUse, $isCaseSensitive, $names, $namespaceName)) {
                     continue;
@@ -64,7 +69,7 @@ final class UnusedImportRemovingPostRector extends \Rector\PostRector\Rector\Abs
             }
             if ($stmt->uses === []) {
                 $comments = $node->stmts[$key]->getComments();
-                if ($key === 0 && $comments !== []) {
+                if ($key === $firstStmtKey && $comments !== []) {
                     $node->stmts[$key] = new Nop();
                     $node->stmts[$key]->setAttribute(AttributeKey::COMMENTS, $comments);
                 } else {
@@ -75,17 +80,18 @@ final class UnusedImportRemovingPostRector extends \Rector\PostRector\Rector\Abs
         if ($hasChanged === \false) {
             return null;
         }
-        $node->stmts = \array_values($node->stmts);
+        $this->addRectorClassWithLine($node);
+        $node->stmts = array_values($node->stmts);
         return $node;
     }
     /**
      * @return string[]
-     * @param \PhpParser\Node\Stmt\Namespace_|\Rector\PhpParser\Node\CustomNode\FileWithoutNamespace $namespace
+     * @param \PhpParser\Node\Stmt\Namespace_|\Rector\PhpParser\Node\FileNode $fileNode
      */
-    private function findNonUseImportNames($namespace) : array
+    private function findNonUseImportNames($fileNode): array
     {
         $names = [];
-        $this->simpleCallableNodeTraverser->traverseNodesWithCallable($namespace->stmts, static function (Node $node) use(&$names) {
+        $this->simpleCallableNodeTraverser->traverseNodesWithCallable($fileNode->stmts, static function (Node $node) use (&$names) {
             if ($node instanceof Use_) {
                 return NodeVisitor::DONT_TRAVERSE_CURRENT_AND_CHILDREN;
             }
@@ -107,59 +113,61 @@ final class UnusedImportRemovingPostRector extends \Rector\PostRector\Rector\Abs
     }
     /**
      * @return string[]
-     * @param \PhpParser\Node\Stmt\Namespace_|\Rector\PhpParser\Node\CustomNode\FileWithoutNamespace $namespace
+     * @param \PhpParser\Node\Stmt\Namespace_|\Rector\PhpParser\Node\FileNode $rootNode
      */
-    private function findNamesInDocBlocks($namespace) : array
+    private function findNamesInDocBlocks($rootNode): array
     {
         $names = [];
-        $this->simpleCallableNodeTraverser->traverseNodesWithCallable($namespace, function (Node $node) use(&$names) {
+        $this->simpleCallableNodeTraverser->traverseNodesWithCallable($rootNode, function (Node $node) use (&$names) {
             $comments = $node->getComments();
             if ($comments === []) {
                 return null;
             }
-            $docs = \array_filter($comments, static fn(Comment $comment): bool => $comment instanceof Doc);
+            $docs = array_filter($comments, static fn(Comment $comment): bool => $comment instanceof Doc);
             if ($docs === []) {
                 return null;
             }
-            $totalDocs = \count($docs);
+            $totalDocs = count($docs);
             foreach ($docs as $doc) {
                 $nodeToCheck = $totalDocs === 1 ? $node : clone $node;
                 if ($totalDocs > 1) {
                     $nodeToCheck->setDocComment($doc);
                 }
                 $phpDocInfo = $this->phpDocInfoFactory->createFromNodeOrEmpty($nodeToCheck);
-                $names = \array_merge($names, $phpDocInfo->getAnnotationClassNames());
+                $names = array_merge($names, $phpDocInfo->getAnnotationClassNames());
                 $constFetchNodeNames = $phpDocInfo->getConstFetchNodeClassNames();
-                $names = \array_merge($names, $constFetchNodeNames);
+                $names = array_merge($names, $constFetchNodeNames);
                 $genericTagClassNames = $phpDocInfo->getGenericTagClassNames();
-                $names = \array_merge($names, $genericTagClassNames);
+                $names = array_merge($names, $genericTagClassNames);
+                $inlineGenericUsesTagClassNames = $phpDocInfo->getInlineGenericUsesTagClassNames();
+                $names = array_merge($names, $inlineGenericUsesTagClassNames);
                 $arrayItemTagClassNames = $phpDocInfo->getArrayItemNodeClassNames();
-                $names = \array_merge($names, $arrayItemTagClassNames);
+                $names = array_merge($names, $arrayItemTagClassNames);
             }
         });
         return $names;
     }
     /**
      * @return string[]
-     * @param \PhpParser\Node\Stmt\Namespace_|\Rector\PhpParser\Node\CustomNode\FileWithoutNamespace $namespace
+     * @param \PhpParser\Node\Stmt\Namespace_|\Rector\PhpParser\Node\FileNode $rootNode
      */
-    private function resolveUsedPhpAndDocNames($namespace) : array
+    private function resolveUsedPhpAndDocNames($rootNode): array
     {
-        $phpNames = $this->findNonUseImportNames($namespace);
-        $docBlockNames = $this->findNamesInDocBlocks($namespace);
-        $names = \array_merge($phpNames, $docBlockNames);
-        return \array_unique($names);
+        $phpNames = $this->findNonUseImportNames($rootNode);
+        $docBlockNames = $this->findNamesInDocBlocks($rootNode);
+        $names = array_merge($phpNames, $docBlockNames);
+        return array_unique($names);
     }
     /**
      * @param string[] $names
      */
-    private function isUseImportUsed(UseItem $useItem, bool $isCaseSensitive, array $names, ?string $namespaceName) : bool
+    private function isUseImportUsed(UseItem $useItem, bool $isCaseSensitive, array $names, ?string $namespaceName): bool
     {
         $comparedName = $useItem->alias instanceof Identifier ? $useItem->alias->toString() : $useItem->name->toString();
         if (!$isCaseSensitive) {
-            $comparedName = \strtolower($comparedName);
+            $comparedName = strtolower($comparedName);
         }
-        if (\in_array($comparedName, $names, \true)) {
+        if (in_array($comparedName, $names, \true)) {
             return \true;
         }
         $lastName = Strings::after($comparedName, '\\', -1);
@@ -169,32 +177,38 @@ final class UnusedImportRemovingPostRector extends \Rector\PostRector\Rector\Abs
         }
         // match partial import
         foreach ($names as $name) {
-            if (\strncmp($name, '\\', \strlen('\\')) === 0) {
+            if (strncmp($name, '\\', strlen('\\')) === 0) {
                 continue;
             }
             if ($this->isSubNamespace($name, $comparedName, $namespacedPrefix)) {
                 return \true;
             }
-            if (\strncmp($name, $lastName . '\\', \strlen($lastName . '\\')) !== 0) {
+            if (strncmp($name, $lastName . '\\', strlen($lastName . '\\')) !== 0) {
+                if (strncmp($name, $comparedName . '\\', strlen($comparedName . '\\')) === 0) {
+                    return \true;
+                }
                 continue;
             }
             if ($namespaceName === null) {
                 return \true;
             }
-            if (\strncmp($name, $namespaceName . '\\', \strlen($namespaceName . '\\')) !== 0) {
+            if (strncmp($name, $namespaceName . '\\', strlen($namespaceName . '\\')) !== 0) {
                 return \true;
             }
         }
         return \false;
     }
-    private function isSubNamespace(string $name, string $comparedName, string $namespacedPrefix) : bool
+    private function isSubNamespace(string $name, string $comparedName, string $namespacedPrefix): bool
     {
-        if (\substr_compare($comparedName, '\\' . $name, -\strlen('\\' . $name)) === 0) {
+        // a partially qualified name like "Foo\Bar" resolves through the import of its first
+        // segment, never through an import whose tail it happens to match, so only a single
+        // segment name (the imported short name) may be matched against the import's tail here
+        if (strpos($name, '\\') === \false && substr_compare($comparedName, '\\' . $name, -strlen('\\' . $name)) === 0) {
             return \true;
         }
-        if (\strncmp($name, $namespacedPrefix, \strlen($namespacedPrefix)) === 0) {
-            $subNamespace = \substr($name, \strlen($namespacedPrefix));
-            return \strpos($subNamespace, '\\') === \false;
+        if (strncmp($name, $namespacedPrefix, strlen($namespacedPrefix)) === 0) {
+            $subNamespace = (string) substr($name, strlen($namespacedPrefix));
+            return strpos($subNamespace, '\\') === \false;
         }
         return \false;
     }

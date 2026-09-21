@@ -8,9 +8,9 @@
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\Symfony\Component\Console;
+namespace RectorPrefix202609\Symfony\Component\Console;
 
-use RectorPrefix202502\Symfony\Component\Console\Exception\InvalidArgumentException;
+use RectorPrefix202609\Symfony\Component\Console\Exception\InvalidArgumentException;
 /**
  * @author Fabien Potencier <fabien@symfony.com>
  */
@@ -28,16 +28,16 @@ final class Color
         $this->background = $this->parseColor($background, \true);
         foreach ($options as $option) {
             if (!isset(self::AVAILABLE_OPTIONS[$option])) {
-                throw new InvalidArgumentException(\sprintf('Invalid option specified: "%s". Expected one of (%s).', $option, \implode(', ', \array_keys(self::AVAILABLE_OPTIONS))));
+                throw new InvalidArgumentException(\sprintf('Invalid option specified: "%s". Expected one of (%s).', $option, implode(', ', array_keys(self::AVAILABLE_OPTIONS))));
             }
             $this->options[$option] = self::AVAILABLE_OPTIONS[$option];
         }
     }
-    public function apply(string $text) : string
+    public function apply(string $text): string
     {
         return $this->set() . $text . $this->unset();
     }
-    public function set() : string
+    public function set(): string
     {
         $setCodes = [];
         if ('' !== $this->foreground) {
@@ -49,12 +49,12 @@ final class Color
         foreach ($this->options as $option) {
             $setCodes[] = $option['set'];
         }
-        if (0 === \count($setCodes)) {
+        if (!$setCodes) {
             return '';
         }
-        return \sprintf("\x1b[%sm", \implode(';', $setCodes));
+        return \sprintf("\x1b[%sm", implode(';', $setCodes));
     }
-    public function unset() : string
+    public function unset(): string
     {
         $unsetCodes = [];
         if ('' !== $this->foreground) {
@@ -66,12 +66,12 @@ final class Color
         foreach ($this->options as $option) {
             $unsetCodes[] = $option['unset'];
         }
-        if (0 === \count($unsetCodes)) {
+        if (!$unsetCodes) {
             return '';
         }
-        return \sprintf("\x1b[%sm", \implode(';', $unsetCodes));
+        return \sprintf("\x1b[%sm", implode(';', $unsetCodes));
     }
-    private function parseColor(string $color, bool $background = \false) : string
+    private function parseColor(string $color, bool $background = \false): string
     {
         if ('' === $color) {
             return '';
@@ -85,6 +85,6 @@ final class Color
         if (isset(self::BRIGHT_COLORS[$color])) {
             return ($background ? '10' : '9') . self::BRIGHT_COLORS[$color];
         }
-        throw new InvalidArgumentException(\sprintf('Invalid "%s" color; expected one of (%s).', $color, \implode(', ', \array_merge(\array_keys(self::COLORS), \array_keys(self::BRIGHT_COLORS)))));
+        throw new InvalidArgumentException(\sprintf('Invalid "%s" color; expected one of (%s).', $color, implode(', ', array_merge(array_keys(self::COLORS), array_keys(self::BRIGHT_COLORS)))));
     }
 }

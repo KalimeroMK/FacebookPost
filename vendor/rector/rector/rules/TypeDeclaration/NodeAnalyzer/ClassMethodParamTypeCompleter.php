@@ -5,7 +5,6 @@ namespace Rector\TypeDeclaration\NodeAnalyzer;
 
 use PhpParser\Node;
 use PhpParser\Node\Expr;
-use PhpParser\Node\Identifier;
 use PhpParser\Node\Param;
 use PhpParser\Node\Stmt\ClassMethod;
 use PHPStan\Type\MixedType;
@@ -31,9 +30,9 @@ final class ClassMethodParamTypeCompleter
         $this->classMethodParamVendorLockResolver = $classMethodParamVendorLockResolver;
     }
     /**
-     * @param array<int, Type> $classParameterTypes
+     * @param array<int|string, Type> $classParameterTypes
      */
-    public function complete(ClassMethod $classMethod, array $classParameterTypes, int $maxUnionTypes) : ?ClassMethod
+    public function complete(ClassMethod $classMethod, array $classParameterTypes, int $maxUnionTypes): ?ClassMethod
     {
         $hasChanged = \false;
         foreach ($classParameterTypes as $position => $argumentStaticType) {
@@ -51,7 +50,7 @@ final class ClassMethodParamTypeCompleter
                 continue;
             }
             // skip if param type already filled
-            if ($param->type instanceof Identifier) {
+            if ($param->type instanceof Node) {
                 continue;
             }
             // update parameter
@@ -63,7 +62,10 @@ final class ClassMethodParamTypeCompleter
         }
         return null;
     }
-    private function shouldSkipArgumentStaticType(ClassMethod $classMethod, Type $argumentStaticType, int $position, int $maxUnionTypes) : bool
+    /**
+     * @param int|string $position
+     */
+    private function shouldSkipArgumentStaticType(ClassMethod $classMethod, Type $argumentStaticType, $position, int $maxUnionTypes): bool
     {
         if ($argumentStaticType instanceof MixedType) {
             return \true;
@@ -79,6 +81,10 @@ final class ClassMethodParamTypeCompleter
             return \true;
         }
         $parameter = $classMethod->params[$position];
+        // skip variadic param, as resolved type belongs to single element, not the whole array
+        if ($parameter->variadic) {
+            return \true;
+        }
         if ($parameter->type === null) {
             return \false;
         }
@@ -101,21 +107,21 @@ final class ClassMethodParamTypeCompleter
         // already completed → skip
         return $currentParameterStaticType->equals($argumentStaticType);
     }
-    private function isClosureAndCallableType(Type $parameterStaticType, Type $argumentStaticType) : bool
+    private function isClosureAndCallableType(Type $parameterStaticType, Type $argumentStaticType): bool
     {
         if ($parameterStaticType->isCallable()->yes() && $this->isClosureObjectType($argumentStaticType)) {
             return \true;
         }
         return $argumentStaticType->isCallable()->yes() && $this->isClosureObjectType($parameterStaticType);
     }
-    private function isClosureObjectType(Type $type) : bool
+    private function isClosureObjectType(Type $type): bool
     {
         if (!$type instanceof ObjectType) {
             return \false;
         }
         return $type->getClassName() === 'Closure';
     }
-    private function isTooDetailedUnionType(Type $currentType, Type $newType, int $maxUnionTypes) : bool
+    private function isTooDetailedUnionType(Type $currentType, Type $newType, int $maxUnionTypes): bool
     {
         if ($currentType instanceof MixedType) {
             return \false;
@@ -123,9 +129,9 @@ final class ClassMethodParamTypeCompleter
         if (!$newType instanceof UnionType) {
             return \false;
         }
-        return \count($newType->getTypes()) > $maxUnionTypes;
+        return count($newType->getTypes()) > $maxUnionTypes;
     }
-    private function isAcceptedByDefault(Param $param, Type $argumentStaticType) : bool
+    private function isAcceptedByDefault(Param $param, Type $argumentStaticType): bool
     {
         if (!$param->default instanceof Expr) {
             return \true;

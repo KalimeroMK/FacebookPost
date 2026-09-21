@@ -9,7 +9,7 @@
  * file that was distributed with this source code.
  */
 declare (strict_types=1);
-namespace RectorPrefix202502\Fidry\CpuCoreCounter\Finder;
+namespace RectorPrefix202609\Fidry\CpuCoreCounter\Finder;
 
 use function sprintf;
 /**
@@ -22,7 +22,7 @@ final class DummyCpuCoreFinder implements CpuCoreFinder
      * @var positive-int
      */
     private $count;
-    public function diagnose() : string
+    public function diagnose(): string
     {
         return sprintf('Will return "%d".', $this->count);
     }
@@ -33,11 +33,12 @@ final class DummyCpuCoreFinder implements CpuCoreFinder
     {
         $this->count = $count;
     }
-    public function find() : ?int
+    /** @phpstan-ignore return.unusedType */
+    public function find(): ?int
     {
         return $this->count;
     }
-    public function toString() : string
+    public function toString(): string
     {
         return sprintf('DummyCpuCoreFinder(value=%d)', $this->count);
     }

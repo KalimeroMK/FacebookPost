@@ -1,10 +1,10 @@
 <?php
 
 declare (strict_types=1);
-namespace RectorPrefix202502\OndraM\CiDetector;
+namespace RectorPrefix202609\OndraM\CiDetector;
 
-use RectorPrefix202502\OndraM\CiDetector\Ci\CiInterface;
-use RectorPrefix202502\OndraM\CiDetector\Exception\CiNotDetectedException;
+use RectorPrefix202609\OndraM\CiDetector\Ci\CiInterface;
+use RectorPrefix202609\OndraM\CiDetector\Exception\CiNotDetectedException;
 /**
  * Unified way to get environment variables from current continuous integration server
  */
@@ -31,22 +31,22 @@ class CiDetector implements CiDetectorInterface
      */
     public const CI_WERCKER = 'Wercker';
     private Env $environment;
-    public final function __construct()
+    final public function __construct()
     {
         $this->environment = new Env();
     }
-    public static function fromEnvironment(Env $environment) : self
+    public static function fromEnvironment(Env $environment): self
     {
         $detector = new static();
         $detector->environment = $environment;
         return $detector;
     }
-    public function isCiDetected() : bool
+    public function isCiDetected(): bool
     {
         $ciServer = $this->detectCurrentCiServer();
         return $ciServer !== null;
     }
-    public function detect() : CiInterface
+    public function detect(): CiInterface
     {
         $ciServer = $this->detectCurrentCiServer();
         if ($ciServer === null) {
@@ -57,16 +57,16 @@ class CiDetector implements CiDetectorInterface
     /**
      * @return string[]
      */
-    protected function getCiServers() : array
+    protected function getCiServers(): array
     {
         return [Ci\AppVeyor::class, Ci\AwsCodeBuild::class, Ci\AzurePipelines::class, Ci\Bamboo::class, Ci\BitbucketPipelines::class, Ci\Buddy::class, Ci\Circle::class, Ci\Codeship::class, Ci\Continuousphp::class, Ci\Drone::class, Ci\GitHubActions::class, Ci\GitLab::class, Ci\Jenkins::class, Ci\SourceHut::class, Ci\TeamCity::class, Ci\Travis::class, Ci\Wercker::class];
     }
-    protected function detectCurrentCiServer() : ?CiInterface
+    protected function detectCurrentCiServer(): ?CiInterface
     {
         $ciServers = $this->getCiServers();
         foreach ($ciServers as $ciClass) {
             $callback = [$ciClass, 'isDetected'];
-            if (\is_callable($callback) && $callback($this->environment)) {
+            if (is_callable($callback) && $callback($this->environment)) {
                 return new $ciClass($this->environment);
             }
         }

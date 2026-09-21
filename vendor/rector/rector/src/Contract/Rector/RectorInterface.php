@@ -4,7 +4,6 @@ declare (strict_types=1);
 namespace Rector\Contract\Rector;
 
 use PhpParser\Node;
-use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor;
 
 interface RectorInterface extends NodeVisitor
@@ -15,10 +14,10 @@ interface RectorInterface extends NodeVisitor
      *
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array;
+    public function getNodeTypes(): array;
     /**
      * Process Node of matched type
-     * @return Node|Node[]|null|NodeTraverser::*
+     * @return Node|Node[]|null|NodeVisitor::REMOVE_NODE
      */
     public function refactor(Node $node);
 }

@@ -13,7 +13,8 @@ final class UndefinedValue implements JsonSerializable
      * Determine if value is equivalent to "undefined" or "null".
      *
      * @param  mixed  $value
-     * @return bool
+     *
+     * @phpstan-assert-if-true \Orchestra\Sidekick\UndefinedValue|null $value
      */
     public static function equalsTo($value): bool
     {
@@ -21,7 +22,7 @@ final class UndefinedValue implements JsonSerializable
     }
 
     /**
-     * Get the value as json.
+     * Get the value for JSON serialization.
      *
      * @return null
      */

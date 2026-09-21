@@ -6,6 +6,7 @@ namespace Rector\CodeQuality\Rector\Isset_;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\ArrayDimFetch;
 use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
 use PhpParser\Node\Expr\BinaryOp\BooleanOr;
 use PhpParser\Node\Expr\BinaryOp\Identical;
@@ -24,6 +25,7 @@ use Rector\PhpParser\Node\Value\ValueResolver;
 use Rector\Rector\AbstractRector;
 use Rector\Reflection\ReflectionResolver;
 use Rector\StaticTypeMapper\Resolver\ClassNameFromObjectTypeResolver;
+use Rector\ValueObject\MethodName;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -49,9 +51,9 @@ final class IssetOnPropertyObjectToPropertyExistsRector extends AbstractRector
         $this->reflectionResolver = $reflectionResolver;
         $this->valueResolver = $valueResolver;
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
-        return new RuleDefinition('Change isset on property object to property_exists() and not null check', [new CodeSample(<<<'CODE_SAMPLE'
+        return new RuleDefinition('Change isset on property object to `property_exists()` and not null check', [new CodeSample(<<<'CODE_SAMPLE'
 class SomeClass
 {
     private $x;
@@ -78,14 +80,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Isset_::class, BooleanNot::class];
     }
     /**
      * @param Isset_|BooleanNot $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         $isNegated = \false;
         if ($node instanceof BooleanNot) {
@@ -109,14 +111,21 @@ CODE_SAMPLE
             }
             // Ignore dynamically accessed properties ($o->$p)
             $propertyFetchName = $this->getName($issetExpr->name);
-            if (!\is_string($propertyFetchName)) {
+            if (!is_string($propertyFetchName)) {
                 continue;
             }
             $classReflection = $this->matchPropertyTypeClassReflection($issetExpr);
             if (!$classReflection instanceof ClassReflection) {
                 continue;
             }
-            if (!$classReflection->hasProperty($propertyFetchName) || $classReflection->isBuiltin()) {
+            if ($classReflection->hasNativeMethod(MethodName::ISSET)) {
+                continue;
+            }
+            // possibly by docblock
+            if ($issetExpr->var instanceof ArrayDimFetch) {
+                continue;
+            }
+            if (!$classReflection->hasInstanceProperty($propertyFetchName) || $classReflection->isBuiltin()) {
                 $newNodes[] = $this->replaceToPropertyExistsWithNullCheck($issetExpr->var, $propertyFetchName, $issetExpr, $isNegated);
             } elseif ($isNegated) {
                 $newNodes[] = $this->createIdenticalToNull($issetExpr);
@@ -139,11 +148,11 @@ CODE_SAMPLE
         }
         return new BooleanAnd($propertyExistsFuncCall, $this->createNotIdenticalToNull($propertyFetch));
     }
-    private function createNotIdenticalToNull(PropertyFetch $propertyFetch) : NotIdentical
+    private function createNotIdenticalToNull(PropertyFetch $propertyFetch): NotIdentical
     {
         return new NotIdentical($propertyFetch, $this->nodeFactory->createNull());
     }
-    private function shouldSkipForPropertyTypeDeclaration(PropertyFetch $propertyFetch) : bool
+    private function shouldSkipForPropertyTypeDeclaration(PropertyFetch $propertyFetch): bool
     {
         if (!$propertyFetch->name instanceof Identifier) {
             return \true;
@@ -166,11 +175,11 @@ CODE_SAMPLE
         $defaultValueExpr = $nativeReflectionProperty->getDefaultValueExpression();
         return !$this->valueResolver->isNull($defaultValueExpr);
     }
-    private function createIdenticalToNull(PropertyFetch $propertyFetch) : Identical
+    private function createIdenticalToNull(PropertyFetch $propertyFetch): Identical
     {
         return new Identical($propertyFetch, $this->nodeFactory->createNull());
     }
-    private function matchPropertyTypeClassReflection(PropertyFetch $propertyFetch) : ?ClassReflection
+    private function matchPropertyTypeClassReflection(PropertyFetch $propertyFetch): ?ClassReflection
     {
         $propertyFetchVarType = $this->getType($propertyFetch->var);
         $className = ClassNameFromObjectTypeResolver::resolve($propertyFetchVarType);
@@ -183,6 +192,11 @@ CODE_SAMPLE
         if (!$this->reflectionProvider->hasClass($className)) {
             return null;
         }
-        return $this->reflectionProvider->getClass($className);
+        $classReflection = $this->reflectionProvider->getClass($className);
+        // XML elements resolve properties from the XML document itself
+        if ($classReflection->is('SimpleXMLElement')) {
+            return null;
+        }
+        return $classReflection;
     }
 }

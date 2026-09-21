@@ -20,10 +20,11 @@ use PHPStan\Type\ObjectType;
 use Rector\Exception\ShouldNotHappenException;
 use Rector\PhpParser\Node\Value\ValueResolver;
 use Rector\Rector\AbstractRector;
+use Rector\Symfony\Enum\SymfonyClass;
 use Rector\Symfony\MinimalSharedStringSolver;
 use Rector\Symfony\NodeAnalyzer\SymfonyPhpClosureDetector;
 use Rector\Symfony\ValueObject\ClassNameAndFilePath;
-use RectorPrefix202502\Symfony\Component\Filesystem\Filesystem;
+use RectorPrefix202609\Symfony\Component\Filesystem\Filesystem;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 /**
@@ -59,7 +60,7 @@ final class ServiceSettersToSettersAutodiscoveryRector extends AbstractRector
         $this->valueResolver = $valueResolver;
         $this->minimalSharedStringSolver = new MinimalSharedStringSolver();
     }
-    public function getRuleDefinition() : RuleDefinition
+    public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Change $services->set(..., ...) to $services->load(..., ...) where meaningful', [new CodeSample(<<<'CODE_SAMPLE'
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
@@ -92,14 +93,14 @@ CODE_SAMPLE
     /**
      * @return array<class-string<Node>>
      */
-    public function getNodeTypes() : array
+    public function getNodeTypes(): array
     {
         return [Closure::class];
     }
     /**
      * @param Closure $node
      */
-    public function refactor(Node $node) : ?Node
+    public function refactor(Node $node): ?Node
     {
         if (!$this->symfonyPhpClosureDetector->detect($node)) {
             return null;
@@ -110,7 +111,10 @@ CODE_SAMPLE
             return null;
         }
         $classNamesAndFilesPaths = $this->createClassNamesAndFilePaths($bareServicesSetMethodCallExpressions);
-        $classNames = \array_map(static fn(ClassNameAndFilePath $classNameAndFilePath): string => $classNameAndFilePath->getClassName(), $classNamesAndFilesPaths);
+        $classNames = array_map(static fn(ClassNameAndFilePath $classNameAndFilePath): string => $classNameAndFilePath->getClassName(), $classNamesAndFilesPaths);
+        if (count($classNames) < 2) {
+            return null;
+        }
         $sharedNamespace = $this->minimalSharedStringSolver->solve(...$classNames);
         $firstClassNameAndFilePath = $classNamesAndFilesPaths[0];
         $classFilePath = $firstClassNameAndFilePath->getFilePath();
@@ -120,16 +124,16 @@ CODE_SAMPLE
         $this->removeServicesSetMethodCalls($node, $bareServicesSetMethodCallExpressions);
         return $node;
     }
-    public function isBareServicesSetMethodCall(MethodCall $methodCall) : bool
+    public function isBareServicesSetMethodCall(MethodCall $methodCall): bool
     {
         if (!$this->isName($methodCall->name, 'set')) {
             return \false;
         }
-        if (!$this->isObjectType($methodCall->var, new ObjectType('Symfony\\Component\\DependencyInjection\\Loader\\Configurator\\ServicesConfigurator'))) {
+        if (!$this->isObjectType($methodCall->var, new ObjectType(SymfonyClass::SERVICES_CONFIGURATOR))) {
             return \false;
         }
         // must have exactly single argument
-        if (\count($methodCall->getArgs()) !== 1) {
+        if (count($methodCall->getArgs()) !== 1) {
             return \false;
         }
         $firstArg = $methodCall->getArgs()[0];
@@ -139,7 +143,7 @@ CODE_SAMPLE
     /**
      * @return array<Expression<MethodCall>>
      */
-    private function collectServiceSetMethodCallExpressions(Closure $closure) : array
+    private function collectServiceSetMethodCallExpressions(Closure $closure): array
     {
         $servicesSetMethodCalls = [];
         foreach ($closure->stmts as $stmt) {
@@ -161,7 +165,7 @@ CODE_SAMPLE
      * @param array<Expression<MethodCall>> $methodsCallExpressions
      * @return ClassNameAndFilePath[]
      */
-    private function createClassNamesAndFilePaths(array $methodsCallExpressions) : array
+    private function createClassNamesAndFilePaths(array $methodsCallExpressions): array
     {
         $classNamesAndFilesPaths = [];
         foreach ($methodsCallExpressions as $methodCallExpression) {
@@ -169,7 +173,7 @@ CODE_SAMPLE
             $methodCall = $methodCallExpression->expr;
             $firstArg = $methodCall->getArgs()[0];
             $serviceClassReference = $this->valueResolver->getValue($firstArg->value);
-            if (!\is_string($serviceClassReference)) {
+            if (!is_string($serviceClassReference)) {
                 throw new ShouldNotHappenException();
             }
             $classReflection = $this->reflectionProvider->getClass($serviceClassReference);
@@ -178,20 +182,20 @@ CODE_SAMPLE
                 continue;
             }
             $filename = $classReflection->getFileName();
-            if (!\is_string($filename)) {
+            if (!is_string($filename)) {
                 continue;
             }
             $classNamesAndFilesPaths[] = new ClassNameAndFilePath($classReflection->getName(), $filename);
         }
         return $classNamesAndFilesPaths;
     }
-    private function createAbsolutePathConcat(string $classFilePath) : Concat
+    private function createAbsolutePathConcat(string $classFilePath): Concat
     {
-        $relativeDirectoryPath = $this->filesystem->makePathRelative(\dirname($classFilePath), \dirname($this->file->getFilePath()));
+        $relativeDirectoryPath = $this->filesystem->makePathRelative(dirname($classFilePath), dirname($this->getFile()->getFilePath()));
         $distConstFetch = new ConstFetch(new Name('__DIR__'));
         return new Concat($distConstFetch, new String_('/' . $relativeDirectoryPath));
     }
-    private function createServicesLoadMethodCall(string $sharedNamespace, Concat $directoryConcat) : MethodCall
+    private function createServicesLoadMethodCall(string $sharedNamespace, Concat $directoryConcat): MethodCall
     {
         $args = [new Arg(new String_($sharedNamespace)), new Arg($directoryConcat)];
         return new MethodCall(new Variable('services'), 'load', $args);
@@ -199,7 +203,7 @@ CODE_SAMPLE
     /**
      * @param Stmt[] $stmtsToRemove
      */
-    private function removeServicesSetMethodCalls(Closure $closure, array $stmtsToRemove) : void
+    private function removeServicesSetMethodCalls(Closure $closure, array $stmtsToRemove): void
     {
         foreach ($closure->stmts as $key => $stmt) {
             foreach ($stmtsToRemove as $stmtToRemove) {

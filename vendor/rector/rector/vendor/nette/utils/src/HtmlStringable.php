@@ -1,17 +1,20 @@
 <?php
 
+declare (strict_types=1);
 /**
  * This file is part of the Nette Framework (https://nette.org)
  * Copyright (c) 2004 David Grudl (https://davidgrudl.com)
  */
-declare (strict_types=1);
-namespace RectorPrefix202502\Nette;
+namespace RectorPrefix202609\Nette;
 
+/**
+ * Represents object convertible to HTML string.
+ */
 interface HtmlStringable
 {
     /**
-     * Returns string in HTML format
+     * Returns string in HTML format.
      */
-    function __toString() : string;
+    function __toString(): string;
 }
-\interface_exists(Utils\IHtmlString::class);
+interface_exists(Utils\IHtmlString::class);

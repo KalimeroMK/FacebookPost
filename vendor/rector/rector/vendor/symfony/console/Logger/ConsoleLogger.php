@@ -8,13 +8,13 @@
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-namespace RectorPrefix202502\Symfony\Component\Console\Logger;
+namespace RectorPrefix202609\Symfony\Component\Console\Logger;
 
-use RectorPrefix202502\Psr\Log\AbstractLogger;
-use RectorPrefix202502\Psr\Log\InvalidArgumentException;
-use RectorPrefix202502\Psr\Log\LogLevel;
-use RectorPrefix202502\Symfony\Component\Console\Output\ConsoleOutputInterface;
-use RectorPrefix202502\Symfony\Component\Console\Output\OutputInterface;
+use RectorPrefix202609\Psr\Log\AbstractLogger;
+use RectorPrefix202609\Psr\Log\InvalidArgumentException;
+use RectorPrefix202609\Psr\Log\LogLevel;
+use RectorPrefix202609\Symfony\Component\Console\Output\ConsoleOutputInterface;
+use RectorPrefix202609\Symfony\Component\Console\Output\OutputInterface;
 /**
  * PSR-3 compliant console logger.
  *
@@ -36,7 +36,7 @@ class ConsoleLogger extends AbstractLogger
         $this->verbosityLevelMap = $verbosityLevelMap + $this->verbosityLevelMap;
         $this->formatLevelMap = $formatLevelMap + $this->formatLevelMap;
     }
-    public function log($level, $message, array $context = []) : void
+    public function log($level, $message, array $context = []): void
     {
         if (!isset($this->verbosityLevelMap[$level])) {
             throw new InvalidArgumentException(\sprintf('The log level "%s" does not exist.', $level));
@@ -58,7 +58,7 @@ class ConsoleLogger extends AbstractLogger
     /**
      * Returns true when any messages have been logged at error levels.
      */
-    public function hasErrored() : bool
+    public function hasErrored(): bool
     {
         return $this->errored;
     }
@@ -67,23 +67,23 @@ class ConsoleLogger extends AbstractLogger
      *
      * @author PHP Framework Interoperability Group
      */
-    private function interpolate(string $message, array $context) : string
+    private function interpolate(string $message, array $context): string
     {
-        if (\strpos($message, '{') === \false) {
+        if (strpos($message, '{') === \false) {
             return $message;
         }
         $replacements = [];
         foreach ($context as $key => $val) {
-            if (null === $val || \is_scalar($val) || $val instanceof \Stringable) {
+            if (null === $val || \is_scalar($val) || is_object($val) && method_exists($val, '__toString')) {
                 $replacements["{{$key}}"] = $val;
             } elseif ($val instanceof \DateTimeInterface) {
                 $replacements["{{$key}}"] = $val->format(\DateTimeInterface::RFC3339);
             } elseif (\is_object($val)) {
-                $replacements["{{$key}}"] = '[object ' . \get_class($val) . ']';
+                $replacements["{{$key}}"] = '[object ' . get_class($val) . ']';
             } else {
                 $replacements["{{$key}}"] = '[' . \gettype($val) . ']';
             }
         }
-        return \strtr($message, $replacements);
+        return strtr($message, $replacements);
     }
 }

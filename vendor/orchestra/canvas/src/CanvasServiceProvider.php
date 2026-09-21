@@ -9,7 +9,7 @@ use Illuminate\Support\ServiceProvider;
 use Orchestra\Canvas\Core\PresetManager;
 use Symfony\Component\Yaml\Yaml;
 
-use function Illuminate\Filesystem\join_paths;
+use function Orchestra\Sidekick\join_paths;
 
 class CanvasServiceProvider extends ServiceProvider implements DeferrableProvider
 {
@@ -19,7 +19,7 @@ class CanvasServiceProvider extends ServiceProvider implements DeferrableProvide
     public function register(): void
     {
         $this->callAfterResolving(PresetManager::class, static function ($manager, $app) {
-            $manager->extend('canvas', static fn ($app) => new GeneratorPreset($app));
+            $manager->extend('canvas', fn ($app) => new GeneratorPreset($app));
 
             $manager->setDefaultDriver('canvas');
         });

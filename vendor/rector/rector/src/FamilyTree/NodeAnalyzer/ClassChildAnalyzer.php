@@ -8,28 +8,35 @@ use PHPStan\Reflection\ParametersAcceptorSelector;
 use PHPStan\Reflection\Php\PhpMethodReflection;
 use PHPStan\Type\MixedType;
 use PHPStan\Type\Type;
+/**
+ * @api
+ */
 final class ClassChildAnalyzer
 {
     /**
      * Look both parent class and interface, yes, all PHP interface methods are abstract
+     *
+     * @api rector-symfony
      */
-    public function hasAbstractParentClassMethod(ClassReflection $classReflection, string $methodName) : bool
+    public function hasAbstractParentClassMethod(ClassReflection $classReflection, string $methodName): bool
     {
         $parentClassMethods = $this->resolveParentClassMethods($classReflection, $methodName);
         if ($parentClassMethods === []) {
             return \false;
         }
-        foreach ($parentClassMethods as $parentClassMethod) {
-            if ($parentClassMethod->isAbstract()) {
-                return \true;
+        $found = \false;
+        foreach ($parentClassMethods as $phpMethodReflection) {
+            if ($phpMethodReflection->isAbstract()) {
+                $found = \true;
+                break;
             }
         }
-        return \false;
+        return $found;
     }
     /**
      * @api downgrade
      */
-    public function resolveParentClassMethodReturnType(ClassReflection $classReflection, string $methodName) : Type
+    public function resolveParentClassMethodReturnType(ClassReflection $classReflection, string $methodName): Type
     {
         $parentClassMethods = $this->resolveParentClassMethods($classReflection, $methodName);
         if ($parentClassMethods === []) {
@@ -47,13 +54,13 @@ final class ClassChildAnalyzer
     /**
      * @return PhpMethodReflection[]
      */
-    private function resolveParentClassMethods(ClassReflection $classReflection, string $methodName) : array
+    private function resolveParentClassMethods(ClassReflection $classReflection, string $methodName): array
     {
         if ($classReflection->hasNativeMethod($methodName) && $classReflection->getNativeMethod($methodName)->isPrivate()) {
             return [];
         }
         $parentClassMethods = [];
-        $parents = \array_merge($classReflection->getParents(), $classReflection->getInterfaces());
+        $parents = array_merge($classReflection->getParents(), $classReflection->getInterfaces());
         foreach ($parents as $parent) {
             if (!$parent->hasNativeMethod($methodName)) {
                 continue;
