@@ -43,6 +43,17 @@ FacebookPost::storePost('Hello, this is a test post!');
 
 ```
 
+### Create post with a link
+``` 
+use Kalimeromk\FacebookPost\Facades\FacebookPost;
+
+FacebookPost::storePostWithLink('https://example.com/article', 'Headline');
+```
+Unlike a photo post, the whole preview card is clickable and opens the url.
+Facebook builds that card by scraping the page's Open Graph tags, so `og:title`,
+`og:description` and `og:image` have to be right on your side. It needs an image
+of at least 600x315 for the large card and ignores anything under 200x200.
+
 ### Create Text post with photo
 ``` 
 use Kalimeromk\FacebookPost\Facades\FacebookPost;

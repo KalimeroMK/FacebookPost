@@ -51,6 +51,31 @@ class FacebookPostService
     }
 
     /**
+     * Create a post that links out of Facebook.
+     * The preview card is built by Facebook from the url's Open Graph tags, so
+     * title, description and image come from the page itself and cannot be sent
+     * here; Graph has ignored those parameters since v2.9.
+     */
+    public function storePostWithLink(string $link, ?string $message = null): array
+    {
+        if (empty($link)) {
+            return $this->failureResponse(422, 'Link is required');
+        }
+
+        $url = "https://graph.facebook.com/v22.0/{$this->page_id}/feed";
+
+        $response = Http::post($url, [
+            'link' => $link,
+            'message' => $message,
+            'access_token' => $this->access_token,
+        ]);
+
+        return $response->successful()
+            ? $this->successResponse('Link post created successfully', $response->json()['id'] ?? null)
+            : $this->failureResponse($response->status(), $response->body());
+    }
+
+    /**
      * Create a post with a photo.
      */
     public function storePostWithPhoto(string $imageUrl, ?string $message = null): array

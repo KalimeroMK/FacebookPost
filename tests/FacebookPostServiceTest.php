@@ -40,6 +40,36 @@ class FacebookPostServiceTest extends TestCase
         $this->assertEquals('123456789', $response['post_id']);
     }
 
+    public function test_it_can_create_a_link_post()
+    {
+        Http::fake([
+            'https://graph.facebook.com/v22.0/*' => Http::response(['id' => '111222333_444555666'], 200),
+        ]);
+
+        $response = FacebookPost::storePostWithLink('https://example.com/article', 'Headline');
+
+        $this->assertIsArray($response);
+        $this->assertEquals('success', $response['status']);
+        $this->assertEquals(200, $response['status_code']);
+        $this->assertEquals('Link post created successfully', $response['message']);
+        $this->assertEquals('111222333_444555666', $response['post_id']);
+
+        Http::assertSent(function ($request) {
+            return $request->url() === 'https://graph.facebook.com/v22.0/111222333/feed'
+                && $request['link'] === 'https://example.com/article'
+                && $request['message'] === 'Headline';
+        });
+    }
+
+    public function test_it_rejects_a_link_post_without_a_link()
+    {
+        $response = FacebookPost::storePostWithLink('');
+
+        $this->assertEquals('fail', $response['status']);
+        $this->assertEquals(422, $response['status_code']);
+        $this->assertEquals('Link is required', $response['message']);
+    }
+
     public function test_it_can_create_a_photo_post()
     {
         Http::fake([
